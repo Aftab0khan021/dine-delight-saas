@@ -5,8 +5,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import NotFound from "./pages/NotFound";
 
+
 // Public Website
 import Home from "./apps/public-website/pages/Home";
+import PublicMenu from "./apps/public-website/pages/Menu";
 
 // Admin Panel
 import AdminAuth from "./apps/admin-panel/pages/Auth";
@@ -34,6 +36,7 @@ const App = () => (
         <Routes>
           {/* Public Website */}
           <Route path="/" element={<Home />} />
+          <Route path="/menu" element={<PublicMenu />} />
 
           {/* Admin Panel Routes */}
           <Route path="/admin/auth" element={<AdminAuth />} />
