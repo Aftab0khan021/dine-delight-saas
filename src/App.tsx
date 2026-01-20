@@ -10,7 +10,14 @@ import Home from "./apps/public-website/pages/Home";
 
 // Admin Panel
 import AdminAuth from "./apps/admin-panel/pages/Auth";
+import { AdminLayout } from "./apps/admin-panel/components/AdminLayout";
 import AdminDashboard from "./apps/admin-panel/pages/Dashboard";
+import AdminOrders from "./apps/admin-panel/pages/Orders";
+import AdminMenu from "./apps/admin-panel/pages/Menu";
+import AdminQrMenu from "./apps/admin-panel/pages/QrMenu";
+import AdminStaff from "./apps/admin-panel/pages/Staff";
+import AdminBranding from "./apps/admin-panel/pages/Branding";
+import AdminBilling from "./apps/admin-panel/pages/Billing";
 
 // Super Admin
 import SuperAdminAuth from "./apps/super-admin/pages/Auth";
@@ -27,15 +34,23 @@ const App = () => (
         <Routes>
           {/* Public Website */}
           <Route path="/" element={<Home />} />
-          
+
           {/* Admin Panel Routes */}
           <Route path="/admin/auth" element={<AdminAuth />} />
-          <Route path="/admin" element={<AdminDashboard />} />
-          
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminDashboard />} />
+            <Route path="orders" element={<AdminOrders />} />
+            <Route path="menu" element={<AdminMenu />} />
+            <Route path="qr-menu" element={<AdminQrMenu />} />
+            <Route path="staff" element={<AdminStaff />} />
+            <Route path="branding" element={<AdminBranding />} />
+            <Route path="billing" element={<AdminBilling />} />
+          </Route>
+
           {/* Super Admin Routes */}
           <Route path="/super-admin/auth" element={<SuperAdminAuth />} />
           <Route path="/super-admin" element={<SuperAdminDashboard />} />
-          
+
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
