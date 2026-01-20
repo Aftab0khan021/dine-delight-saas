@@ -10,10 +10,10 @@ import {
 import { NavLink } from "@/components/NavLink";
 
 const items = [
-  { label: "Dashboard", to: "/admin", icon: LayoutDashboard, end: true },
+  { label: "Dashboard", to: "/admin/dashboard", icon: LayoutDashboard, end: true },
   { label: "Orders", to: "/admin/orders", icon: ShoppingBag },
   { label: "Menu", to: "/admin/menu", icon: Salad },
-  { label: "QR", to: "/admin/qr-menu", icon: Barcode },
+  { label: "QR", to: "/admin/qr", icon: Barcode },
   { label: "Staff", to: "/admin/staff", icon: Users },
   { label: "Brand", to: "/admin/branding", icon: Brush },
   { label: "Billing", to: "/admin/billing", icon: CreditCard },

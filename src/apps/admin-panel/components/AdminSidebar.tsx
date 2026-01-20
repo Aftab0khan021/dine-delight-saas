@@ -21,10 +21,10 @@ import {
 } from "@/components/ui/sidebar";
 
 const navItems = [
-  { title: "Dashboard", to: "/admin", icon: LayoutDashboard, end: true },
+  { title: "Dashboard", to: "/admin/dashboard", icon: LayoutDashboard, end: true },
   { title: "Orders", to: "/admin/orders", icon: ShoppingBag },
   { title: "Menu", to: "/admin/menu", icon: Salad },
-  { title: "QR Menu", to: "/admin/qr-menu", icon: Barcode },
+  { title: "QR Menu", to: "/admin/qr", icon: Barcode },
   { title: "Staff", to: "/admin/staff", icon: Users },
   { title: "Branding", to: "/admin/branding", icon: Brush },
   { title: "Billing", to: "/admin/billing", icon: CreditCard },
