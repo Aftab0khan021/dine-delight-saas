@@ -5,10 +5,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import NotFound from "./pages/NotFound";
 
-
 // Public Website
 import Home from "./apps/public-website/pages/Home";
 import PublicMenu from "./apps/public-website/pages/Menu";
+import TrackOrder from "./apps/public-website/pages/TrackOrder";
 
 // Admin Panel
 import AdminAuth from "./apps/admin-panel/pages/Auth";
@@ -37,6 +37,7 @@ const App = () => (
           {/* Public Website */}
           <Route path="/" element={<Home />} />
           <Route path="/menu" element={<PublicMenu />} />
+          <Route path="/track" element={<TrackOrder />} />
 
           {/* Admin Panel Routes */}
           <Route path="/admin/auth" element={<AdminAuth />} />
