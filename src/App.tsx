@@ -11,12 +11,6 @@ import Home from "./apps/public-website/pages/Home";
 // Admin Panel
 import AdminAuth from "./apps/admin-panel/pages/Auth";
 import AdminDashboard from "./apps/admin-panel/pages/Dashboard";
-import Orders from "./apps/admin-panel/pages/Orders";
-import Menu from "./apps/admin-panel/pages/Menu";
-import QRMenu from "./apps/admin-panel/pages/QRMenu";
-import Staff from "./apps/admin-panel/pages/Staff";
-import Branding from "./apps/admin-panel/pages/Branding";
-import Billing from "./apps/admin-panel/pages/Billing";
 
 // Super Admin
 import SuperAdminAuth from "./apps/super-admin/pages/Auth";
@@ -37,12 +31,6 @@ const App = () => (
           {/* Admin Panel Routes */}
           <Route path="/admin/auth" element={<AdminAuth />} />
           <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/admin/orders" element={<Orders />} />
-          <Route path="/admin/menu" element={<Menu />} />
-          <Route path="/admin/qr-menu" element={<QRMenu />} />
-          <Route path="/admin/staff" element={<Staff />} />
-          <Route path="/admin/branding" element={<Branding />} />
-          <Route path="/admin/billing" element={<Billing />} />
           
           {/* Super Admin Routes */}
           <Route path="/super-admin/auth" element={<SuperAdminAuth />} />
