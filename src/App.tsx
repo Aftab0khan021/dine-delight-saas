@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import NotFound from "./pages/NotFound";
 
 // Public Website
@@ -38,10 +38,13 @@ const App = () => (
           {/* Admin Panel Routes */}
           <Route path="/admin/auth" element={<AdminAuth />} />
           <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<AdminDashboard />} />
+            <Route index element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="menu" element={<AdminMenu />} />
-            <Route path="qr-menu" element={<AdminQrMenu />} />
+            <Route path="qr" element={<AdminQrMenu />} />
+            {/* Backwards compatible */}
+            <Route path="qr-menu" element={<Navigate to="/admin/qr" replace />} />
             <Route path="staff" element={<AdminStaff />} />
             <Route path="branding" element={<AdminBranding />} />
             <Route path="billing" element={<AdminBilling />} />
