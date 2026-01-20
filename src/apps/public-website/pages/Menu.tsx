@@ -1,10 +1,23 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
+import { Minus, Plus, ShoppingBag } from "lucide-react";
+import { useRestaurantCart } from "../hooks/useRestaurantCart";
 
 function formatMoney(cents: number, currency = "USD") {
   try {
@@ -26,6 +39,9 @@ type CategoryWithItems = CategoryRow & { items: MenuItemRow[] };
 export default function PublicMenu() {
   const [params] = useSearchParams();
   const slug = (params.get("restaurant") ?? "").trim();
+
+  const cart = useRestaurantCart(slug);
+  const [cartOpen, setCartOpen] = useState(false);
 
   const restaurantQuery = useQuery({
     queryKey: ["public-menu", "restaurant", slug],
@@ -77,6 +93,11 @@ export default function PublicMenu() {
     },
   });
 
+  const currencyCode = useMemo(() => {
+    const first = itemsQuery.data?.find(Boolean);
+    return first?.currency_code ?? "USD";
+  }, [itemsQuery.data]);
+
   const categoriesWithItems = useMemo((): CategoryWithItems[] => {
     const categories = categoriesQuery.data ?? [];
     const items = itemsQuery.data ?? [];
@@ -127,6 +148,10 @@ export default function PublicMenu() {
     document.title = name ? `${name} Menu` : "Menu";
   }, [restaurantQuery.data?.name]);
 
+  useEffect(() => {
+    if (cart.itemCount === 0) setCartOpen(false);
+  }, [cart.itemCount]);
+
   if (!slug) {
     return (
       <main className="min-h-screen bg-background">
@@ -159,7 +184,10 @@ export default function PublicMenu() {
                 loading="lazy"
               />
             ) : (
-              <div className="h-12 w-12 rounded-md border bg-muted" aria-hidden="true" />
+              <div
+                className="h-12 w-12 rounded-md border bg-muted"
+                aria-hidden="true"
+              />
             )}
             <div className="min-w-0">
               <h1 className="text-xl font-semibold tracking-tight truncate">
@@ -175,7 +203,7 @@ export default function PublicMenu() {
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8 max-w-3xl">
+      <div className="container mx-auto px-4 py-8 max-w-3xl pb-28">
         {loading ? (
           <Card className="p-6">
             <p className="text-sm text-muted-foreground">Loading menu…</p>
@@ -238,14 +266,30 @@ export default function PublicMenu() {
                             </p>
                           </div>
 
-                          {item.sku ? (
-                            <>
-                              <Separator className="my-3" />
-                              <p className="text-xs text-muted-foreground font-mono">
+                          <div className="mt-3 flex items-center justify-between gap-3">
+                            {item.sku ? (
+                              <p className="text-xs text-muted-foreground font-mono truncate">
                                 {item.sku}
                               </p>
-                            </>
-                          ) : null}
+                            ) : (
+                              <span />
+                            )}
+
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => {
+                                cart.addItem({
+                                  menu_item_id: item.id,
+                                  name: item.name,
+                                  price_cents: item.price_cents,
+                                });
+                                setCartOpen(true);
+                              }}
+                            >
+                              Add
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </Card>
@@ -256,6 +300,122 @@ export default function PublicMenu() {
           </div>
         )}
       </div>
+
+      {/* Floating Cart */}
+      <Drawer open={cartOpen} onOpenChange={setCartOpen}>
+        <DrawerTrigger asChild>
+          <button
+            type="button"
+            className="fixed bottom-4 right-4 z-40"
+            aria-label="Open cart"
+            onClick={() => setCartOpen(true)}
+          >
+            <div className="relative">
+              <Button size="lg" className="shadow-lg">
+                <ShoppingBag className="h-4 w-4" />
+                Cart
+              </Button>
+              {cart.itemCount > 0 ? (
+                <span className="absolute -top-2 -right-2">
+                  <Badge variant="secondary" className="min-w-6 justify-center">
+                    {cart.itemCount}
+                  </Badge>
+                </span>
+              ) : null}
+            </div>
+          </button>
+        </DrawerTrigger>
+
+        <DrawerContent className="max-h-[85vh]">
+          <DrawerHeader className="text-left">
+            <DrawerTitle>Cart</DrawerTitle>
+          </DrawerHeader>
+
+          <div className="px-4 pb-4 overflow-auto">
+            {cart.items.length === 0 ? (
+              <Card className="p-6">
+                <p className="text-sm text-muted-foreground">Your cart is empty.</p>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {cart.items.map((line) => (
+                  <Card key={line.menu_item_id} className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{line.name}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {formatMoney(line.price_cents, currencyCode)} each
+                        </p>
+                      </div>
+
+                      <p className="font-medium tabular-nums whitespace-nowrap">
+                        {formatMoney(line.price_cents * line.quantity, currencyCode)}
+                      </p>
+                    </div>
+
+                    <Separator className="my-3" />
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => cart.decrement(line.menu_item_id)}
+                          aria-label={`Decrease ${line.name}`}
+                        >
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                        <span className="min-w-8 text-center tabular-nums">
+                          {line.quantity}
+                        </span>
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => cart.increment(line.menu_item_id)}
+                          aria-label={`Increase ${line.name}`}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      <Button
+                        variant="ghost"
+                        onClick={() => cart.removeItem(line.menu_item_id)}
+                        className="text-muted-foreground"
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <DrawerFooter>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Subtotal</p>
+              <p className="font-medium tabular-nums">
+                {formatMoney(cart.subtotalCents, currencyCode)}
+              </p>
+            </div>
+            <Button disabled={cart.items.length === 0}>Checkout</Button>
+            <div className="flex items-center justify-between gap-3">
+              <DrawerClose asChild>
+                <Button variant="outline">Close</Button>
+              </DrawerClose>
+              <Button
+                variant="ghost"
+                onClick={cart.clear}
+                disabled={cart.items.length === 0}
+                className="text-muted-foreground"
+              >
+                Clear
+              </Button>
+            </div>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
     </main>
   );
 }
