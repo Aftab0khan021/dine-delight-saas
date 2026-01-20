@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -16,6 +16,8 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from "@/components/ui/drawer";
+import { useToast } from "@/hooks/use-toast";
+import { CopyButton } from "@/apps/admin-panel/components/qr/CopyButton";
 import { Minus, Plus, ShoppingBag } from "lucide-react";
 import { useRestaurantCart } from "../hooks/useRestaurantCart";
 
@@ -37,11 +39,17 @@ type MenuItemRow = Tables<"menu_items">;
 type CategoryWithItems = CategoryRow & { items: MenuItemRow[] };
 
 export default function PublicMenu() {
+  const { toast } = useToast();
   const [params] = useSearchParams();
   const slug = (params.get("restaurant") ?? "").trim();
 
   const cart = useRestaurantCart(slug);
   const [cartOpen, setCartOpen] = useState(false);
+
+  const [placingOrder, setPlacingOrder] = useState(false);
+  const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
+  const [placedOrderToken, setPlacedOrderToken] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   const restaurantQuery = useQuery({
     queryKey: ["public-menu", "restaurant", slug],
@@ -143,14 +151,78 @@ export default function PublicMenu() {
     (itemsQuery.error as Error | null)?.message ??
     null;
 
+  const trackUrl = useMemo(() => {
+    if (!placedOrderToken) return null;
+    const url = new URL(window.location.origin + "/track");
+    url.searchParams.set("token", placedOrderToken);
+    return url.toString();
+  }, [placedOrderToken]);
+
+  const placeOrder = async () => {
+    if (placingOrder) return;
+    const restaurantId = restaurantQuery.data?.id;
+    if (!restaurantId) return;
+    if (cart.items.length === 0) return;
+
+    setPlacingOrder(true);
+    setCheckoutError(null);
+
+    try {
+      const { data: insertedOrder, error: orderError } = await supabase
+        .from("orders")
+        .insert({
+          restaurant_id: restaurantId,
+          status: "pending",
+          currency_code: "USD",
+          tax_cents: 0,
+          tip_cents: 0,
+          subtotal_cents: cart.subtotalCents,
+          total_cents: cart.subtotalCents,
+        })
+        .select("id, order_token")
+        .single();
+
+      if (orderError) throw orderError;
+      if (!insertedOrder?.id || !insertedOrder?.order_token) {
+        throw new Error("Order created without a token.");
+      }
+
+      const orderItemsPayload = cart.items.map((i) => ({
+        restaurant_id: restaurantId,
+        order_id: insertedOrder.id,
+        menu_item_id: i.menu_item_id,
+        name_snapshot: i.name,
+        quantity: i.quantity,
+        unit_price_cents: i.price_cents,
+        line_total_cents: i.price_cents * i.quantity,
+      }));
+
+      const { error: itemsError } = await supabase.from("order_items").insert(orderItemsPayload);
+      if (itemsError) throw itemsError;
+
+      setPlacedOrderId(insertedOrder.id);
+      setPlacedOrderToken(insertedOrder.order_token);
+      cart.clear();
+      setCartOpen(true);
+      toast({
+        title: "Order placed",
+        description: "Save your order token to track status.",
+      });
+    } catch (e: any) {
+      setCheckoutError(e?.message ?? "Could not place order.");
+    } finally {
+      setPlacingOrder(false);
+    }
+  };
+
   useEffect(() => {
     const name = restaurantQuery.data?.name;
     document.title = name ? `${name} Menu` : "Menu";
   }, [restaurantQuery.data?.name]);
 
   useEffect(() => {
-    if (cart.itemCount === 0) setCartOpen(false);
-  }, [cart.itemCount]);
+    if (cart.itemCount === 0 && !placedOrderToken) setCartOpen(false);
+  }, [cart.itemCount, placedOrderToken]);
 
   if (!slug) {
     return (
@@ -333,9 +405,28 @@ export default function PublicMenu() {
 
           <div className="px-4 pb-4 overflow-auto">
             {cart.items.length === 0 ? (
-              <Card className="p-6">
-                <p className="text-sm text-muted-foreground">Your cart is empty.</p>
-              </Card>
+              placedOrderToken ? (
+                <Card className="p-6">
+                  <p className="text-sm text-muted-foreground">Order placed</p>
+                  <p className="mt-2 font-mono text-sm break-all">{placedOrderToken}</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <CopyButton value={placedOrderToken} label="Copy token" />
+                    {trackUrl ? <CopyButton value={trackUrl} label="Copy tracking link" /> : null}
+                    {placedOrderToken ? (
+                      <Link to={`/track?token=${encodeURIComponent(placedOrderToken)}`}>
+                        <Button variant="secondary" size="sm">Track</Button>
+                      </Link>
+                    ) : null}
+                  </div>
+                  {checkoutError ? (
+                    <p className="mt-3 text-sm text-destructive">{checkoutError}</p>
+                  ) : null}
+                </Card>
+              ) : (
+                <Card className="p-6">
+                  <p className="text-sm text-muted-foreground">Your cart is empty.</p>
+                </Card>
+              )
             ) : (
               <div className="space-y-3">
                 {cart.items.map((line) => (
@@ -365,9 +456,7 @@ export default function PublicMenu() {
                         >
                           <Minus className="h-4 w-4" />
                         </Button>
-                        <span className="min-w-8 text-center tabular-nums">
-                          {line.quantity}
-                        </span>
+                        <span className="min-w-8 text-center tabular-nums">{line.quantity}</span>
                         <Button
                           size="icon"
                           variant="outline"
@@ -393,25 +482,51 @@ export default function PublicMenu() {
           </div>
 
           <DrawerFooter>
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">Subtotal</p>
-              <p className="font-medium tabular-nums">
-                {formatMoney(cart.subtotalCents, currencyCode)}
-              </p>
-            </div>
-            <Button disabled={cart.items.length === 0}>Checkout</Button>
+            {cart.items.length > 0 ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">Subtotal</p>
+                  <p className="font-medium tabular-nums">{formatMoney(cart.subtotalCents, currencyCode)}</p>
+                </div>
+                <Button
+                  disabled={cart.items.length === 0 || placingOrder || !restaurantQuery.data?.id}
+                  onClick={placeOrder}
+                >
+                  {placingOrder ? "Placing…" : "Place order"}
+                </Button>
+                {checkoutError ? (
+                  <p className="text-sm text-destructive">{checkoutError}</p>
+                ) : null}
+              </>
+            ) : null}
+
             <div className="flex items-center justify-between gap-3">
               <DrawerClose asChild>
                 <Button variant="outline">Close</Button>
               </DrawerClose>
-              <Button
-                variant="ghost"
-                onClick={cart.clear}
-                disabled={cart.items.length === 0}
-                className="text-muted-foreground"
-              >
-                Clear
-              </Button>
+              {cart.items.length > 0 ? (
+                <Button
+                  variant="ghost"
+                  onClick={cart.clear}
+                  disabled={cart.items.length === 0}
+                  className="text-muted-foreground"
+                >
+                  Clear
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setPlacedOrderId(null);
+                    setPlacedOrderToken(null);
+                    setCheckoutError(null);
+                  }}
+                  disabled={!placedOrderToken}
+                  className="text-muted-foreground"
+                >
+                  Done
+                </Button>
+              )}
             </div>
           </DrawerFooter>
         </DrawerContent>
