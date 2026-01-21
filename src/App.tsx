@@ -9,6 +9,8 @@ import NotFound from "./pages/NotFound";
 import Home from "./apps/public-website/pages/Home";
 import PublicMenu from "./apps/public-website/pages/Menu";
 import TrackOrder from "./apps/public-website/pages/TrackOrder";
+import RestaurantProfile from "./apps/public-website/pages/RestaurantProfile";
+import QrResolver from "./apps/public-website/pages/QrResolver";
 
 // Admin Panel
 import AdminAuth from "./apps/admin-panel/pages/Auth";
@@ -23,7 +25,14 @@ import AdminBilling from "./apps/admin-panel/pages/Billing";
 
 // Super Admin
 import SuperAdminAuth from "./apps/super-admin/pages/Auth";
+import { SuperAdminLayout } from "./apps/super-admin/components/SuperAdminLayout";
 import SuperAdminDashboard from "./apps/super-admin/pages/Dashboard";
+import SuperAdminRestaurants from "./apps/super-admin/pages/Restaurants";
+import SuperAdminSubscriptions from "./apps/super-admin/pages/Subscriptions";
+import SuperAdminInvoices from "./apps/super-admin/pages/Invoices";
+import SuperAdminActivity from "./apps/super-admin/pages/Activity";
+import SuperAdminAbuse from "./apps/super-admin/pages/Abuse";
+import SuperAdminSettings from "./apps/super-admin/pages/Settings";
 
 const queryClient = new QueryClient();
 
@@ -36,6 +45,8 @@ const App = () => (
         <Routes>
           {/* Public Website */}
           <Route path="/" element={<Home />} />
+          <Route path="/r/:restaurantSlug" element={<RestaurantProfile />} />
+          <Route path="/q/:code" element={<QrResolver />} />
           <Route path="/menu" element={<PublicMenu />} />
           <Route path="/track" element={<TrackOrder />} />
 
@@ -55,8 +66,29 @@ const App = () => (
           </Route>
 
           {/* Super Admin Routes */}
-          <Route path="/super-admin/auth" element={<SuperAdminAuth />} />
-          <Route path="/super-admin" element={<SuperAdminDashboard />} />
+          {/* Canonical: /superadmin */}
+          <Route path="/superadmin/auth" element={<SuperAdminAuth />} />
+          <Route path="/superadmin" element={<SuperAdminLayout />}>
+            <Route index element={<Navigate to="/superadmin/dashboard" replace />} />
+            <Route path="dashboard" element={<SuperAdminDashboard />} />
+            <Route path="restaurants" element={<SuperAdminRestaurants />} />
+            <Route path="subscriptions" element={<SuperAdminSubscriptions />} />
+            <Route path="invoices" element={<SuperAdminInvoices />} />
+            <Route path="activity" element={<SuperAdminActivity />} />
+            <Route path="abuse" element={<SuperAdminAbuse />} />
+            <Route path="settings" element={<SuperAdminSettings />} />
+          </Route>
+
+          {/* Legacy redirects: /super-admin -> /superadmin */}
+          <Route path="/super-admin/auth" element={<Navigate to="/superadmin/auth" replace />} />
+          <Route path="/super-admin" element={<Navigate to="/superadmin/dashboard" replace />} />
+          <Route path="/super-admin/dashboard" element={<Navigate to="/superadmin/dashboard" replace />} />
+          <Route path="/super-admin/restaurants" element={<Navigate to="/superadmin/restaurants" replace />} />
+          <Route path="/super-admin/subscriptions" element={<Navigate to="/superadmin/subscriptions" replace />} />
+          <Route path="/super-admin/invoices" element={<Navigate to="/superadmin/invoices" replace />} />
+          <Route path="/super-admin/activity" element={<Navigate to="/superadmin/activity" replace />} />
+          <Route path="/super-admin/abuse" element={<Navigate to="/superadmin/abuse" replace />} />
+          <Route path="/super-admin/settings" element={<Navigate to="/superadmin/settings" replace />} />
 
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
