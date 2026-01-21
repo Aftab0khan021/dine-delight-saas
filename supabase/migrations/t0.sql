@@ -1,0 +1,13 @@
+-- FORCE RLS on all tenant tables
+alter table restaurants force row level security;
+alter table profiles force row level security;
+alter table user_roles force row level security;
+alter table categories force row level security;
+alter table menu_items force row level security;
+alter table orders force row level security;
+alter table order_items force row level security;
+alter table staff_invites force row level security;
+alter table qr_codes force row level security;
+alter table subscriptions force row level security;
+alter table invoices force row level security;
+alter table activity_logs force row level security;
