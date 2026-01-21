@@ -18,14 +18,14 @@ export default function SuperAdminAuth() {
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        navigate("/super-admin");
+        navigate("/superadmin/dashboard");
       }
     };
     checkUser();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
-        navigate("/super-admin");
+        navigate("/superadmin/dashboard");
       }
     });
 
@@ -48,6 +48,8 @@ export default function SuperAdminAuth() {
         title: "Success",
         description: "Signed in successfully",
       });
+
+      navigate("/superadmin/dashboard");
     } catch (error: any) {
       toast({
         title: "Error",
