@@ -1,319 +1,385 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { addMonths, startOfMonth } from "date-fns";
+import { startOfDay, addDays } from "date-fns";
+import {
+  ArrowUpRight,
+  ClipboardList,
+  Plus,
+  QrCode,
+  ReceiptText,
+  Sparkles,
+} from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 
+// UI Components
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 
-type SubscriptionRow = {
-  id: string;
-  plan_key: string;
-  status: string;
-  current_period_end: string | null;
-  current_period_start: string | null;
-  cancel_at_period_end: boolean;
-  canceled_at: string | null;
-};
-
-type InvoiceRow = {
-  id: string;
-  status: string;
-  amount_due_cents: number;
-  currency_code: string;
-  due_at: string | null;
-  hosted_invoice_url: string | null;
-  invoice_pdf_url: string | null;
-  provider_invoice_id: string;
-};
-
+// --- Helpers ---
 function formatMoney(cents: number, currency = "USD") {
   const amount = (cents ?? 0) / 100;
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
-  } catch {
-    return `$${amount.toFixed(2)}`;
-  }
+  return new Intl.NumberFormat("en-US", { 
+    style: "currency", 
+    currency, 
+    maximumFractionDigits: 0 
+  }).format(amount);
 }
 
 function shortId(id: string) {
-  return id?.slice(0, 8) ?? "—";
+  return id ? `#${id.slice(0, 4)}` : "—";
 }
 
-function formatDate(iso: string | null) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
+function formatTime(dateStr: string) {
+  return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-export default function AdminBilling() {
+const statusVariant = (status: string) => {
+  switch (status) {
+    case "pending": return "default";
+    case "in_progress": return "secondary";
+    case "ready": return "outline";
+    default: return "secondary";
+  }
+};
+
+export default function AdminDashboard() {
   const { restaurant } = useRestaurantContext();
 
-  const { monthStartISO, monthEndISO } = useMemo(() => {
-    const start = startOfMonth(new Date());
-    const end = addMonths(start, 1);
-    return { monthStartISO: start.toISOString(), monthEndISO: end.toISOString() };
+  // --- 1. Data Fetching (Real Data) ---
+  const { startISO, endISO } = useMemo(() => {
+    const start = startOfDay(new Date());
+    const end = addDays(start, 1);
+    return { startISO: start.toISOString(), endISO: end.toISOString() };
   }, []);
 
-  const subscriptionQuery = useQuery({
-    queryKey: ["admin", "billing", restaurant?.id, "subscription"],
+  // KPI Data: Today's Orders
+  const todayOrdersQuery = useQuery({
+    queryKey: ["admin", "dashboard", restaurant?.id, "todayOrders"],
     enabled: !!restaurant?.id,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("subscriptions")
-        .select(
-          "id, plan_key, status, current_period_end, current_period_start, cancel_at_period_end, canceled_at, created_at",
-        )
+        .from("orders")
+        .select("id, placed_at, completed_at, total_cents, currency_code")
         .eq("restaurant_id", restaurant!.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
+        .gte("placed_at", startISO)
+        .lt("placed_at", endISO);
       if (error) throw error;
-      return (data ?? null) as unknown as SubscriptionRow | null;
+      return data;
     },
   });
 
-  const invoicesQuery = useQuery({
-    queryKey: ["admin", "billing", restaurant?.id, "invoices"],
+  // List Data: Latest 5 Orders
+  const latestOrdersQuery = useQuery({
+    queryKey: ["admin", "dashboard", restaurant?.id, "latestOrders"],
+    enabled: !!restaurant?.id,
+    queryFn: async () => {
+      // Added table_label to the selection
+      const { data, error } = await supabase
+        .from("orders")
+        .select("id, status, placed_at, total_cents, table_label, currency_code")
+        .eq("restaurant_id", restaurant!.id)
+        .order("placed_at", { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // KPI Data: Top Selling Item (All Time)
+  const topSellingQuery = useQuery({
+    queryKey: ["admin", "dashboard", restaurant?.id, "topSellingItem"],
     enabled: !!restaurant?.id,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("invoices")
-        .select(
-          "id, status, amount_due_cents, currency_code, due_at, hosted_invoice_url, invoice_pdf_url, provider_invoice_id, created_at",
-        )
+        .from("order_items")
+        .select("name_snapshot, quantity")
         .eq("restaurant_id", restaurant!.id)
-        .order("created_at", { ascending: false })
-        .limit(50);
-
+        .limit(1000); // Fetch sample to calculate client-side for now
       if (error) throw error;
-      return (data ?? []) as unknown as InvoiceRow[];
+      return data;
     },
   });
 
-  const usageQuery = useQuery({
-    queryKey: ["admin", "billing", restaurant?.id, "usage"],
+  // Checklist Data
+  const setupQuery = useQuery({
+    queryKey: ["admin", "dashboard", restaurant?.id, "setupChecklist"],
     enabled: !!restaurant?.id,
     queryFn: async () => {
-      const [ordersCount, menuItemsCount] = await Promise.all([
-        supabase
-          .from("orders")
-          .select("id", { count: "exact", head: true })
-          .eq("restaurant_id", restaurant!.id)
-          .gte("placed_at", monthStartISO)
-          .lt("placed_at", monthEndISO),
-        supabase
-          .from("menu_items")
-          .select("id", { count: "exact", head: true })
-          .eq("restaurant_id", restaurant!.id),
+      const [{ data: restaurantRow }, menuCount, qrCount] = await Promise.all([
+        supabase.from("restaurants").select("logo_url").eq("id", restaurant!.id).maybeSingle(),
+        supabase.from("menu_items").select("id", { count: "exact", head: true }).eq("restaurant_id", restaurant!.id),
+        supabase.from("qr_codes").select("id", { count: "exact", head: true }).eq("restaurant_id", restaurant!.id),
       ]);
-
-      if (ordersCount.error) throw ordersCount.error;
-      if (menuItemsCount.error) throw menuItemsCount.error;
-
       return {
-        ordersThisMonth: ordersCount.count ?? 0,
-        menuItems: menuItemsCount.count ?? 0,
+        logoUrl: restaurantRow?.logo_url ?? null,
+        menuItemsCount: menuCount.count ?? 0,
+        qrCodesCount: qrCount.count ?? 0,
       };
     },
   });
 
-  const usage = usageQuery.data ?? { ordersThisMonth: 0, menuItems: 0 };
+  // --- 2. Calculations ---
+  const kpis = useMemo(() => {
+    const todayOrders = todayOrdersQuery.data ?? [];
+    const currency = todayOrders[0]?.currency_code ?? "USD";
+    
+    // Revenue
+    const revenue = todayOrders.reduce((sum, o) => sum + (o.total_cents ?? 0), 0);
+    
+    // Avg Prep Time
+    const completed = todayOrders.filter((o) => o.completed_at).map((o) => 
+      new Date(o.completed_at!).getTime() - new Date(o.placed_at).getTime()
+    );
+    const avgPrepMs = completed.length ? completed.reduce((a, b) => a + b, 0) / completed.length : 0;
+    const avgPrepMins = Math.round(avgPrepMs / 1000 / 60);
 
-  // Display-only “usage bars” (no enforcement yet)
-  const ordersUsagePercent = Math.min(100, (usage.ordersThisMonth / 200) * 100);
-  const menuItemsUsagePercent = Math.min(100, (usage.menuItems / 100) * 100);
+    // Top Item Calculation
+    const items = topSellingQuery.data ?? [];
+    const counts = new Map<string, number>();
+    items.forEach(i => {
+      const k = i.name_snapshot;
+      counts.set(k, (counts.get(k) || 0) + (i.quantity || 1));
+    });
+    
+    let topItem = { name: "No sales yet", qty: 0 };
+    counts.forEach((qty, name) => {
+      if (qty > topItem.qty) topItem = { name, qty };
+    });
 
-  const subscription = subscriptionQuery.data;
-  const invoices = invoicesQuery.data ?? [];
+    return [
+      {
+        label: "Today’s Orders",
+        value: todayOrders.length.toString(),
+        delta: "Since midnight",
+        tone: "neutral",
+      },
+      {
+        label: "Revenue",
+        value: formatMoney(revenue, currency),
+        delta: "Gross total",
+        tone: "good",
+      },
+      {
+        label: "Avg Prep Time",
+        value: avgPrepMins > 0 ? `${avgPrepMins}m` : "—",
+        delta: "Completed orders",
+        tone: "neutral",
+      },
+      {
+        label: "Top Selling Item",
+        value: topItem.qty > 0 ? topItem.name : "—",
+        delta: topItem.qty > 0 ? `${topItem.qty} sold` : "All time",
+        tone: "neutral",
+      },
+    ];
+  }, [todayOrdersQuery.data, topSellingQuery.data]);
 
+  const setupChecklist = [
+    { 
+      label: "Branding", 
+      detail: "Logo uploaded", 
+      status: setupQuery.data?.logoUrl ? "Done" : "Pending",
+      isDone: !!setupQuery.data?.logoUrl
+    },
+    { 
+      label: "First Menu Item", 
+      detail: "At least 1 item", 
+      status: (setupQuery.data?.menuItemsCount ?? 0) > 0 ? "Done" : "Pending",
+      isDone: (setupQuery.data?.menuItemsCount ?? 0) > 0
+    },
+    { 
+      label: "QR Published", 
+      detail: "Codes generated", 
+      status: (setupQuery.data?.qrCodesCount ?? 0) > 0 ? "Done" : "Pending",
+      isDone: (setupQuery.data?.qrCodesCount ?? 0) > 0
+    },
+  ];
+
+  // --- 3. Render ---
   return (
-    <section className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Billing</h1>
-        <p className="text-sm text-muted-foreground">Subscription and invoices for {restaurant?.name}.</p>
-      </header>
+    <div className="space-y-6">
+      <section className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            A clear snapshot of today—built for busy service.
+          </p>
+        </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        {/* CURRENT PLAN */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <CardTitle>Current plan</CardTitle>
-                <CardDescription>Manage your subscription (UI only for now).</CardDescription>
+        {/* Quick actions (top) */}
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" asChild>
+            <Link to="/admin/orders">
+              View orders <ArrowUpRight className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link to="/admin/menu">
+              Add menu item <Plus className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
+      </section>
+
+      {/* KPI cards */}
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {kpis.map((k) => (
+          <Card key={k.label} className="shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                {k.label}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-2xl font-semibold tracking-tight truncate" title={k.value}>
+                  {k.value}
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">{k.delta}</div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" disabled title="Payment flow not implemented yet">
-                  Upgrade / Downgrade
-                </Button>
-                <Button variant="outline" disabled title="Cancellation flow not implemented yet">
-                  Cancel
-                </Button>
+            </CardContent>
+          </Card>
+        ))}
+      </section>
+
+      {/* Body grid */}
+      <section className="grid gap-3 lg:grid-cols-3">
+        {/* Live Orders */}
+        <Card className="shadow-sm lg:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-base">Live orders</CardTitle>
+              <div className="mt-1 text-xs text-muted-foreground">
+                Latest 5 orders.
               </div>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {subscriptionQuery.isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading subscription…</p>
-            ) : !subscription ? (
-              <div className="rounded-lg border border-dashed p-6 text-center">
-                <p className="font-medium">No active plan</p>
-                <p className="text-sm text-muted-foreground">Create a subscription to see billing details here.</p>
-              </div>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs text-muted-foreground">Plan</p>
-                  <p className="text-lg font-semibold break-all">{subscription.plan_key}</p>
-                </div>
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs text-muted-foreground">Status</p>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary">{subscription.status}</Badge>
-                    {subscription.cancel_at_period_end ? <Badge variant="secondary">Cancels at period end</Badge> : null}
-                  </div>
-                </div>
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs text-muted-foreground">Current period end</p>
-                  <p className="text-lg font-semibold">{formatDate(subscription.current_period_end)}</p>
-                </div>
-              </div>
-            )}
-
-            <Separator />
-
-            {/* USAGE */}
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm font-medium">Usage (display only)</p>
-                <p className="text-sm text-muted-foreground">Derived from current data counts. No limits are enforced yet.</p>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm">Orders this month</p>
-                    <Badge variant="secondary">{usageQuery.isLoading ? "…" : usage.ordersThisMonth}</Badge>
-                  </div>
-                  <Progress value={ordersUsagePercent} />
-                  <p className="text-xs text-muted-foreground">Shown against a placeholder bar (200 orders).</p>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm">Menu items</p>
-                    <Badge variant="secondary">{usageQuery.isLoading ? "…" : usage.menuItems}</Badge>
-                  </div>
-                  <Progress value={menuItemsUsagePercent} />
-                  <p className="text-xs text-muted-foreground">Shown against a placeholder bar (100 items).</p>
-                </div>
-              </div>
+            <div className="flex items-center gap-2">
+              <span className="relative inline-flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/40 motion-reduce:hidden" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+              </span>
+              <span className="text-xs text-muted-foreground">Live</span>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* INVOICES */}
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle>Invoices</CardTitle>
-            <CardDescription>Latest invoices for this restaurant.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {invoicesQuery.isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading invoices…</p>
-            ) : invoices.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-4 text-center">
-                <p className="text-sm font-medium">No invoices</p>
-                <p className="text-xs text-muted-foreground">Invoices will appear here when available.</p>
-              </div>
-            ) : (
-              <div className="hidden md:block">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Invoice</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {invoices.map((inv) => {
-                      const link = inv.hosted_invoice_url ?? inv.invoice_pdf_url;
-                      return (
-                        <TableRow key={inv.id}>
-                          <TableCell>
-                            <div className="space-y-1">
-                              <p className="font-medium">{shortId(inv.id)}</p>
-                              <p className="text-xs text-muted-foreground">Due: {formatDate(inv.due_at)}</p>
-                              {link ? (
-                                <a
-                                  href={link}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-xs underline text-muted-foreground"
-                                >
-                                  View invoice
-                                </a>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary">{inv.status}</Badge>
-                          </TableCell>
-                          <TableCell className="text-right">{formatMoney(inv.amount_due_cents ?? 0, inv.currency_code ?? "USD")}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-
-            {/* Mobile invoice cards */}
-            {invoices.length > 0 ? (
-              <div className="grid gap-3 md:hidden">
-                {invoices.map((inv) => {
-                  const link = inv.hosted_invoice_url ?? inv.invoice_pdf_url;
-                  return (
-                    <div key={inv.id} className="rounded-lg border p-4 space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="font-medium">Invoice {shortId(inv.id)}</p>
-                          <p className="text-sm text-muted-foreground">Due: {formatDate(inv.due_at)}</p>
-                        </div>
-                        <Badge variant="secondary">{inv.status}</Badge>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold">{formatMoney(inv.amount_due_cents ?? 0, inv.currency_code ?? "USD")}</p>
-                        {link ? (
-                          <a href={link} target="_blank" rel="noreferrer" className="text-sm underline text-muted-foreground">
-                            View invoice
-                          </a>
-                        ) : null}
-                      </div>
+          <CardContent>
+            <div className="space-y-2">
+              {(latestOrdersQuery.data ?? []).map((o) => (
+                <div
+                  key={o.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background p-3"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">#{shortId(o.id)}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {o.table_label ? o.table_label : "Takeaway"}
+                      </span>
                     </div>
-                  );
-                })}
-              </div>
-            ) : null}
+                    <div className="text-xs text-muted-foreground">
+                      {formatTime(o.placed_at)} • {formatMoney(o.total_cents, o.currency_code)}
+                    </div>
+                  </div>
+                  <Badge variant={statusVariant(o.status)} className="shrink-0 capitalize">
+                    {o.status.replace("_", " ")}
+                  </Badge>
+                </div>
+              ))}
+              {(latestOrdersQuery.data?.length === 0) && (
+                <div className="text-center py-8 text-sm text-muted-foreground border-dashed border rounded-xl">
+                  No orders today yet.
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button variant="secondary" size="sm" asChild>
+                <Link to="/admin/orders">
+                  View full board <ReceiptText className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+              <Button variant="secondary" size="sm" asChild>
+                <Link to="/admin/qr">
+                  Print QR <QrCode className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
-      </div>
-    </section>
+
+        {/* Setup + quick actions */}
+        <div className="space-y-3">
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base">Setup checklist</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="rounded-xl border border-border bg-background p-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  <div className="text-sm font-medium">Ready in 3 steps</div>
+                </div>
+                <ul className="mt-3 space-y-2 text-sm">
+                  {setupChecklist.map((i) => (
+                    <li key={i.label} className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium">{i.label}</div>
+                        <div className="text-xs text-muted-foreground">{i.detail}</div>
+                      </div>
+                      <Badge variant={i.isDone ? "default" : "secondary"} className="shrink-0">
+                        {i.status}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <Button className="w-full" variant="secondary" asChild>
+                <Link to="/admin/branding">
+                  Open setup <ClipboardList className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base">Quick actions</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-2">
+              <Button className="w-full justify-between" variant="secondary" asChild>
+                <Link to="/admin/menu">
+                  <span className="flex items-center gap-2">
+                    <Plus className="h-4 w-4" />
+                    Add Menu Item
+                  </span>
+                  <ArrowUpRight className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button className="w-full justify-between" variant="secondary" asChild>
+                <Link to="/admin/qr">
+                  <span className="flex items-center gap-2">
+                    <QrCode className="h-4 w-4" />
+                    Print QR
+                  </span>
+                  <ArrowUpRight className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button className="w-full justify-between" variant="secondary" asChild>
+                <Link to="/admin/orders">
+                  <span className="flex items-center gap-2">
+                    <ReceiptText className="h-4 w-4" />
+                    View Orders
+                  </span>
+                  <ArrowUpRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+    </div>
   );
 }

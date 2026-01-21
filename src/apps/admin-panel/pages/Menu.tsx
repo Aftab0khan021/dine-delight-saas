@@ -1,702 +1,494 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { GripVertical, Pencil, Plus, Search } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { 
+  Grip, 
+  Image as ImageIcon, 
+  MoreHorizontal, 
+  Plus, 
+  Search, 
+  Trash2 
+} from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
+import { useToast } from "@/hooks/use-toast";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+// UI Components
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
-import { CategoryEditorDrawer, type CategoryEditorValues } from "../components/menu/CategoryEditorDrawer";
-import { MenuItemEditorDrawer, type MenuItemEditorValues } from "../components/menu/MenuItemEditorDrawer";
-
-function formatMoney(cents: number, currency = "USD") {
-  const amount = (cents ?? 0) / 100;
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-    }).format(amount);
-  } catch {
-    return `$${amount.toFixed(2)}`;
-  }
-}
-
+// --- Types ---
 type CategoryRow = {
   id: string;
   name: string;
   description: string | null;
-  is_active: boolean;
   sort_order: number;
+  is_active: boolean; 
+  restaurant_id: string; 
 };
 
 type MenuItemRow = {
   id: string;
   name: string;
   description: string | null;
-  category_id: string | null;
   price_cents: number;
-  currency_code: string;
+  category_id: string | null;
   image_url: string | null;
   is_active: boolean;
-  sort_order: number;
 };
+
+// --- Helpers ---
+function formatMoney(cents: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+}
 
 export default function AdminMenu() {
   const { restaurant } = useRestaurantContext();
   const qc = useQueryClient();
+  const { toast } = useToast();
 
-  const [categoryEditorOpen, setCategoryEditorOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<CategoryRow | null>(null);
-
-  const [itemEditorOpen, setItemEditorOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<MenuItemRow | null>(null);
-
+  // --- State ---
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [availabilityFilter, setAvailabilityFilter] = useState<"all" | "active" | "inactive">("all");
+  const [draggedCatId, setDraggedCatId] = useState<string | null>(null);
+  
+  // Sheet States
+  const [catSheetOpen, setCatSheetOpen] = useState(false);
+  const [editCat, setEditCat] = useState<CategoryRow | null>(null);
+  
+  const [itemSheetOpen, setItemSheetOpen] = useState(false);
+  const [editItem, setEditItem] = useState<MenuItemRow | null>(null);
 
+  // --- Queries ---
   const categoriesQuery = useQuery({
     queryKey: ["admin", "menu", restaurant?.id, "categories"],
     enabled: !!restaurant?.id,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("categories")
-        .select("id, name, description, is_active, sort_order")
+        .select("*")
         .eq("restaurant_id", restaurant!.id)
-        .is("deleted_at", null) // ✅ Ensure we only fetch non-deleted
-        .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: true });
-
+        .is("deleted_at", null) 
+        .order("sort_order");
       if (error) throw error;
-      return (data ?? []) as CategoryRow[];
+      return data as CategoryRow[];
     },
   });
 
-  const menuItemsQuery = useQuery({
-    queryKey: ["admin", "menu", restaurant?.id, "menuItems"],
+  const itemsQuery = useQuery({
+    queryKey: ["admin", "menu", restaurant?.id, "items"],
     enabled: !!restaurant?.id,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("menu_items")
-        .select(
-          "id, name, description, category_id, price_cents, currency_code, image_url, is_active, sort_order",
-        )
+        .select("*")
         .eq("restaurant_id", restaurant!.id)
-        .is("deleted_at", null) // ✅ Ensure we only fetch non-deleted
-        .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: true });
-
+        .is("deleted_at", null)
+        .order("sort_order");
       if (error) throw error;
-      return (data ?? []) as MenuItemRow[];
-    },
-  });
-
-  const itemCountByCategory = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const it of menuItemsQuery.data ?? []) {
-      if (!it.category_id) continue;
-      map.set(it.category_id, (map.get(it.category_id) ?? 0) + 1);
-    }
-    return map;
-  }, [menuItemsQuery.data]);
-
-  const categoryNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const c of categoriesQuery.data ?? []) map.set(c.id, c.name);
-    return map;
-  }, [categoriesQuery.data]);
-
-  const filteredItems = useMemo(() => {
-    const s = search.trim().toLowerCase();
-    return (menuItemsQuery.data ?? []).filter((it) => {
-      if (s && !it.name.toLowerCase().includes(s)) return false;
-      if (categoryFilter !== "all" && (it.category_id ?? "none") !== categoryFilter) return false;
-      if (availabilityFilter === "active" && !it.is_active) return false;
-      if (availabilityFilter === "inactive" && it.is_active) return false;
-      return true;
-    });
-  }, [availabilityFilter, categoryFilter, menuItemsQuery.data, search]);
-
-  const categorySaveMutation = useMutation({
-    mutationFn: async (values: CategoryEditorValues) => {
-      if (!restaurant?.id) throw new Error("Missing restaurant");
-
-      if (editingCategory) {
-        const { error } = await supabase
-          .from("categories")
-          .update({
-            name: values.name,
-            description: values.description ?? null,
-            is_active: values.is_active,
-          })
-          .eq("id", editingCategory.id)
-          .eq("restaurant_id", restaurant.id);
-        if (error) throw error;
-        return;
-      }
-
-      const existing = categoriesQuery.data ?? [];
-      const nextSort = existing.length ? Math.max(...existing.map((c) => c.sort_order ?? 0)) + 1 : 0;
-
-      const { error } = await supabase.from("categories").insert({
-        restaurant_id: restaurant.id,
-        name: values.name,
-        description: values.description ?? null,
-        is_active: values.is_active,
-        sort_order: nextSort,
-      });
-
-      if (error) throw error;
-    },
-    onSuccess: async () => {
-      setCategoryEditorOpen(false);
-      setEditingCategory(null);
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["admin", "menu", restaurant?.id, "categories"] }),
-        qc.invalidateQueries({ queryKey: ["admin", "menu", restaurant?.id, "menuItems"] }),
-      ]);
-    },
-  });
-
-  const categoryToggleMutation = useMutation({
-    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      if (!restaurant?.id) throw new Error("Missing restaurant");
-      const { error } = await supabase
-        .from("categories")
-        .update({ is_active })
-        .eq("id", id)
-        .eq("restaurant_id", restaurant.id);
-      if (error) throw error;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "menu", restaurant?.id, "categories"] }),
-  });
-
-  const categoryReorderMutation = useMutation({
-    mutationFn: async (orderedIds: string[]) => {
-      if (!restaurant?.id) throw new Error("Missing restaurant");
-
-      const updates = orderedIds.map((id, index) =>
-        supabase
-          .from("categories")
-          .update({ sort_order: index })
-          .eq("id", id)
-          .eq("restaurant_id", restaurant.id),
-      );
-
-      const results = await Promise.all(updates);
-      const err = results.find((r) => r.error)?.error;
-      if (err) throw err;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "menu", restaurant?.id, "categories"] }),
-  });
-
-  // ✅ NEW: Category Soft Delete Mutation
-  const categoryDeleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      if (!restaurant?.id) throw new Error("Missing restaurant");
-      const { error } = await supabase
-        .from("categories")
-        .update({ deleted_at: new Date().toISOString() } as any) // Soft Delete
-        .eq("id", id)
-        .eq("restaurant_id", restaurant.id);
-      if (error) throw error;
-    },
-    onSuccess: async () => {
-      setCategoryEditorOpen(false);
-      setEditingCategory(null);
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["admin", "menu", restaurant?.id, "categories"] }),
-        qc.invalidateQueries({ queryKey: ["admin", "menu", restaurant?.id, "menuItems"] }),
-      ]);
-    },
-  });
-
-  const menuItemSaveMutation = useMutation({
-    mutationFn: async (values: MenuItemEditorValues) => {
-      if (!restaurant?.id) throw new Error("Missing restaurant");
-
-      if (editingItem) {
-        const { error } = await supabase
-          .from("menu_items")
-          .update({
-            name: values.name,
-            description: values.description ?? null,
-            category_id: values.category_id ?? null,
-            price_cents: values.price_cents,
-            image_url: values.image_url ?? null,
-            is_active: values.is_active,
-          })
-          .eq("id", editingItem.id)
-          .eq("restaurant_id", restaurant.id);
-        if (error) throw error;
-        return;
-      }
-
-      const existing = menuItemsQuery.data ?? [];
-      const nextSort = existing.length ? Math.max(...existing.map((i) => i.sort_order ?? 0)) + 1 : 0;
-
-      const { error } = await supabase.from("menu_items").insert({
-        restaurant_id: restaurant.id,
-        name: values.name,
-        description: values.description ?? null,
-        category_id: values.category_id ?? null,
-        price_cents: values.price_cents,
-        image_url: values.image_url ?? null,
-        is_active: values.is_active,
-        sort_order: nextSort,
-      });
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      setItemEditorOpen(false);
-      setEditingItem(null);
-      qc.invalidateQueries({ queryKey: ["admin", "menu", restaurant?.id, "menuItems"] });
-    },
-  });
-
-  const menuItemToggleMutation = useMutation({
-    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      if (!restaurant?.id) throw new Error("Missing restaurant");
-      const { error } = await supabase
-        .from("menu_items")
-        .update({ is_active })
-        .eq("id", id)
-        .eq("restaurant_id", restaurant.id);
-      if (error) throw error;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "menu", restaurant?.id, "menuItems"] }),
-  });
-
-  // ✅ NEW: Menu Item Soft Delete Mutation
-  const menuItemDeleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      if (!restaurant?.id) throw new Error("Missing restaurant");
-      const { error } = await supabase
-        .from("menu_items")
-        .update({ deleted_at: new Date().toISOString() } as any) // Soft Delete
-        .eq("id", id)
-        .eq("restaurant_id", restaurant.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      setItemEditorOpen(false);
-      setEditingItem(null);
-      qc.invalidateQueries({ queryKey: ["admin", "menu", restaurant?.id, "menuItems"] });
+      return data as MenuItemRow[];
     },
   });
 
   const categories = categoriesQuery.data ?? [];
-  const menuItems = menuItemsQuery.data ?? [];
+  const items = itemsQuery.data ?? [];
 
-  const [dragId, setDragId] = useState<string | null>(null);
-  const orderedCategoryIds = useMemo(() => categories.map((c) => c.id), [categories]);
+  // --- Derived Data ---
+  const itemCountByCat = useMemo(() => {
+    const map = new Map<string, number>();
+    items.forEach(i => {
+      if (i.category_id) map.set(i.category_id, (map.get(i.category_id) || 0) + 1);
+    });
+    return map;
+  }, [items]);
+
+  const filteredItems = useMemo(() => {
+    const s = search.toLowerCase().trim();
+    return items.filter(i => i.name.toLowerCase().includes(s));
+  }, [items, search]);
+
+  // --- Drag & Drop Logic ---
+  const reorderMutation = useMutation({
+    mutationFn: async (updates: CategoryRow[]) => {
+      const { error } = await supabase.from("categories").upsert(updates);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "menu"] });
+      toast({ title: "Reordered", description: "New category order saved." });
+    }
+  });
+
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    setDraggedCatId(id);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault(); 
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggedCatId || draggedCatId === targetId) return;
+
+    const oldIndex = categories.findIndex(c => c.id === draggedCatId);
+    const newIndex = categories.findIndex(c => c.id === targetId);
+    
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const newCategories = [...categories];
+    const [movedItem] = newCategories.splice(oldIndex, 1);
+    newCategories.splice(newIndex, 0, movedItem);
+
+    const updates = newCategories.map((cat, index) => ({
+      ...cat,
+      sort_order: index
+    }));
+
+    reorderMutation.mutate(updates);
+    setDraggedCatId(null);
+  };
+
+  // --- CRUD Mutations ---
+  const saveCategory = useMutation({
+    mutationFn: async (values: any) => {
+      if (editCat) {
+        await supabase.from("categories").update(values).eq("id", editCat.id);
+      } else {
+        await supabase.from("categories").insert({ ...values, restaurant_id: restaurant!.id, sort_order: categories.length });
+      }
+    },
+    onSuccess: () => {
+      setCatSheetOpen(false);
+      qc.invalidateQueries({ queryKey: ["admin", "menu"] });
+      toast({ title: "Saved", description: "Category updated." });
+    }
+  });
+
+  const deleteCategory = useMutation({
+    mutationFn: async (id: string) => {
+      await supabase.from("categories").update({ deleted_at: new Date().toISOString() } as any).eq("id", id);
+    },
+    onSuccess: () => {
+      setCatSheetOpen(false);
+      qc.invalidateQueries({ queryKey: ["admin", "menu"] });
+      toast({ title: "Deleted", description: "Category removed." });
+    }
+  });
+
+  const saveItem = useMutation({
+    mutationFn: async (values: any) => {
+      if (editItem) {
+        await supabase.from("menu_items").update(values).eq("id", editItem.id);
+      } else {
+        await supabase.from("menu_items").insert({ ...values, restaurant_id: restaurant!.id, sort_order: items.length });
+      }
+    },
+    onSuccess: () => {
+      setItemSheetOpen(false);
+      qc.invalidateQueries({ queryKey: ["admin", "menu"] });
+      toast({ title: "Saved", description: "Menu item updated." });
+    }
+  });
+
+  const deleteItem = useMutation({
+    mutationFn: async (id: string) => {
+      await supabase.from("menu_items").update({ deleted_at: new Date().toISOString() } as any).eq("id", id);
+    },
+    onSuccess: () => {
+      setItemSheetOpen(false);
+      qc.invalidateQueries({ queryKey: ["admin", "menu"] });
+      toast({ title: "Deleted", description: "Item removed." });
+    }
+  });
 
   return (
-    <section className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Menu</h1>
-        <p className="text-sm text-muted-foreground">Manage categories and menu items for {restaurant?.name}.</p>
+    <div className="space-y-6">
+      <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Menu Management</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Manage your food and drink offerings.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => { setEditCat(null); setCatSheetOpen(true); }}>
+            <Plus className="mr-2 h-4 w-4" /> Add Category
+          </Button>
+          <Button onClick={() => { setEditItem(null); setItemSheetOpen(true); }}>
+            <Plus className="mr-2 h-4 w-4" /> Add Item
+          </Button>
+        </div>
       </header>
 
-      {/* SECTION 1: Categories */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <CardTitle>Categories</CardTitle>
-              <CardDescription>Organize your menu and control visibility.</CardDescription>
+      <div className="grid gap-3 lg:grid-cols-3">
+        {/* LEFT COLUMN: Categories (Draggable) */}
+        <Card className="shadow-sm lg:col-span-1 h-fit">
+          <CardHeader>
+            <CardTitle className="text-base">Categories</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {categories.map((cat) => (
+              <div 
+                key={cat.id} 
+                draggable={true}
+                onDragStart={(e) => handleDragStart(e, cat.id)}
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, cat.id)}
+                className={cn(
+                  "group flex items-center justify-between gap-3 rounded-xl border bg-background p-3 transition-all duration-200",
+                  "cursor-grab", // <--- UPDATED: Simple grab hand only
+                  // Default Style
+                  draggedCatId !== cat.id && "border-border shadow-sm hover:border-primary/20 hover:shadow-md",
+                  // Active Drag Style (LIFTED LOOK)
+                  draggedCatId === cat.id && "border-2 border-primary shadow-xl scale-[1.02] z-10 relative bg-background"
+                )}
+              >
+                <div className="flex items-center gap-3 min-w-0 pointer-events-none">
+                  <Grip className={cn(
+                    "h-4 w-4 text-muted-foreground transition-colors",
+                    draggedCatId === cat.id && "text-primary"
+                  )} />
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium">{cat.name}</div>
+                    <div className="text-xs text-muted-foreground">{itemCountByCat.get(cat.id) || 0} items</div>
+                  </div>
+                </div>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); setEditCat(cat); setCatSheetOpen(true); }}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+            {categories.length === 0 && <div className="text-sm text-muted-foreground text-center py-4">No categories.</div>}
+          </CardContent>
+        </Card>
+
+        {/* RIGHT COLUMN: Items */}
+        <Card className="shadow-sm lg:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
+            <CardTitle className="text-base">Menu Items</CardTitle>
+            <div className="relative w-full max-w-xs">
+              <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Search items..." 
+                className="pl-9 h-9" 
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
-            <Button
-              onClick={() => {
-                setEditingCategory(null);
-                setCategoryEditorOpen(true);
-              }}
-            >
-              <Plus className="h-4 w-4" />
-              Add category
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {categoriesQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading categories…</p>
-          ) : categories.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-6 text-center">
-              <p className="font-medium">No categories yet</p>
-              <p className="text-sm text-muted-foreground">Create your first category to start building your menu.</p>
-            </div>
-          ) : (
+          </CardHeader>
+          <CardContent>
             <div className="space-y-2">
-              <div className="hidden md:block">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-10" />
-                      <TableHead>Name</TableHead>
-                      <TableHead>Items</TableHead>
-                      <TableHead>Visible</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {categories.map((c) => {
-                      const count = itemCountByCategory.get(c.id) ?? 0;
-                      return (
-                        <TableRow
-                          key={c.id}
-                          draggable
-                          onDragStart={() => setDragId(c.id)}
-                          onDragOver={(e) => e.preventDefault()}
-                          onDrop={() => {
-                            if (!dragId || dragId === c.id) return;
-                            const ids = [...orderedCategoryIds];
-                            const from = ids.indexOf(dragId);
-                            const to = ids.indexOf(c.id);
-                            if (from < 0 || to < 0) return;
-                            ids.splice(from, 1);
-                            ids.splice(to, 0, dragId);
-                            categoryReorderMutation.mutate(ids);
-                            setDragId(null);
-                          }}
-                        >
-                          <TableCell className="text-muted-foreground">
-                            <GripVertical className="h-4 w-4" />
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              <span>{c.name}</span>
-                              {!c.is_active ? <Badge variant="secondary">Hidden</Badge> : null}
-                            </div>
-                            {c.description ? <p className="text-xs text-muted-foreground">{c.description}</p> : null}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">{count}</TableCell>
-                          <TableCell>
-                            <Switch
-                              checked={c.is_active}
-                              onCheckedChange={(v) => categoryToggleMutation.mutate({ id: c.id, is_active: v })}
-                            />
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setEditingCategory(c);
-                                setCategoryEditorOpen(true);
-                              }}
-                            >
-                              <Pencil className="h-4 w-4" />
-                              Edit
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
+              {filteredItems.map((item) => (
+                <div 
+                  key={item.id} 
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background p-3 transition-all hover:shadow-sm"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg border border-border bg-muted">
+                      {item.image_url ? (
+                        <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <ImageIcon className="h-5 w-5 text-muted-foreground/50" />
+                      )}
+                    </div>
+                    
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">{item.name}</div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs font-mono text-muted-foreground">{formatMoney(item.price_cents)}</span>
+                        {!item.is_active && <Badge variant="destructive" className="h-4 px-1 text-[10px]">Sold Out</Badge>}
+                      </div>
+                    </div>
+                  </div>
 
-              {/* Mobile cards */}
-              <div className="grid gap-3 md:hidden">
-                {categories.map((c) => {
-                  const count = itemCountByCategory.get(c.id) ?? 0;
-                  return (
-                    <Card key={c.id}>
-                      <CardContent className="pt-6 space-y-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-medium">{c.name}</p>
-                            <p className="text-sm text-muted-foreground">{count} item{count === 1 ? "" : "s"}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={c.is_active}
-                              onCheckedChange={(v) => categoryToggleMutation.mutate({ id: c.id, is_active: v })}
-                            />
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setEditingCategory(c);
-                                setCategoryEditorOpen(true);
-                              }}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                        {c.description ? <p className="text-sm text-muted-foreground">{c.description}</p> : null}
-                        <p className="text-xs text-muted-foreground">Reorder on desktop (drag handle).</p>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => { setEditItem(item); setItemSheetOpen(true); }}>
+                      Edit
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {filteredItems.length === 0 && <div className="text-sm text-muted-foreground text-center py-8">No items found.</div>}
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* SECTION 2: Menu Items */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <CardTitle>Menu Items</CardTitle>
-              <CardDescription>Add items, set categories, and control availability.</CardDescription>
-            </div>
-            <Button
-              onClick={() => {
-                setEditingItem(null);
-                setItemEditorOpen(true);
-              }}
-            >
-              <Plus className="h-4 w-4" />
-              Add item
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-3 lg:grid-cols-3">
-            <div className="relative lg:col-span-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search items…" className="pl-9" />
-            </div>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="All categories" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All categories</SelectItem>
-                <SelectItem value="none">Uncategorized</SelectItem>
-                {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={availabilityFilter} onValueChange={(v) => setAvailabilityFilter(v as any)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Availability" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="active">Available</SelectItem>
-                <SelectItem value="inactive">Hidden</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Separator />
-
-          {menuItemsQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading menu items…</p>
-          ) : menuItems.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-6 text-center">
-              <p className="font-medium">No menu items yet</p>
-              <p className="text-sm text-muted-foreground">Add your first item to start taking orders.</p>
-            </div>
-          ) : filteredItems.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-6 text-center">
-              <p className="font-medium">No results</p>
-              <p className="text-sm text-muted-foreground">Try adjusting your search or filters.</p>
-            </div>
-          ) : (
-            <>
-              {/* Desktop table */}
-              <div className="hidden md:block">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Item</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Price</TableHead>
-                      <TableHead>Available</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredItems.map((it) => {
-                      const categoryName = it.category_id ? categoryNameById.get(it.category_id) : "Uncategorized";
-                      return (
-                        <TableRow key={it.id}>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-3">
-                              <div className="h-10 w-10 overflow-hidden rounded-md border bg-muted">
-                                {it.image_url ? (
-                                  <img
-                                    src={it.image_url}
-                                    alt={`${it.name} image`}
-                                    className="h-full w-full object-cover"
-                                    loading="lazy"
-                                  />
-                                ) : null}
-                              </div>
-                              <div>
-                                <p>{it.name}</p>
-                                {it.description ? <p className="text-xs text-muted-foreground line-clamp-1">{it.description}</p> : null}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">{categoryName ?? "—"}</TableCell>
-                          <TableCell>{formatMoney(it.price_cents ?? 0, it.currency_code ?? "USD")}</TableCell>
-                          <TableCell>
-                            <Switch
-                              checked={it.is_active}
-                              onCheckedChange={(v) => menuItemToggleMutation.mutate({ id: it.id, is_active: v })}
-                            />
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setEditingItem(it);
-                                setItemEditorOpen(true);
-                              }}
-                            >
-                              <Pencil className="h-4 w-4" />
-                              Edit
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {/* Mobile cards */}
-              <div className="grid gap-3 md:hidden">
-                {filteredItems.map((it) => {
-                  const categoryName = it.category_id ? categoryNameById.get(it.category_id) : "Uncategorized";
-                  return (
-                    <Card key={it.id}>
-                      <CardContent className="pt-6 space-y-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-start gap-3">
-                            <div className="h-12 w-12 overflow-hidden rounded-md border bg-muted">
-                              {it.image_url ? (
-                                <img
-                                  src={it.image_url}
-                                  alt={`${it.name} image`}
-                                  className="h-full w-full object-cover"
-                                  loading="lazy"
-                                />
-                              ) : null}
-                            </div>
-                            <div>
-                              <p className="font-medium">{it.name}</p>
-                              <p className="text-sm text-muted-foreground">{categoryName}</p>
-                              <p className="text-sm">{formatMoney(it.price_cents ?? 0, it.currency_code ?? "USD")}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={it.is_active}
-                              onCheckedChange={(v) => menuItemToggleMutation.mutate({ id: it.id, is_active: v })}
-                            />
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setEditingItem(it);
-                                setItemEditorOpen(true);
-                              }}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                        {it.description ? <p className="text-sm text-muted-foreground">{it.description}</p> : null}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      <CategoryEditorDrawer
-        open={categoryEditorOpen}
-        onOpenChange={(open) => {
-          setCategoryEditorOpen(open);
-          if (!open) setEditingCategory(null);
-        }}
-        title={editingCategory ? "Edit Category" : "Add Category"}
-        defaultValues={
-          editingCategory
-            ? {
-                name: editingCategory.name,
-                description: editingCategory.description ?? "",
-                is_active: editingCategory.is_active,
-              }
-            : { is_active: true }
-        }
-        saving={categorySaveMutation.isPending}
-        onSubmit={async (values) => categorySaveMutation.mutateAsync(values)}
-        onDelete={
-          editingCategory
-            ? async () => {
-                if (confirm("Are you sure you want to delete this category? Items will be hidden.")) {
-                  await categoryDeleteMutation.mutateAsync(editingCategory.id);
-                }
-              }
-            : undefined
-        }
+      {/* --- EDITORS --- */}
+      
+      <CategorySheet 
+        open={catSheetOpen} 
+        onOpenChange={setCatSheetOpen} 
+        data={editCat} 
+        onSave={(vals: any) => saveCategory.mutate(vals)}
+        onDelete={(id: string) => deleteCategory.mutate(id)}
       />
 
-      <MenuItemEditorDrawer
-        open={itemEditorOpen}
-        onOpenChange={(open) => {
-          setItemEditorOpen(open);
-          if (!open) setEditingItem(null);
-        }}
-        title={editingItem ? "Edit Menu Item" : "Add Menu Item"}
-        categories={(categoriesQuery.data ?? []).map((c) => ({ id: c.id, name: c.name }))}
-        defaultValues={
-          editingItem
-            ? {
-                name: editingItem.name,
-                description: editingItem.description ?? "",
-                category_id: editingItem.category_id,
-                price_cents: editingItem.price_cents ?? 0,
-                image_url: editingItem.image_url ?? "",
-                is_active: editingItem.is_active,
-              }
-            : { is_active: true, price_cents: 0, category_id: null }
-        }
-        saving={menuItemSaveMutation.isPending}
-        onSubmit={async (values) => menuItemSaveMutation.mutateAsync(values)}
-        onDelete={
-          editingItem
-            ? async () => {
-                if (confirm("Are you sure you want to delete this item?")) {
-                  await menuItemDeleteMutation.mutateAsync(editingItem.id);
-                }
-              }
-            : undefined
-        }
+      <ItemSheet 
+        open={itemSheetOpen} 
+        onOpenChange={setItemSheetOpen} 
+        data={editItem} 
+        categories={categories}
+        onSave={(vals: any) => saveItem.mutate(vals)}
+        onDelete={(id: string) => deleteItem.mutate(id)}
       />
-    </section>
+    </div>
+  );
+}
+
+// --- Subcomponent: Category Sheet ---
+function CategorySheet({ open, onOpenChange, data, onSave, onDelete }: any) {
+  const form = useForm();
+  
+  useMemo(() => {
+    if (open) {
+      form.reset({
+        name: data?.name || "",
+        description: data?.description || "",
+      });
+    }
+  }, [open, data]);
+
+  const onSubmit = (values: any) => onSave(values);
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent>
+        <SheetHeader>
+          <SheetTitle>{data ? "Edit Category" : "New Category"}</SheetTitle>
+          <SheetDescription>Organize your menu sections.</SheetDescription>
+        </SheetHeader>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-6">
+          <div className="space-y-2">
+            <Label>Name</Label>
+            <Input {...form.register("name", { required: true })} placeholder="e.g. Starters" />
+          </div>
+          <div className="space-y-2">
+            <Label>Description</Label>
+            <Textarea {...form.register("description")} placeholder="Optional details..." />
+          </div>
+          <SheetFooter className="gap-2 sm:justify-between">
+            {data && (
+              <Button type="button" variant="destructive" onClick={() => onDelete(data.id)}>
+                <Trash2 className="mr-2 h-4 w-4" /> Delete
+              </Button>
+            )}
+            <Button type="submit">Save Changes</Button>
+          </SheetFooter>
+        </form>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// --- Subcomponent: Item Sheet ---
+function ItemSheet({ open, onOpenChange, data, categories, onSave, onDelete }: any) {
+  const form = useForm();
+
+  useMemo(() => {
+    if (open) {
+      form.reset({
+        name: data?.name || "",
+        description: data?.description || "",
+        price_cents: data?.price_cents || 0,
+        category_id: data?.category_id || (categories[0]?.id ?? ""),
+        image_url: data?.image_url || "",
+        is_active: data?.is_active ?? true 
+      });
+    }
+  }, [open, data]);
+
+  const onSubmit = (values: any) => onSave({ ...values, price_cents: Number(values.price_cents) });
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle>{data ? "Edit Item" : "New Item"}</SheetTitle>
+          <SheetDescription>Update item details, price, and availability.</SheetDescription>
+        </SheetHeader>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-6">
+          <div className="space-y-2">
+            <Label>Name</Label>
+            <Input {...form.register("name", { required: true })} placeholder="e.g. Cheeseburger" />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Price (Cents)</Label>
+              <Input type="number" {...form.register("price_cents", { required: true })} />
+              <div className="text-xs text-muted-foreground">1000 = $10.00</div>
+            </div>
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <Select 
+                onValueChange={(v) => form.setValue("category_id", v)} 
+                defaultValue={form.getValues("category_id")}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((c: any) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Description</Label>
+            <Textarea {...form.register("description")} />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Image URL</Label>
+            <Input {...form.register("image_url")} placeholder="https://..." />
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+            <div className="space-y-0.5">
+              <Label>Available</Label>
+              <div className="text-xs text-muted-foreground">Show on public menu</div>
+            </div>
+            <Switch 
+              checked={form.watch("is_active")} 
+              onCheckedChange={(v) => form.setValue("is_active", v)} 
+            />
+          </div>
+
+          <SheetFooter className="gap-2 sm:justify-between pt-4">
+            {data && (
+              <Button type="button" variant="destructive" onClick={() => onDelete(data.id)}>
+                <Trash2 className="mr-2 h-4 w-4" /> Delete
+              </Button>
+            )}
+            <Button type="submit">Save Item</Button>
+          </SheetFooter>
+        </form>
+      </SheetContent>
+    </Sheet>
   );
 }

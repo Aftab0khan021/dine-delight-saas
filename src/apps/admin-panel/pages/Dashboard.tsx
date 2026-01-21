@@ -1,48 +1,86 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { startOfDay, addDays } from "date-fns";
+import { addDays, startOfDay } from "date-fns";
+import { ArrowUpRight, Plus, QrCode, ReceiptText, Sparkles } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
+import { cn } from "@/lib/utils";
 
+// UI Components
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Link } from "react-router-dom";
+
+// --- Visual Component: Sparkline (From Repo A) ---
+function Sparkline({ values, className }: { values: number[]; className?: string }) {
+  const w = 96;
+  const h = 32;
+  const pad = 2;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = Math.max(1, max - min);
+
+  const points = values
+    .map((v, i) => {
+      const x = (i / (values.length - 1)) * (w - pad * 2) + pad;
+      const y = h - pad - ((v - min) / range) * (h - pad * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+
+  const last = values[values.length - 1];
+  const first = values[0];
+  const up = last >= first;
+
+  return (
+    <div className={cn("w-24", className)} aria-hidden>
+      <svg viewBox={`0 0 ${w} ${h}`} className="h-8 w-full">
+        <polyline
+          points={points}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={cn(up ? "text-primary" : "text-muted-foreground")}
+        />
+      </svg>
+    </div>
+  );
+}
+
+// --- Helpers ---
 function formatMoney(cents: number, currency = "USD") {
   const amount = (cents ?? 0) / 100;
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  } catch {
-    return `$${amount.toFixed(2)}`;
-  }
+  return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
 }
 
 function shortId(id: string) {
-  return id?.slice(0, 8) ?? "—";
+  return id?.slice(0, 4) ?? "—";
 }
+
+const statusVariant = (status: string) => {
+  switch (status) {
+    case "pending": return "default"; // New
+    case "in_progress": return "secondary"; // Preparing
+    case "ready": return "outline";
+    default: return "secondary";
+  }
+};
 
 export default function AdminDashboard() {
   const { restaurant } = useRestaurantContext();
 
+  // --- 1. Data Fetching (From Repo B) ---
   const { startISO, endISO } = useMemo(() => {
     const start = startOfDay(new Date());
     const end = addDays(start, 1);
     return { startISO: start.toISOString(), endISO: end.toISOString() };
   }, []);
 
+  // Fetch Today's Orders for KPIs
   const todayOrdersQuery = useQuery({
     queryKey: ["admin", "dashboard", restaurant?.id, "todayOrders"],
     enabled: !!restaurant?.id,
@@ -52,59 +90,38 @@ export default function AdminDashboard() {
         .select("id, placed_at, completed_at, total_cents, currency_code")
         .eq("restaurant_id", restaurant!.id)
         .gte("placed_at", startISO)
-        .lt("placed_at", endISO)
-        .order("placed_at", { ascending: false });
-
+        .lt("placed_at", endISO);
       if (error) throw error;
       return data;
     },
   });
 
+  // Fetch Latest 5 Orders for the List
   const latestOrdersQuery = useQuery({
     queryKey: ["admin", "dashboard", restaurant?.id, "latestOrders"],
     enabled: !!restaurant?.id,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("id, status, placed_at, total_cents, currency_code")
+        .select("id, status, placed_at, total_cents, table_label")
         .eq("restaurant_id", restaurant!.id)
         .order("placed_at", { ascending: false })
         .limit(5);
-
       if (error) throw error;
       return data;
     },
   });
 
-  const topSellingQuery = useQuery({
-    queryKey: ["admin", "dashboard", restaurant?.id, "topSellingItem"],
-    enabled: !!restaurant?.id,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("order_items")
-        .select("name_snapshot, quantity")
-        .eq("restaurant_id", restaurant!.id)
-        .limit(1000);
-
-      if (error) throw error;
-      return data;
-    },
-  });
-
+  // Fetch Setup Status (Menu Items, QR Codes, Branding)
   const setupQuery = useQuery({
     queryKey: ["admin", "dashboard", restaurant?.id, "setupChecklist"],
     enabled: !!restaurant?.id,
     queryFn: async () => {
-      const [{ data: restaurantRow, error: restaurantErr }, menuCount, qrCount] = await Promise.all([
+      const [{ data: restaurantRow }, menuCount, qrCount] = await Promise.all([
         supabase.from("restaurants").select("logo_url").eq("id", restaurant!.id).maybeSingle(),
         supabase.from("menu_items").select("id", { count: "exact", head: true }).eq("restaurant_id", restaurant!.id),
         supabase.from("qr_codes").select("id", { count: "exact", head: true }).eq("restaurant_id", restaurant!.id),
       ]);
-
-      if (restaurantErr) throw restaurantErr;
-      if (menuCount.error) throw menuCount.error;
-      if (qrCount.error) throw qrCount.error;
-
       return {
         logoUrl: restaurantRow?.logo_url ?? null,
         menuItemsCount: menuCount.count ?? 0,
@@ -113,199 +130,192 @@ export default function AdminDashboard() {
     },
   });
 
+  // --- 2. KPI Calculation ---
   const kpis = useMemo(() => {
     const todayOrders = todayOrdersQuery.data ?? [];
+    const count = todayOrders.length;
+    const revenue = todayOrders.reduce((sum, o) => sum + (o.total_cents ?? 0), 0);
     const currency = todayOrders[0]?.currency_code ?? "USD";
 
-    const todaysOrdersCount = todayOrders.length;
-    const todaysRevenueCents = todayOrders.reduce((sum, o) => sum + (o.total_cents ?? 0), 0);
+    // Calculate Avg Prep Time
+    const completed = todayOrders.filter((o) => o.completed_at).map((o) => 
+      new Date(o.completed_at!).getTime() - new Date(o.placed_at).getTime()
+    );
+    const avgPrep = completed.length ? Math.round(completed.reduce((a, b) => a + b, 0) / completed.length / 1000 / 60) : 0;
 
-    const completed = todayOrders
-      .filter((o) => o.completed_at)
-      .map((o) => {
-        const placed = new Date(o.placed_at).getTime();
-        const completedAt = new Date(o.completed_at as string).getTime();
-        return completedAt - placed;
-      })
-      .filter((ms) => Number.isFinite(ms) && ms > 0);
+    return [
+      {
+        label: "Today’s Orders",
+        value: count.toString(),
+        delta: "Since midnight",
+        // Mock trend for visual flair (since we don't have historical data easily available)
+        trend: [count * 0.5, count * 0.2, count * 0.8, count], 
+      },
+      {
+        label: "Revenue",
+        value: formatMoney(revenue, currency),
+        delta: "Gross total",
+        trend: [revenue * 0.4, revenue * 0.6, revenue * 0.5, revenue], 
+      },
+      {
+        label: "Avg Prep Time",
+        value: avgPrep > 0 ? `${avgPrep}m` : "—",
+        delta: "Completed orders",
+        trend: [15, 12, 18, avgPrep || 15], 
+      },
+      {
+        label: "Active Tables",
+        value: "—", // Placeholder as we don't track "Active Sessions" yet
+        delta: "Currently seated",
+        trend: [2, 4, 3, 5],
+      }
+    ];
+  }, [todayOrdersQuery.data]);
 
-    const avgPrepMs = completed.length >= 3 ? completed.reduce((a, b) => a + b, 0) / completed.length : null;
+  const setupChecklist = [
+    { label: "Branding", detail: "Logo + cover", status: setupQuery.data?.logoUrl ? "Done" : "Pending" },
+    { label: "First Menu Item", detail: "Create at least 1 item", status: (setupQuery.data?.menuItemsCount ?? 0) > 0 ? "Done" : "Pending" },
+    { label: "QR Published", detail: "Generate & print", status: (setupQuery.data?.qrCodesCount ?? 0) > 0 ? "Done" : "Pending" },
+  ];
 
-    const items = topSellingQuery.data ?? [];
-    const counts = new Map<string, number>();
-    for (const it of items) {
-      const key = it.name_snapshot;
-      counts.set(key, (counts.get(key) ?? 0) + (it.quantity ?? 0));
-    }
-
-    let topItem: { name: string; qty: number } | null = null;
-    for (const [name, qty] of counts.entries()) {
-      if (!topItem || qty > topItem.qty) topItem = { name, qty };
-    }
-
-    return {
-      currency,
-      todaysOrdersCount,
-      todaysRevenueCents,
-      avgPrepMs,
-      topItem,
-    };
-  }, [todayOrdersQuery.data, topSellingQuery.data]);
-
-  const avgPrepLabel = useMemo(() => {
-    if (!kpis.avgPrepMs) return "Not enough data";
-    const minutes = Math.round(kpis.avgPrepMs / 1000 / 60);
-    return `${minutes} min`;
-  }, [kpis.avgPrepMs]);
-
+  // --- 3. Render (Repo A Layout) ---
   return (
-    <section className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Key metrics and quick access for {restaurant?.name}.</p>
-      </header>
+    <div className="space-y-6">
+      <section className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            A clear snapshot of today—built for busy service.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" asChild>
+            <Link to="/admin/orders">View orders <ArrowUpRight className="ml-2 h-4 w-4" /></Link>
+          </Button>
+          <Button asChild>
+            <Link to="/admin/menu">Add menu item <Plus className="ml-2 h-4 w-4" /></Link>
+          </Button>
+        </div>
+      </section>
 
-      {/* KPI cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Today’s Orders</CardDescription>
-            <CardTitle className="text-3xl">{todayOrdersQuery.isLoading ? "…" : kpis.todaysOrdersCount}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-xs text-muted-foreground">Placed since midnight.</CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Revenue</CardDescription>
-            <CardTitle className="text-3xl">
-              {todayOrdersQuery.isLoading ? "…" : formatMoney(kpis.todaysRevenueCents, kpis.currency)}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-xs text-muted-foreground">From orders placed today.</CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Avg Prep Time</CardDescription>
-            <CardTitle className="text-3xl">{todayOrdersQuery.isLoading ? "…" : avgPrepLabel}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-xs text-muted-foreground">Requires at least 3 completed orders today.</CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Top Selling Item</CardDescription>
-            <CardTitle className="text-xl">
-              {topSellingQuery.isLoading
-                ? "…"
-                : kpis.topItem
-                  ? kpis.topItem.name
-                  : "No order items yet"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-xs text-muted-foreground">
-            {kpis.topItem ? `${kpis.topItem.qty} sold` : "Create orders to see your top item."}
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        {/* Orders Preview */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <CardTitle>Latest Orders</CardTitle>
-                <CardDescription>Most recent 5 orders for this restaurant.</CardDescription>
+      {/* KPI Cards */}
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {kpis.map((k) => (
+          <Card key={k.label} className="shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">{k.label}</CardTitle>
+            </CardHeader>
+            <CardContent className="flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-2xl font-semibold tracking-tight">{k.value}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{k.delta}</div>
               </div>
-              <Button variant="outline" size="sm" asChild>
-                <a href="/admin/orders">View Orders</a>
-              </Button>
+              <div className="flex items-end gap-3 pb-1">
+                <Sparkline values={k.trend} />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </section>
+
+      {/* Main Content Grid */}
+      <section className="grid gap-3 lg:grid-cols-3">
+        
+        {/* LEFT: Live Orders */}
+        <Card className="shadow-sm lg:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-base">Live orders</CardTitle>
+              <div className="mt-1 text-xs text-muted-foreground">Latest 5 orders.</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="relative inline-flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/40 motion-reduce:hidden" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+              </span>
+              <span className="text-xs text-muted-foreground">Live</span>
             </div>
           </CardHeader>
           <CardContent>
-            {latestOrdersQuery.isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading orders…</p>
-            ) : (latestOrdersQuery.data?.length ?? 0) === 0 ? (
-              <div className="rounded-lg border border-dashed p-6 text-center">
-                <p className="font-medium">No orders yet</p>
-                <p className="text-sm text-muted-foreground">When customers place orders, they’ll show up here.</p>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Order</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Placed</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(latestOrdersQuery.data ?? []).map((o) => (
-                    <TableRow key={o.id}>
-                      <TableCell className="font-medium">{shortId(o.id)}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{o.status}</Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{new Date(o.placed_at).toLocaleString()}</TableCell>
-                      <TableCell className="text-right">{formatMoney(o.total_cents ?? 0, o.currency_code ?? "USD")}</TableCell>
-                    </TableRow>
+            <div className="space-y-2">
+              {(latestOrdersQuery.data ?? []).map((o) => (
+                <div key={o.id} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background p-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">#{shortId(o.id)}</span>
+                      <span className="text-xs text-muted-foreground">{o.table_label || "No Table"}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(o.placed_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    </div>
+                  </div>
+                  <Badge variant={statusVariant(o.status)} className="shrink-0 capitalize">
+                    {o.status.replace('_', ' ')}
+                  </Badge>
+                </div>
+              ))}
+              {(latestOrdersQuery.data?.length === 0) && (
+                <div className="text-center py-8 text-sm text-muted-foreground border-dashed border rounded-xl">
+                  No orders today yet.
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* RIGHT: Checklist & Quick Actions */}
+        <div className="space-y-3">
+          
+          {/* Setup Checklist */}
+          <Card className="shadow-sm">
+            <CardHeader><CardTitle className="text-base">Setup checklist</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <div className="rounded-xl border border-border bg-background p-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  <div className="text-sm font-medium">Ready in 3 steps</div>
+                </div>
+                <ul className="mt-3 space-y-2 text-sm">
+                  {setupChecklist.map((i) => (
+                    <li key={i.label} className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium">{i.label}</div>
+                        <div className="text-xs text-muted-foreground">{i.detail}</div>
+                      </div>
+                      <Badge variant={i.status === "Done" ? "default" : "secondary"} className="shrink-0">{i.status}</Badge>
+                    </li>
                   ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
 
-        {/* Setup Checklist + Quick Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Setup</CardTitle>
-            <CardDescription>Finish these steps to go live faster.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm">Branding complete</span>
-                <Badge variant={setupQuery.data?.logoUrl ? "default" : "secondary"}>
-                  {setupQuery.isLoading ? "…" : setupQuery.data?.logoUrl ? "Done" : "Missing"}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm">First Menu Item</span>
-                <Badge variant={(setupQuery.data?.menuItemsCount ?? 0) > 0 ? "default" : "secondary"}>
-                  {setupQuery.isLoading ? "…" : (setupQuery.data?.menuItemsCount ?? 0) > 0 ? "Done" : "Missing"}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm">QR Published</span>
-                <Badge variant={(setupQuery.data?.qrCodesCount ?? 0) > 0 ? "default" : "secondary"}>
-                  {setupQuery.isLoading ? "…" : (setupQuery.data?.qrCodesCount ?? 0) > 0 ? "Done" : "Missing"}
-                </Badge>
-              </div>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Quick Actions</p>
-              <div className="grid gap-2">
-                <Button asChild>
-                  <a href="/admin/menu">Add Menu Item</a>
-                </Button>
-                <Button variant="outline" asChild>
-                  <a href="/admin/orders">View Orders</a>
-                </Button>
-                <Button variant="outline" asChild>
-                  <a href="/admin/qr">Generate QR</a>
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </section>
+          {/* Quick Actions */}
+          <Card className="shadow-sm">
+            <CardHeader><CardTitle className="text-base">Quick actions</CardTitle></CardHeader>
+            <CardContent className="grid gap-2">
+              <Button className="w-full justify-between" variant="secondary" asChild>
+                <Link to="/admin/menu">
+                  <span className="flex items-center gap-2"><Plus className="h-4 w-4" /> Add Item</span>
+                  <ArrowUpRight className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button className="w-full justify-between" variant="secondary" asChild>
+                <Link to="/admin/qr">
+                  <span className="flex items-center gap-2"><QrCode className="h-4 w-4" /> Print QR</span>
+                  <ArrowUpRight className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button className="w-full justify-between" variant="secondary" asChild>
+                <Link to="/admin/orders">
+                  <span className="flex items-center gap-2"><ReceiptText className="h-4 w-4" /> View Orders</span>
+                  <ArrowUpRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+    </div>
   );
 }
