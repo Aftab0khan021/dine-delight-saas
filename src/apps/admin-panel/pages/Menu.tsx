@@ -7,7 +7,8 @@ import {
   MoreHorizontal, 
   Plus, 
   Search, 
-  Trash2 
+  Trash2,
+  RefreshCw
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -137,6 +138,9 @@ export default function AdminMenu() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "menu"] });
       toast({ title: "Reordered", description: "New category order saved." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Reorder Failed", description: err.message, variant: "destructive" });
     }
   });
 
@@ -175,52 +179,83 @@ export default function AdminMenu() {
   const saveCategory = useMutation({
     mutationFn: async (values: any) => {
       if (editCat) {
-        await supabase.from("categories").update(values).eq("id", editCat.id);
+        const { error } = await supabase.from("categories").update(values).eq("id", editCat.id);
+        if (error) throw error;
       } else {
-        await supabase.from("categories").insert({ ...values, restaurant_id: restaurant!.id, sort_order: categories.length });
+        const { error } = await supabase.from("categories").insert({ ...values, restaurant_id: restaurant!.id, sort_order: categories.length });
+        if (error) throw error;
       }
     },
     onSuccess: () => {
       setCatSheetOpen(false);
       qc.invalidateQueries({ queryKey: ["admin", "menu"] });
       toast({ title: "Saved", description: "Category updated." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     }
   });
 
   const deleteCategory = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from("categories").update({ deleted_at: new Date().toISOString() } as any).eq("id", id);
+      const { error } = await supabase.from("categories").update({ deleted_at: new Date().toISOString() } as any).eq("id", id);
+      if (error) throw error;
     },
     onSuccess: () => {
       setCatSheetOpen(false);
       qc.invalidateQueries({ queryKey: ["admin", "menu"] });
       toast({ title: "Deleted", description: "Category removed." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     }
   });
 
   const saveItem = useMutation({
     mutationFn: async (values: any) => {
+      // 1. Sanitize Data
+      const payload = {
+        name: values.name,
+        description: values.description,
+        price_cents: Number(values.price_cents),
+        // FIX: Ensure category_id is NULL if empty string to prevent UUID errors
+        category_id: values.category_id === "" ? null : values.category_id,
+        image_url: values.image_url || null,
+        is_active: values.is_active,
+        restaurant_id: restaurant!.id
+      };
+
       if (editItem) {
-        await supabase.from("menu_items").update(values).eq("id", editItem.id);
+        const { error } = await supabase.from("menu_items").update(payload).eq("id", editItem.id);
+        if (error) throw error;
       } else {
-        await supabase.from("menu_items").insert({ ...values, restaurant_id: restaurant!.id, sort_order: items.length });
+        const { error } = await supabase.from("menu_items").insert({ ...payload, sort_order: items.length });
+        if (error) throw error;
       }
     },
     onSuccess: () => {
       setItemSheetOpen(false);
       qc.invalidateQueries({ queryKey: ["admin", "menu"] });
       toast({ title: "Saved", description: "Menu item updated." });
+    },
+    onError: (err: any) => {
+      console.error("Save Item Error:", err);
+      toast({ title: "Failed to Save", description: err.message || "Check database permissions", variant: "destructive" });
     }
   });
 
   const deleteItem = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from("menu_items").update({ deleted_at: new Date().toISOString() } as any).eq("id", id);
+      const { error } = await supabase.from("menu_items").update({ deleted_at: new Date().toISOString() } as any).eq("id", id);
+      if (error) throw error;
     },
     onSuccess: () => {
       setItemSheetOpen(false);
       qc.invalidateQueries({ queryKey: ["admin", "menu"] });
       toast({ title: "Deleted", description: "Item removed." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     }
   });
 
@@ -232,6 +267,10 @@ export default function AdminMenu() {
           <p className="mt-1 text-sm text-muted-foreground">Manage your food and drink offerings.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+           {/* Add Refresh Button for troubleshooting */}
+           <Button variant="outline" size="icon" onClick={() => qc.invalidateQueries({ queryKey: ["admin", "menu"] })}>
+             <RefreshCw className="h-4 w-4" />
+           </Button>
           <Button variant="secondary" onClick={() => { setEditCat(null); setCatSheetOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" /> Add Category
           </Button>
@@ -257,10 +296,8 @@ export default function AdminMenu() {
                 onDrop={(e) => handleDrop(e, cat.id)}
                 className={cn(
                   "group flex items-center justify-between gap-3 rounded-xl border bg-background p-3 transition-all duration-200",
-                  "cursor-grab", // <--- UPDATED: Simple grab hand only
-                  // Default Style
+                  "cursor-grab",
                   draggedCatId !== cat.id && "border-border shadow-sm hover:border-primary/20 hover:shadow-md",
-                  // Active Drag Style (LIFTED LOOK)
                   draggedCatId === cat.id && "border-2 border-primary shadow-xl scale-[1.02] z-10 relative bg-background"
                 )}
               >
@@ -374,7 +411,7 @@ function CategorySheet({ open, onOpenChange, data, onSave, onDelete }: any) {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent>
+      <SheetContent className="w-[90%] sm:max-w-lg overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{data ? "Edit Category" : "New Category"}</SheetTitle>
           <SheetDescription>Organize your menu sections.</SheetDescription>
@@ -388,7 +425,7 @@ function CategorySheet({ open, onOpenChange, data, onSave, onDelete }: any) {
             <Label>Description</Label>
             <Textarea {...form.register("description")} placeholder="Optional details..." />
           </div>
-          <SheetFooter className="gap-2 sm:justify-between">
+          <SheetFooter className="gap-2 sm:justify-between flex-col sm:flex-row">
             {data && (
               <Button type="button" variant="destructive" onClick={() => onDelete(data.id)}>
                 <Trash2 className="mr-2 h-4 w-4" /> Delete
@@ -412,18 +449,19 @@ function ItemSheet({ open, onOpenChange, data, categories, onSave, onDelete }: a
         name: data?.name || "",
         description: data?.description || "",
         price_cents: data?.price_cents || 0,
-        category_id: data?.category_id || (categories[0]?.id ?? ""),
+        // FIX: Default to first category if available, else empty string (which mutation converts to null)
+        category_id: data?.category_id || (categories.length > 0 ? categories[0].id : ""),
         image_url: data?.image_url || "",
         is_active: data?.is_active ?? true 
       });
     }
-  }, [open, data]);
+  }, [open, data, categories]);
 
   const onSubmit = (values: any) => onSave({ ...values, price_cents: Number(values.price_cents) });
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-lg">
+      <SheetContent className="w-[90%] sm:max-w-lg overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{data ? "Edit Item" : "New Item"}</SheetTitle>
           <SheetDescription>Update item details, price, and availability.</SheetDescription>
@@ -434,7 +472,7 @@ function ItemSheet({ open, onOpenChange, data, categories, onSave, onDelete }: a
             <Input {...form.register("name", { required: true })} placeholder="e.g. Cheeseburger" />
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Price (Cents)</Label>
               <Input type="number" {...form.register("price_cents", { required: true })} />
@@ -444,7 +482,7 @@ function ItemSheet({ open, onOpenChange, data, categories, onSave, onDelete }: a
               <Label>Category</Label>
               <Select 
                 onValueChange={(v) => form.setValue("category_id", v)} 
-                defaultValue={form.getValues("category_id")}
+                value={form.watch("category_id")} // Use watch to control value
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select..." />
@@ -453,6 +491,7 @@ function ItemSheet({ open, onOpenChange, data, categories, onSave, onDelete }: a
                   {categories.map((c: any) => (
                     <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                   ))}
+                  {categories.length === 0 && <div className="p-2 text-xs text-muted-foreground">No categories yet</div>}
                 </SelectContent>
               </Select>
             </div>
@@ -479,7 +518,7 @@ function ItemSheet({ open, onOpenChange, data, categories, onSave, onDelete }: a
             />
           </div>
 
-          <SheetFooter className="gap-2 sm:justify-between pt-4">
+          <SheetFooter className="gap-2 sm:justify-between flex-col sm:flex-row pt-4">
             {data && (
               <Button type="button" variant="destructive" onClick={() => onDelete(data.id)}>
                 <Trash2 className="mr-2 h-4 w-4" /> Delete

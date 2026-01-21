@@ -1,15 +1,12 @@
 import { useEffect, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { MapPin, Phone, Clock, ArrowRight, Utensils, Mail } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
-import type { Tables } from "@/integrations/supabase/types";
-
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 
-type RestaurantRow = Tables<"restaurants">;
-
+// Helper to safely access settings
 function normalizeSettings(settings: any | null) {
   return settings && typeof settings === "object" && !Array.isArray(settings) ? settings : {};
 }
@@ -18,10 +15,11 @@ export default function RestaurantProfile() {
   const { restaurantSlug } = useParams();
   const slug = (restaurantSlug ?? "").trim();
 
-  const restaurantQuery = useQuery({
+  // Fetch Restaurant Info
+  const { data: restaurant, isLoading, error } = useQuery({
     queryKey: ["public", "restaurant-profile", slug],
     enabled: !!slug,
-    queryFn: async (): Promise<RestaurantRow> => {
+    queryFn: async () => {
       const { data, error } = await supabase
         .from("restaurants")
         .select("*")
@@ -34,108 +32,120 @@ export default function RestaurantProfile() {
     },
   });
 
-  const coverImageUrl = useMemo(() => {
-    const s = normalizeSettings(restaurantQuery.data?.settings ?? null);
-    return (s.cover_image_url as string | null) ?? null;
-  }, [restaurantQuery.data?.settings]);
-
   useEffect(() => {
-    const name = restaurantQuery.data?.name;
-    document.title = name ? `${name} — Restaurant` : "Restaurant";
-  }, [restaurantQuery.data?.name]);
+    if (restaurant?.name) document.title = restaurant.name;
+  }, [restaurant?.name]);
 
-  if (!slug) {
-    return (
-      <main className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-10 max-w-3xl">
-          <h1 className="text-2xl font-semibold tracking-tight">Restaurant</h1>
-          <p className="mt-2 text-muted-foreground">
-            Missing restaurant slug. Try: <span className="font-mono">/r/your-slug</span>
-          </p>
-        </div>
-      </main>
-    );
-  }
+  if (isLoading) return <div className="h-screen flex items-center justify-center">Loading...</div>;
+  if (error || !restaurant) return <div className="h-screen flex items-center justify-center text-red-500">Restaurant not found</div>;
 
-  const isLoading = restaurantQuery.isLoading;
-  const errorMessage = (restaurantQuery.error as Error | null)?.message ?? null;
-  const restaurant = restaurantQuery.data ?? null;
+  // Extract Settings
+  const settings = normalizeSettings(restaurant.settings);
+  const themeColor = settings?.theme?.primary_color || "#0f172a";
+  const contactEmail = settings?.contact_email;
+  const contactPhone = settings?.contact_phone;
 
   return (
-    <main className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4 max-w-4xl flex items-center justify-between gap-4">
-          <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">
-            Home
-          </Link>
-          <Link to={`/menu?restaurant=${encodeURIComponent(slug)}`}>
-            <Button size="sm" variant="secondary">View Menu</Button>
-          </Link>
-        </div>
-      </header>
-
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        {isLoading ? (
-          <Card className="p-6">
-            <p className="text-sm text-muted-foreground">Loading restaurant…</p>
-          </Card>
-        ) : errorMessage ? (
-          <Card className="p-6">
-            <p className="text-sm text-destructive">{errorMessage}</p>
-          </Card>
-        ) : !restaurant ? (
-          <Card className="p-6">
-            <p className="text-sm text-muted-foreground">Restaurant not found.</p>
-          </Card>
+    <div className="min-h-screen bg-background flex flex-col">
+      
+      {/* --- HERO SECTION --- */}
+      <div className="relative h-[55vh] w-full bg-muted overflow-hidden">
+        {settings.cover_image_url ? (
+          <img src={settings.cover_image_url} alt="Cover" className="h-full w-full object-cover opacity-60" />
         ) : (
-          <section className="space-y-6">
-            {coverImageUrl ? (
-              <div className="overflow-hidden rounded-xl border bg-muted">
-                <img
-                  src={coverImageUrl}
-                  alt={`${restaurant.name} cover image`}
-                  className="h-48 w-full object-cover sm:h-64"
-                  loading="lazy"
-                />
-              </div>
-            ) : null}
-
-            <Card className="p-6">
-              <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex items-start gap-4">
-                  {restaurant.logo_url ? (
-                    <img
-                      src={restaurant.logo_url}
-                      alt={`${restaurant.name} logo`}
-                      className="h-14 w-14 rounded-lg object-cover border"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="h-14 w-14 rounded-lg border bg-muted" aria-hidden="true" />
-                  )}
-
-                  <div className="min-w-0">
-                    <h1 className="text-2xl font-semibold tracking-tight">{restaurant.name}</h1>
-                    {restaurant.description ? (
-                      <p className="mt-2 text-muted-foreground whitespace-pre-line">
-                        {restaurant.description}
-                      </p>
-                    ) : (
-                      <p className="mt-2 text-sm text-muted-foreground">No description provided.</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Link to={`/menu?restaurant=${encodeURIComponent(slug)}`}>
-                    <Button size="lg">View Menu</Button>
-                  </Link>
-                </div>
-              </div>
-            </Card>
-          </section>
+          <div className="h-full w-full bg-gradient-to-br from-slate-800 to-slate-900" />
         )}
+        
+        {/* Overlay Content */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 space-y-6 bg-black/30">
+          
+          {/* Logo */}
+          <div className="h-28 w-28 md:h-36 md:w-36 rounded-full border-4 border-background bg-background shadow-xl overflow-hidden shrink-0">
+            {restaurant.logo_url ? (
+              <img src={restaurant.logo_url} alt="Logo" className="h-full w-full object-cover" />
+            ) : (
+              <div className="h-full w-full flex items-center justify-center bg-muted text-muted-foreground font-bold text-3xl">
+                {restaurant.name.substring(0, 2).toUpperCase()}
+              </div>
+            )}
+          </div>
+          
+          {/* Text */}
+          <div className="space-y-2 max-w-2xl text-white drop-shadow-md">
+            <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
+              {restaurant.name}
+            </h1>
+            <p className="text-lg md:text-xl opacity-90 font-light">
+              Experience the best flavors in town.
+            </p>
+          </div>
+
+          {/* CTA Button */}
+          <Button 
+            size="lg" 
+            className="rounded-full px-8 h-12 text-base font-bold shadow-lg hover:scale-105 transition-transform"
+            style={{ backgroundColor: themeColor, borderColor: themeColor }}
+            asChild
+          >
+            <Link to={`/r/${slug}/menu`}>
+              View Menu <ArrowRight className="ml-2 h-5 w-5" />
+            </Link>
+          </Button>
+        </div>
       </div>
-    </main>
+
+      {/* --- DETAILS SECTION --- */}
+      <div className="flex-1 max-w-5xl mx-auto w-full p-6 md:p-12 space-y-12">
+        
+        {/* About */}
+        <section className="space-y-4 text-center">
+          <div className="inline-flex items-center justify-center p-3 bg-muted rounded-full mb-2">
+            <Utensils className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <h2 className="text-3xl font-bold tracking-tight">About Us</h2>
+          <p className="text-muted-foreground leading-relaxed text-lg max-w-2xl mx-auto">
+            {restaurant.description || "Welcome to our restaurant. We are dedicated to serving you the freshest ingredients and the most delicious meals. Come dine with us and experience true hospitality."}
+          </p>
+        </section>
+
+        {/* Info Grid */}
+        <div className="grid md:grid-cols-3 gap-6">
+          {/* Hours */}
+          <div className="p-6 bg-card border rounded-2xl flex flex-col items-center text-center gap-3 shadow-sm">
+            <Clock className="h-8 w-8 text-primary/60" />
+            <h3 className="font-semibold">Opening Hours</h3>
+            <p className="text-sm text-muted-foreground">
+              Mon-Sun: 10:00 AM - 10:00 PM<br/>(Open all week)
+            </p>
+          </div>
+
+          {/* Contact */}
+          <div className="p-6 bg-card border rounded-2xl flex flex-col items-center text-center gap-3 shadow-sm">
+            <Phone className="h-8 w-8 text-primary/60" />
+            <h3 className="font-semibold">Contact Us</h3>
+            <div className="text-sm text-muted-foreground space-y-1">
+              {contactPhone && <p>{contactPhone}</p>}
+              {contactEmail && <p>{contactEmail}</p>}
+              {!contactPhone && !contactEmail && <p>No contact info available</p>}
+            </div>
+          </div>
+
+          {/* Location */}
+          <div className="p-6 bg-card border rounded-2xl flex flex-col items-center text-center gap-3 shadow-sm">
+            <MapPin className="h-8 w-8 text-primary/60" />
+            <h3 className="font-semibold">Location</h3>
+            <p className="text-sm text-muted-foreground">
+              123 Foodie Lane <br/> Culinary District
+            </p>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Footer */}
+      <footer className="border-t py-8 text-center text-sm text-muted-foreground bg-muted/30">
+        &copy; {new Date().getFullYear()} {restaurant.name}. Powered by Project Blueprint.
+      </footer>
+    </div>
   );
 }
