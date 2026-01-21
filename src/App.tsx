@@ -47,7 +47,7 @@ const App = () => (
           <Route path="/" element={<Home />} />
           <Route path="/r/:restaurantSlug" element={<RestaurantProfile />} />
           <Route path="/q/:code" element={<QrResolver />} />
-          <Route path="/menu" element={<PublicMenu />} />
+          <Route path="/r/:restaurantSlug/menu" element={<PublicMenu />} />
           <Route path="/track" element={<TrackOrder />} />
 
           {/* Admin Panel Routes */}

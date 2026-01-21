@@ -1,520 +1,452 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { Search, ShoppingBag, ArrowLeft, ImageOff, Plus, Minus, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import type { Tables } from "@/integrations/supabase/types";
+
+import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from "@/components/ui/drawer";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { CopyButton } from "@/apps/admin-panel/components/qr/CopyButton";
-import { Minus, Plus, ShoppingBag } from "lucide-react";
 import { useRestaurantCart } from "../hooks/useRestaurantCart";
 
-function formatMoney(cents: number, currency = "USD") {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-    }).format((cents ?? 0) / 100);
-  } catch {
-    return `$${((cents ?? 0) / 100).toFixed(2)}`;
-  }
+// --- Types ---
+type Category = { id: string; name: string; sort_order: number };
+type MenuItem = {
+  id: string;
+  category_id: string | null;
+  name: string;
+  description: string | null;
+  price_cents: number;
+  image_url: string | null;
+};
+
+// --- Helper ---
+function formatMoney(cents: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
 
-type RestaurantRow = Tables<"restaurants">;
-type CategoryRow = Tables<"categories">;
-type MenuItemRow = Tables<"menu_items">;
-
-type CategoryWithItems = CategoryRow & { items: MenuItemRow[] };
-
 export default function PublicMenu() {
+  const { restaurantSlug } = useParams();
+  const slug = (restaurantSlug ?? "").trim();
+  const navigate = useNavigate();
   const { toast } = useToast();
-  const [params] = useSearchParams();
-  const slug = (params.get("restaurant") ?? "").trim();
+  
+  const [activeCategory, setActiveCategory] = useState<string>("all");
+  const [search, setSearch] = useState("");
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
-  const cart = useRestaurantCart(slug);
-  const [cartOpen, setCartOpen] = useState(false);
+  // --- Cart Hook ---
+  const { 
+    items: cartItems, 
+    addItem, 
+    increment, 
+    decrement, 
+    clear, 
+    itemCount, 
+    subtotalCents 
+  } = useRestaurantCart(slug);
 
-  const [placingOrder, setPlacingOrder] = useState(false);
-  const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
-  const [placedOrderToken, setPlacedOrderToken] = useState<string | null>(null);
-  const [checkoutError, setCheckoutError] = useState<string | null>(null);
-
-  const restaurantQuery = useQuery({
-    queryKey: ["public-menu", "restaurant", slug],
+  // 1. Fetch Restaurant
+  const { data: restaurant, isLoading: loadingRest } = useQuery({
+    queryKey: ["public", "menu-restaurant", slug],
     enabled: !!slug,
-    queryFn: async (): Promise<RestaurantRow> => {
+    queryFn: async () => {
       const { data, error } = await supabase
         .from("restaurants")
-        .select("*")
+        .select("id, name, settings, is_accepting_orders")
         .eq("slug", slug)
         .maybeSingle();
-
       if (error) throw error;
       if (!data) throw new Error("Restaurant not found");
       return data;
     },
   });
 
-  const categoriesQuery = useQuery({
-    queryKey: ["public-menu", "categories", slug, restaurantQuery.data?.id],
-    enabled: !!restaurantQuery.data?.id,
-    queryFn: async (): Promise<CategoryRow[]> => {
-      const restaurantId = restaurantQuery.data!.id;
-      const { data, error } = await supabase
+  // 2. Fetch Categories
+  const { data: categories = [] } = useQuery({
+    queryKey: ["public", "menu-categories", restaurant?.id],
+    enabled: !!restaurant?.id,
+    queryFn: async () => {
+      const { data } = await supabase
         .from("categories")
-        .select("*")
-        .eq("restaurant_id", restaurantId)
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true });
-
-      if (error) throw error;
-      return data ?? [];
+        .select("id, name, sort_order")
+        .eq("restaurant_id", restaurant!.id)
+        .is("deleted_at", null)
+        .order("sort_order");
+      return data as Category[];
     },
   });
 
-  const itemsQuery = useQuery({
-    queryKey: ["public-menu", "items", slug, restaurantQuery.data?.id],
-    enabled: !!restaurantQuery.data?.id,
-    queryFn: async (): Promise<MenuItemRow[]> => {
-      const restaurantId = restaurantQuery.data!.id;
-      const { data, error } = await supabase
+  // 3. Fetch Active Items
+  const { data: items = [] } = useQuery({
+    queryKey: ["public", "menu-items", restaurant?.id],
+    enabled: !!restaurant?.id,
+    queryFn: async () => {
+      const { data } = await supabase
         .from("menu_items")
         .select("*")
-        .eq("restaurant_id", restaurantId)
+        .eq("restaurant_id", restaurant!.id)
         .eq("is_active", true)
-        .order("sort_order", { ascending: true });
-
-      if (error) throw error;
-      return data ?? [];
+        .is("deleted_at", null)
+        .order("sort_order");
+      return data as MenuItem[];
     },
   });
 
-  const currencyCode = useMemo(() => {
-    const first = itemsQuery.data?.find(Boolean);
-    return first?.currency_code ?? "USD";
-  }, [itemsQuery.data]);
-
-  const categoriesWithItems = useMemo((): CategoryWithItems[] => {
-    const categories = categoriesQuery.data ?? [];
-    const items = itemsQuery.data ?? [];
-
-    const byCategory = new Map<string, MenuItemRow[]>();
-    for (const item of items) {
-      const key = item.category_id ?? "__uncategorized__";
-      const list = byCategory.get(key) ?? [];
-      list.push(item);
-      byCategory.set(key, list);
+  // --- Filtering & Grouping ---
+  const filteredItems = useMemo(() => {
+    let filtered = items;
+    if (search.trim()) {
+      const s = search.toLowerCase();
+      filtered = filtered.filter(i => i.name.toLowerCase().includes(s));
     }
-
-    const result: CategoryWithItems[] = categories
-      .map((c) => ({ ...c, items: byCategory.get(c.id) ?? [] }))
-      .filter((c) => c.items.length > 0);
-
-    const uncategorized = byCategory.get("__uncategorized__") ?? [];
-    if (uncategorized.length > 0) {
-      result.push({
-        id: "__uncategorized__" as unknown as string,
-        restaurant_id: restaurantQuery.data?.id ?? ("" as unknown as string),
-        name: "Other",
-        description: null,
-        is_active: true,
-        sort_order: Number.MAX_SAFE_INTEGER,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        items: uncategorized,
-      });
+    if (activeCategory !== "all") {
+      filtered = filtered.filter(i => i.category_id === activeCategory);
     }
+    return filtered;
+  }, [items, search, activeCategory]);
 
-    return result;
-  }, [categoriesQuery.data, itemsQuery.data, restaurantQuery.data?.id]);
+  const groupedItems = useMemo(() => {
+    if (activeCategory !== "all") return null;
+    const groups: Record<string, MenuItem[]> = {};
+    categories.forEach(c => { groups[c.id] = []; });
+    groups["uncategorized"] = [];
+    
+    filteredItems.forEach(item => {
+      const catId = item.category_id || "uncategorized";
+      if (!groups[catId]) groups[catId] = [];
+      groups[catId].push(item);
+    });
+    return groups;
+  }, [filteredItems, categories, activeCategory]);
 
-  const loading =
-    (!!slug && restaurantQuery.isLoading) ||
-    categoriesQuery.isLoading ||
-    itemsQuery.isLoading;
-
-  const errorMessage =
-    (restaurantQuery.error as Error | null)?.message ??
-    (categoriesQuery.error as Error | null)?.message ??
-    (itemsQuery.error as Error | null)?.message ??
-    null;
-
-  const trackUrl = useMemo(() => {
-    if (!placedOrderToken) return null;
-    const url = new URL(window.location.origin + "/track");
-    url.searchParams.set("token", placedOrderToken);
-    return url.toString();
-  }, [placedOrderToken]);
-
-  const placeOrder = async () => {
-    if (placingOrder) return;
-    const restaurantId = restaurantQuery.data?.id;
-    if (!restaurantId) return;
-    if (cart.items.length === 0) return;
-
-    setPlacingOrder(true);
-    setCheckoutError(null);
-
+  // --- Checkout Handler (FIXED 401 ISSUE) ---
+  const handlePlaceOrder = async () => {
+    if (!restaurant) return;
+    
+    setIsPlacingOrder(true);
     try {
-      // Call the secure Edge Function instead of inserting directly
-      const { data, error } = await supabase.functions.invoke('place-order', {
-        body: {
-          restaurant_id: restaurantId,
-          items: cart.items.map((i) => ({
-            menu_item_id: i.menu_item_id,
-            quantity: i.quantity,
-          })),
-        },
-      });
+      // FIX: Use manual fetch to ensure Headers are correct
+      // We grab the URL from the Supabase client config if possible, or build it manually
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-      if (error) throw error;
-      if (!data?.id || !data?.order_token) {
-        throw new Error("Order created without a token.");
+      if (!supabaseUrl || !anonKey) {
+        throw new Error("Missing Supabase configuration");
       }
 
-      setPlacedOrderId(data.id);
-      setPlacedOrderToken(data.order_token);
-      cart.clear();
-      setCartOpen(true);
-      toast({
-        title: "Order placed",
-        description: "Save your order token to track status.",
+      const response = await fetch(`${supabaseUrl}/functions/v1/place-order`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${anonKey}` // Explicitly send the Anon Key
+        },
+        body: JSON.stringify({
+          restaurant_id: restaurant.id,
+          items: cartItems.map(i => ({
+            menu_item_id: i.menu_item_id,
+            quantity: i.quantity
+          }))
+        })
       });
-    } catch (e: any) {
-      setCheckoutError(e?.message ?? "Could not place order.");
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to place order");
+      }
+
+      // Success
+      clear();
+      setIsCartOpen(false);
+      
+      if (data?.order_token) {
+        navigate(`/track?token=${data.order_token}`);
+      } else {
+        toast({ title: "Order Placed", description: "Your order has been received!" });
+      }
+
+    } catch (err: any) {
+      console.error("Order Error:", err);
+      toast({ 
+        title: "Error", 
+        description: err.message || "Something went wrong.", 
+        variant: "destructive" 
+      });
     } finally {
-      setPlacingOrder(false);
+      setIsPlacingOrder(false);
     }
   };
 
-  useEffect(() => {
-    const name = restaurantQuery.data?.name;
-    document.title = name ? `${name} Menu` : "Menu";
-  }, [restaurantQuery.data?.name]);
+  if (loadingRest) return <div className="h-screen flex items-center justify-center">Loading menu...</div>;
+  if (!restaurant) return <div className="h-screen flex items-center justify-center">Restaurant not found.</div>;
 
-  useEffect(() => {
-    if (cart.itemCount === 0 && !placedOrderToken) setCartOpen(false);
-  }, [cart.itemCount, placedOrderToken]);
-
-  if (!slug) {
-    return (
-      <main className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-10 max-w-3xl">
-          <h1 className="text-2xl font-semibold tracking-tight">Menu</h1>
-          <p className="mt-2 text-muted-foreground">
-            Add a restaurant slug in the URL like:{" "}
-            <span className="font-mono">/menu?restaurant=your-slug</span>
-          </p>
-          <Card className="mt-6 p-6">
-            <p className="text-sm text-muted-foreground">
-              This page is read-only and intended for guests.
-            </p>
-          </Card>
-        </div>
-      </main>
-    );
-  }
+  const themeColor = (restaurant.settings as any)?.theme?.primary_color || "#0f172a";
 
   return (
-    <main className="min-h-screen bg-background">
-      <header className="border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4 max-w-3xl">
-          <div className="flex items-center gap-4">
-            {restaurantQuery.data?.logo_url ? (
-              <img
-                src={restaurantQuery.data.logo_url}
-                alt={`${restaurantQuery.data.name} logo`}
-                className="h-12 w-12 rounded-md object-cover border"
-                loading="lazy"
-              />
-            ) : (
-              <div
-                className="h-12 w-12 rounded-md border bg-muted"
-                aria-hidden="true"
-              />
-            )}
-            <div className="min-w-0">
-              <h1 className="text-xl font-semibold tracking-tight truncate">
-                {restaurantQuery.data?.name ?? "Menu"}
-              </h1>
-              {restaurantQuery.data?.description ? (
-                <p className="text-sm text-muted-foreground line-clamp-2">
-                  {restaurantQuery.data.description}
-                </p>
-              ) : null}
-            </div>
+    <div className="min-h-screen bg-background pb-20">
+      
+      {/* --- HEADER --- */}
+      <header className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b">
+        <div className="container max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link to={`/r/${slug}`} className="p-2 -ml-2 hover:bg-muted rounded-full text-muted-foreground transition-colors">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+            <h1 className="font-semibold text-lg truncate">{restaurant.name}</h1>
+          </div>
+          
+          {/* Cart Trigger */}
+          <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
+            <SheetTrigger asChild>
+              <div className="relative p-2 cursor-pointer">
+                <ShoppingBag className="h-6 w-6 text-foreground" />
+                {itemCount > 0 && (
+                  <span 
+                    className="absolute top-0 right-0 h-5 w-5 text-[10px] font-bold flex items-center justify-center rounded-full text-white ring-2 ring-background"
+                    style={{ backgroundColor: themeColor }}
+                  >
+                    {itemCount}
+                  </span>
+                )}
+              </div>
+            </SheetTrigger>
+            
+            <SheetContent className="flex flex-col w-full sm:max-w-md">
+              <SheetHeader>
+                <SheetTitle>Your Order</SheetTitle>
+              </SheetHeader>
+              
+              <div className="flex-1 overflow-hidden mt-4">
+                {cartItems.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-2">
+                    <ShoppingBag className="h-12 w-12 opacity-20" />
+                    <p>Your cart is empty.</p>
+                  </div>
+                ) : (
+                  <ScrollArea className="h-full pr-4">
+                    <div className="space-y-4">
+                      {cartItems.map((item) => (
+                        <div key={item.menu_item_id} className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium truncate">{item.name}</div>
+                            <div className="text-sm text-muted-foreground">{formatMoney(item.price_cents)}</div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 border rounded-md p-0.5">
+                              <button 
+                                onClick={() => decrement(item.menu_item_id)} 
+                                className="h-6 w-6 flex items-center justify-center hover:bg-muted rounded text-muted-foreground"
+                              >
+                                <Minus className="h-3 w-3" />
+                              </button>
+                              <span className="text-sm w-4 text-center font-medium">{item.quantity}</span>
+                              <button 
+                                onClick={() => increment(item.menu_item_id)} 
+                                className="h-6 w-6 flex items-center justify-center hover:bg-muted rounded text-muted-foreground"
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+              </div>
+
+              {cartItems.length > 0 && (
+                <div className="pt-4 space-y-4">
+                  <Separator />
+                  <div className="flex items-center justify-between font-bold text-lg">
+                    <span>Total</span>
+                    <span>{formatMoney(subtotalCents)}</span>
+                  </div>
+                  <Button 
+                    className="w-full h-12 text-base font-bold" 
+                    size="lg"
+                    style={{ backgroundColor: themeColor }}
+                    onClick={handlePlaceOrder}
+                    disabled={isPlacingOrder}
+                  >
+                    {isPlacingOrder ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Placing Order...
+                      </>
+                    ) : (
+                      "Place Order"
+                    )}
+                  </Button>
+                </div>
+              )}
+            </SheetContent>
+          </Sheet>
+        </div>
+
+        {/* Category Scroll Bar */}
+        <div className="w-full overflow-x-auto whitespace-nowrap scrollbar-hide border-t bg-muted/30">
+          <div className="container max-w-3xl mx-auto px-4 py-2 flex gap-2">
+            <button
+              onClick={() => setActiveCategory("all")}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                activeCategory === "all" 
+                  ? "text-white shadow-sm" 
+                  : "bg-background text-muted-foreground border hover:bg-muted"
+              }`}
+              style={activeCategory === "all" ? { backgroundColor: themeColor, borderColor: themeColor } : {}}
+            >
+              All
+            </button>
+            {categories.map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => setActiveCategory(cat.id)}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  activeCategory === cat.id 
+                    ? "text-white shadow-sm" 
+                    : "bg-background text-muted-foreground border hover:bg-muted"
+                }`}
+                style={activeCategory === cat.id ? { backgroundColor: themeColor, borderColor: themeColor } : {}}
+              >
+                {cat.name}
+              </button>
+            ))}
           </div>
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8 max-w-3xl pb-28">
-        {loading ? (
-          <Card className="p-6">
-            <p className="text-sm text-muted-foreground">Loading menu…</p>
-          </Card>
-        ) : errorMessage ? (
-          <Card className="p-6">
-            <p className="text-sm text-destructive">{errorMessage}</p>
-          </Card>
-        ) : categoriesWithItems.length === 0 ? (
-          <Card className="p-6">
-            <p className="text-sm text-muted-foreground">
-              No active menu items yet.
-            </p>
-          </Card>
+      {/* --- CONTENT --- */}
+      <main className="container max-w-3xl mx-auto px-4 py-6 space-y-8">
+        
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          <Input 
+            placeholder="Search items..." 
+            className="pl-10 bg-card"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        {/* Categories Loop (View All) */}
+        {activeCategory === "all" && groupedItems ? (
+           categories.map(cat => {
+             const catItems = groupedItems[cat.id];
+             if (!catItems || catItems.length === 0) return null;
+             return (
+               <div key={cat.id} className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                 <h2 className="font-bold text-lg">{cat.name}</h2>
+                 <div className="grid gap-4 sm:grid-cols-2">
+                   {catItems.map(item => (
+                     <MenuItemCard 
+                       key={item.id} 
+                       item={item} 
+                       onAdd={() => {
+                         addItem({ 
+                           menu_item_id: item.id, 
+                           name: item.name, 
+                           price_cents: item.price_cents 
+                         });
+                         toast({ title: "Added", description: `${item.name} added to cart.` });
+                       }}
+                     />
+                   ))}
+                 </div>
+               </div>
+             );
+           })
         ) : (
-          <div className="space-y-10">
-            {categoriesWithItems.map((category) => (
-              <section key={category.id} aria-labelledby={`cat-${category.id}`}>
-                <div className="flex items-baseline justify-between gap-3">
-                  <div className="min-w-0">
-                    <h2
-                      id={`cat-${category.id}`}
-                      className="text-lg font-semibold tracking-tight"
-                    >
-                      {category.name}
-                    </h2>
-                    {category.description ? (
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {category.description}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-3">
-                  {category.items.map((item) => (
-                    <Card key={item.id} className="p-4">
-                      <div className="flex gap-4">
-                        {item.image_url ? (
-                          <img
-                            src={item.image_url}
-                            alt={item.name}
-                            className="h-20 w-20 rounded-md object-cover border"
-                            loading="lazy"
-                          />
-                        ) : null}
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="font-medium truncate">{item.name}</p>
-                              {item.description ? (
-                                <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
-                                  {item.description}
-                                </p>
-                              ) : null}
-                            </div>
-                            <p className="font-medium tabular-nums whitespace-nowrap">
-                              {formatMoney(item.price_cents, item.currency_code)}
-                            </p>
-                          </div>
-
-                          <div className="mt-3 flex items-center justify-between gap-3">
-                            {item.sku ? (
-                              <p className="text-xs text-muted-foreground font-mono truncate">
-                                {item.sku}
-                              </p>
-                            ) : (
-                              <span />
-                            )}
-
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => {
-                                cart.addItem({
-                                  menu_item_id: item.id,
-                                  name: item.name,
-                                  price_cents: item.price_cents,
-                                });
-                                setCartOpen(true);
-                              }}
-                            >
-                              Add
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              </section>
+          /* Single Category View */
+          <div className="grid gap-4 sm:grid-cols-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
+            {filteredItems.map(item => (
+               <MenuItemCard 
+                 key={item.id} 
+                 item={item} 
+                 onAdd={() => {
+                   addItem({ 
+                     menu_item_id: item.id, 
+                     name: item.name, 
+                     price_cents: item.price_cents 
+                   });
+                   toast({ title: "Added", description: `${item.name} added to cart.` });
+                 }}
+               />
             ))}
-          </div>
-        )}
-      </div>
-
-      {/* Floating Cart */}
-      <Drawer open={cartOpen} onOpenChange={setCartOpen}>
-        <DrawerTrigger asChild>
-          <button
-            type="button"
-            className="fixed bottom-4 right-4 z-40"
-            aria-label="Open cart"
-            onClick={() => setCartOpen(true)}
-          >
-            <div className="relative">
-              <Button size="lg" className="shadow-lg">
-                <ShoppingBag className="h-4 w-4" />
-                Cart
-              </Button>
-              {cart.itemCount > 0 ? (
-                <span className="absolute -top-2 -right-2">
-                  <Badge variant="secondary" className="min-w-6 justify-center">
-                    {cart.itemCount}
-                  </Badge>
-                </span>
-              ) : null}
-            </div>
-          </button>
-        </DrawerTrigger>
-
-        <DrawerContent className="max-h-[85vh]">
-          <DrawerHeader className="text-left">
-            <DrawerTitle>Cart</DrawerTitle>
-          </DrawerHeader>
-
-          <div className="px-4 pb-4 overflow-auto">
-            {cart.items.length === 0 ? (
-              placedOrderToken ? (
-                <Card className="p-6">
-                  <p className="text-sm text-muted-foreground">Order placed</p>
-                  <p className="mt-2 font-mono text-sm break-all">{placedOrderToken}</p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <CopyButton value={placedOrderToken} label="Copy token" />
-                    {trackUrl ? <CopyButton value={trackUrl} label="Copy tracking link" /> : null}
-                    {placedOrderToken ? (
-                      <Link to={`/track?token=${encodeURIComponent(placedOrderToken)}`}>
-                        <Button variant="secondary" size="sm">Track</Button>
-                      </Link>
-                    ) : null}
-                  </div>
-                  {checkoutError ? (
-                    <p className="mt-3 text-sm text-destructive">{checkoutError}</p>
-                  ) : null}
-                </Card>
-              ) : (
-                <Card className="p-6">
-                  <p className="text-sm text-muted-foreground">Your cart is empty.</p>
-                </Card>
-              )
-            ) : (
-              <div className="space-y-3">
-                {cart.items.map((line) => (
-                  <Card key={line.menu_item_id} className="p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-medium truncate">{line.name}</p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {formatMoney(line.price_cents, currencyCode)} each
-                        </p>
-                      </div>
-
-                      <p className="font-medium tabular-nums whitespace-nowrap">
-                        {formatMoney(line.price_cents * line.quantity, currencyCode)}
-                      </p>
-                    </div>
-
-                    <Separator className="my-3" />
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          onClick={() => cart.decrement(line.menu_item_id)}
-                          aria-label={`Decrease ${line.name}`}
-                        >
-                          <Minus className="h-4 w-4" />
-                        </Button>
-                        <span className="min-w-8 text-center tabular-nums">{line.quantity}</span>
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          onClick={() => cart.increment(line.menu_item_id)}
-                          aria-label={`Increase ${line.name}`}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-
-                      <Button
-                        variant="ghost"
-                        onClick={() => cart.removeItem(line.menu_item_id)}
-                        className="text-muted-foreground"
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
-              </div>
+            {filteredItems.length === 0 && (
+              <p className="col-span-full text-center text-muted-foreground py-10">No items found.</p>
             )}
           </div>
+        )}
+        
+        {/* Handle Uncategorized for "All" view */}
+        {activeCategory === "all" && groupedItems?.["uncategorized"]?.length ? (
+           <div className="space-y-3">
+             <h2 className="font-bold text-lg">Other</h2>
+             <div className="grid gap-4 sm:grid-cols-2">
+               {groupedItems["uncategorized"].map(item => (
+                 <MenuItemCard 
+                   key={item.id} 
+                   item={item} 
+                   onAdd={() => {
+                     addItem({ 
+                       menu_item_id: item.id, 
+                       name: item.name, 
+                       price_cents: item.price_cents 
+                     });
+                     toast({ title: "Added", description: `${item.name} added to cart.` });
+                   }}
+                 />
+               ))}
+             </div>
+           </div>
+        ) : null}
 
-          <DrawerFooter>
-            {cart.items.length > 0 ? (
-              <>
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">Subtotal</p>
-                  <p className="font-medium tabular-nums">{formatMoney(cart.subtotalCents, currencyCode)}</p>
-                </div>
-                <Button
-                  disabled={cart.items.length === 0 || placingOrder || !restaurantQuery.data?.id}
-                  onClick={placeOrder}
-                >
-                  {placingOrder ? "Placing…" : "Place order"}
-                </Button>
-                {checkoutError ? (
-                  <p className="text-sm text-destructive">{checkoutError}</p>
-                ) : null}
-              </>
-            ) : null}
+      </main>
+    </div>
+  );
+}
 
-            <div className="flex items-center justify-between gap-3">
-              <DrawerClose asChild>
-                <Button variant="outline">Close</Button>
-              </DrawerClose>
-              {cart.items.length > 0 ? (
-                <Button
-                  variant="ghost"
-                  onClick={cart.clear}
-                  disabled={cart.items.length === 0}
-                  className="text-muted-foreground"
-                >
-                  Clear
-                </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setPlacedOrderId(null);
-                    setPlacedOrderToken(null);
-                    setCheckoutError(null);
-                  }}
-                  disabled={!placedOrderToken}
-                  className="text-muted-foreground"
-                >
-                  Done
-                </Button>
-              )}
-            </div>
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
-    </main>
+// --- Component: Menu Item Card ---
+function MenuItemCard({ item, onAdd }: { item: MenuItem, onAdd: () => void }) {
+  return (
+    <Card className="flex overflow-hidden border shadow-sm hover:shadow-md transition-shadow">
+      <div className="flex-1 p-4 flex flex-col justify-between">
+        <div>
+          <div className="font-semibold line-clamp-1">{item.name}</div>
+          <div className="text-xs text-muted-foreground line-clamp-2 mt-1">
+            {item.description || "No description available."}
+          </div>
+        </div>
+        <div className="font-bold text-sm mt-3 flex items-center justify-between">
+          <span>{formatMoney(item.price_cents)}</span>
+          <Button size="sm" variant="outline" className="h-7 px-3 text-xs rounded-full" onClick={onAdd}>
+            Add
+          </Button>
+        </div>
+      </div>
+      
+      {item.image_url ? (
+        <div className="w-28 bg-muted shrink-0 relative">
+          <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
+        </div>
+      ) : (
+        <div className="w-24 bg-muted/50 shrink-0 flex items-center justify-center text-muted-foreground/30">
+           <ImageOff className="h-6 w-6" />
+        </div>
+      )}
+    </Card>
   );
 }
