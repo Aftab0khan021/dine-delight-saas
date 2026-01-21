@@ -9,6 +9,7 @@ import NotFound from "./pages/NotFound";
 import Home from "./apps/public-website/pages/Home";
 import PublicMenu from "./apps/public-website/pages/Menu";
 import TrackOrder from "./apps/public-website/pages/TrackOrder";
+import RestaurantProfile from "./apps/public-website/pages/RestaurantProfile";
 
 // Admin Panel
 import AdminAuth from "./apps/admin-panel/pages/Auth";
@@ -43,6 +44,7 @@ const App = () => (
         <Routes>
           {/* Public Website */}
           <Route path="/" element={<Home />} />
+          <Route path="/r/:restaurantSlug" element={<RestaurantProfile />} />
           <Route path="/menu" element={<PublicMenu />} />
           <Route path="/track" element={<TrackOrder />} />
 
