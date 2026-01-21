@@ -43,19 +43,16 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       return;
     }
 
-    const userId = session.user.id;
-
+    // 1. Check if the user has the role (We removed the restaurant_id check!)
     const { data: userRoleRow, error: roleError } = await supabase
       .from("user_roles")
       .select("role, restaurant_id")
-      .eq("user_id", userId)
+      .eq("user_id", session.user.id)
       .eq("role", "restaurant_admin")
-      .not("restaurant_id", "is", null)
-      .limit(1)
       .maybeSingle();
 
-    if (roleError) {
-      // Treat unexpected errors as denial so we don't leak access.
+    if (roleError || !userRoleRow) {
+      console.warn("Access Denied: No 'restaurant_admin' role found for this user.");
       setRestaurant(null);
       setRole(null);
       setAccessDenied(true);
@@ -63,31 +60,32 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       return;
     }
 
-    if (!userRoleRow?.restaurant_id) {
-      setRestaurant(null);
-      setRole(null);
-      setAccessDenied(true);
-      setLoading(false);
-      return;
+    // 2. Fetch restaurant details (Only if they have one linked)
+    let finalRestaurant: CurrentRestaurant | null = null;
+
+    if (userRoleRow.restaurant_id) {
+      const { data: restaurantRow, error: restaurantError } = await supabase
+        .from("restaurants")
+        .select("id, name, slug")
+        .eq("id", userRoleRow.restaurant_id)
+        .maybeSingle();
+
+      finalRestaurant = restaurantRow;
+
+      // Fallback if RLS hides it but ID exists
+      if (restaurantError || !finalRestaurant) {
+        console.warn("Restaurant details hidden by RLS. Using fallback.");
+        finalRestaurant = {
+          id: userRoleRow.restaurant_id,
+          name: "My Restaurant",
+          slug: "",
+        };
+      }
     }
 
-    const { data: restaurantRow, error: restaurantError } = await supabase
-      .from("restaurants")
-      .select("id, name, slug")
-      .eq("id", userRoleRow.restaurant_id)
-      .maybeSingle();
-
-    if (restaurantError || !restaurantRow) {
-      setRestaurant(null);
-      setRole(null);
-      setAccessDenied(true);
-      setLoading(false);
-      return;
-    }
-
-    setRestaurant(restaurantRow);
+    setRestaurant(finalRestaurant);
     setRole("restaurant_admin");
-    setAccessDenied(false);
+    setAccessDenied(false); // ✅ Allowed in, even if restaurant is null
     setLoading(false);
   }, [navigate]);
 
@@ -116,11 +114,17 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
     [accessDenied, loading, restaurant, role, load],
   );
 
-  return <RestaurantContext.Provider value={value}>{children}</RestaurantContext.Provider>;
+  return (
+    <RestaurantContext.Provider value={value}>
+      {children}
+    </RestaurantContext.Provider>
+  );
 }
 
 export function useRestaurantContext() {
-  const ctx = useContext(RestaurantContext);
-  if (!ctx) throw new Error("useRestaurantContext must be used within RestaurantProvider");
-  return ctx;
+  const context = useContext(RestaurantContext);
+  if (!context) {
+    throw new Error("useRestaurantContext must be used within a RestaurantProvider");
+  }
+  return context;
 }

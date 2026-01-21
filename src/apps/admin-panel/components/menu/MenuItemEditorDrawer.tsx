@@ -35,6 +35,7 @@ type Props = {
   defaultValues?: Partial<MenuItemEditorValues>;
   saving?: boolean;
   onSubmit: (values: MenuItemEditorValues) => Promise<void> | void;
+  onDelete?: () => void; // <--- ADDED: Delete handler
 };
 
 export function MenuItemEditorDrawer({
@@ -45,6 +46,7 @@ export function MenuItemEditorDrawer({
   defaultValues,
   saving,
   onSubmit,
+  onDelete, // <--- ADDED
 }: Props) {
   const form = useForm<MenuItemEditorValues>({
     resolver: zodResolver(schema),
@@ -165,14 +167,29 @@ export function MenuItemEditorDrawer({
             </div>
 
             <DrawerFooter className="px-0">
-              <Button type="submit" disabled={saving || form.formState.isSubmitting}>
-                {saving || form.formState.isSubmitting ? "Saving…" : "Save"}
-              </Button>
-              <DrawerClose asChild>
-                <Button type="button" variant="outline">
-                  Cancel
+              <div className="flex gap-2">
+                <Button className="flex-1" type="submit" disabled={saving || form.formState.isSubmitting}>
+                  {saving || form.formState.isSubmitting ? "Saving…" : "Save"}
                 </Button>
-              </DrawerClose>
+                <DrawerClose asChild>
+                  <Button className="flex-1" type="button" variant="outline">
+                    Cancel
+                  </Button>
+                </DrawerClose>
+              </div>
+              
+              {/* ADDED: Delete Button (Only shows if onDelete prop is provided) */}
+              {onDelete && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                  disabled={saving || form.formState.isSubmitting}
+                  onClick={onDelete}
+                >
+                  Delete Item
+                </Button>
+              )}
             </DrawerFooter>
           </form>
         </div>

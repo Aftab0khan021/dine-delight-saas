@@ -25,6 +25,7 @@ type Props = {
   defaultValues?: Partial<CategoryEditorValues>;
   saving?: boolean;
   onSubmit: (values: CategoryEditorValues) => Promise<void> | void;
+  onDelete?: () => void; // <--- ADDED: Delete handler
 };
 
 export function CategoryEditorDrawer({
@@ -34,6 +35,7 @@ export function CategoryEditorDrawer({
   defaultValues,
   saving,
   onSubmit,
+  onDelete, // <--- ADDED
 }: Props) {
   const form = useForm<CategoryEditorValues>({
     resolver: zodResolver(schema),
@@ -107,14 +109,29 @@ export function CategoryEditorDrawer({
             </div>
 
             <DrawerFooter className="px-0">
-              <Button type="submit" disabled={saving || form.formState.isSubmitting}>
-                {saving || form.formState.isSubmitting ? "Saving…" : "Save"}
-              </Button>
-              <DrawerClose asChild>
-                <Button type="button" variant="outline">
-                  Cancel
+              <div className="flex gap-2">
+                <Button className="flex-1" type="submit" disabled={saving || form.formState.isSubmitting}>
+                  {saving || form.formState.isSubmitting ? "Saving…" : "Save"}
                 </Button>
-              </DrawerClose>
+                <DrawerClose asChild>
+                  <Button className="flex-1" type="button" variant="outline">
+                    Cancel
+                  </Button>
+                </DrawerClose>
+              </div>
+
+              {/* ADDED: Delete Button (Only shows if onDelete prop is provided) */}
+              {onDelete && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                  disabled={saving || form.formState.isSubmitting}
+                  onClick={onDelete}
+                >
+                  Delete Category
+                </Button>
+              )}
             </DrawerFooter>
           </form>
         </div>
