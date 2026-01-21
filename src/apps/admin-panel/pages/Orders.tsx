@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addDays, startOfDay, subHours } from "date-fns";
 
@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast"; // Added toast for notifications
 
 import { OrderCard, type OrderCardVM, type OrderStatus } from "../components/orders/OrderCard";
 import { buildItemSummary, KANBAN_STATUSES, type OrderItemRow } from "../components/orders/order-utils";
@@ -41,6 +42,7 @@ function shortId(id: string) {
 export default function AdminOrders() {
   const { restaurant } = useRestaurantContext();
   const qc = useQueryClient();
+  const { toast } = useToast();
 
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("today");
@@ -56,6 +58,45 @@ export default function AdminOrders() {
     const end = addDays(start, 1);
     return { startISO: start.toISOString(), endISO: end.toISOString() };
   }, [timeFilter]);
+
+  // --- REALTIME SUBSCRIPTION ---
+  useEffect(() => {
+    if (!restaurant?.id) return;
+
+    console.log("🔌 Subscribing to live orders for:", restaurant.name);
+
+    const channel = supabase
+      .channel("admin-orders-tracking")
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // Listen to INSERT, UPDATE, DELETE
+          schema: "public",
+          table: "orders",
+          filter: `restaurant_id=eq.${restaurant.id}`,
+        },
+        (payload) => {
+          console.log("⚡ Realtime update received:", payload);
+          
+          // 1. Invalidate query to refetch data
+          qc.invalidateQueries({ queryKey: ["admin", "orders", restaurant.id] });
+
+          // 2. Show a toast notification for new orders
+          if (payload.eventType === "INSERT") {
+            toast({
+              title: "New Order Received!",
+              description: `Order #${shortId(payload.new.id)} has been placed.`,
+              variant: "default", 
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [restaurant?.id, qc, toast]);
 
   const ordersQuery = useQuery({
     queryKey: ["admin", "orders", restaurant?.id, timeFilter],
@@ -290,4 +331,3 @@ export default function AdminOrders() {
     </section>
   );
 }
-

@@ -168,40 +168,24 @@ export default function PublicMenu() {
     setCheckoutError(null);
 
     try {
-      const { data: insertedOrder, error: orderError } = await supabase
-        .from("orders")
-        .insert({
+      // Call the secure Edge Function instead of inserting directly
+      const { data, error } = await supabase.functions.invoke('place-order', {
+        body: {
           restaurant_id: restaurantId,
-          status: "pending",
-          currency_code: "USD",
-          tax_cents: 0,
-          tip_cents: 0,
-          subtotal_cents: cart.subtotalCents,
-          total_cents: cart.subtotalCents,
-        })
-        .select("id, order_token")
-        .single();
+          items: cart.items.map((i) => ({
+            menu_item_id: i.menu_item_id,
+            quantity: i.quantity,
+          })),
+        },
+      });
 
-      if (orderError) throw orderError;
-      if (!insertedOrder?.id || !insertedOrder?.order_token) {
+      if (error) throw error;
+      if (!data?.id || !data?.order_token) {
         throw new Error("Order created without a token.");
       }
 
-      const orderItemsPayload = cart.items.map((i) => ({
-        restaurant_id: restaurantId,
-        order_id: insertedOrder.id,
-        menu_item_id: i.menu_item_id,
-        name_snapshot: i.name,
-        quantity: i.quantity,
-        unit_price_cents: i.price_cents,
-        line_total_cents: i.price_cents * i.quantity,
-      }));
-
-      const { error: itemsError } = await supabase.from("order_items").insert(orderItemsPayload);
-      if (itemsError) throw itemsError;
-
-      setPlacedOrderId(insertedOrder.id);
-      setPlacedOrderToken(insertedOrder.order_token);
+      setPlacedOrderId(data.id);
+      setPlacedOrderToken(data.order_token);
       cart.clear();
       setCartOpen(true);
       toast({

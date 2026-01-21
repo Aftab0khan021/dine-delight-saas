@@ -78,6 +78,7 @@ export default function AdminMenu() {
         .from("categories")
         .select("id, name, description, is_active, sort_order")
         .eq("restaurant_id", restaurant!.id)
+        .is("deleted_at", null) // ✅ Ensure we only fetch non-deleted
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: true });
 
@@ -96,6 +97,7 @@ export default function AdminMenu() {
           "id, name, description, category_id, price_cents, currency_code, image_url, is_active, sort_order",
         )
         .eq("restaurant_id", restaurant!.id)
+        .is("deleted_at", null) // ✅ Ensure we only fetch non-deleted
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: true });
 
@@ -203,6 +205,27 @@ export default function AdminMenu() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "menu", restaurant?.id, "categories"] }),
   });
 
+  // ✅ NEW: Category Soft Delete Mutation
+  const categoryDeleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      if (!restaurant?.id) throw new Error("Missing restaurant");
+      const { error } = await supabase
+        .from("categories")
+        .update({ deleted_at: new Date().toISOString() } as any) // Soft Delete
+        .eq("id", id)
+        .eq("restaurant_id", restaurant.id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      setCategoryEditorOpen(false);
+      setEditingCategory(null);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["admin", "menu", restaurant?.id, "categories"] }),
+        qc.invalidateQueries({ queryKey: ["admin", "menu", restaurant?.id, "menuItems"] }),
+      ]);
+    },
+  });
+
   const menuItemSaveMutation = useMutation({
     mutationFn: async (values: MenuItemEditorValues) => {
       if (!restaurant?.id) throw new Error("Missing restaurant");
@@ -258,6 +281,24 @@ export default function AdminMenu() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "menu", restaurant?.id, "menuItems"] }),
+  });
+
+  // ✅ NEW: Menu Item Soft Delete Mutation
+  const menuItemDeleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      if (!restaurant?.id) throw new Error("Missing restaurant");
+      const { error } = await supabase
+        .from("menu_items")
+        .update({ deleted_at: new Date().toISOString() } as any) // Soft Delete
+        .eq("id", id)
+        .eq("restaurant_id", restaurant.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setItemEditorOpen(false);
+      setEditingItem(null);
+      qc.invalidateQueries({ queryKey: ["admin", "menu", restaurant?.id, "menuItems"] });
+    },
   });
 
   const categories = categoriesQuery.data ?? [];
@@ -613,6 +654,15 @@ export default function AdminMenu() {
         }
         saving={categorySaveMutation.isPending}
         onSubmit={async (values) => categorySaveMutation.mutateAsync(values)}
+        onDelete={
+          editingCategory
+            ? async () => {
+                if (confirm("Are you sure you want to delete this category? Items will be hidden.")) {
+                  await categoryDeleteMutation.mutateAsync(editingCategory.id);
+                }
+              }
+            : undefined
+        }
       />
 
       <MenuItemEditorDrawer
@@ -637,8 +687,16 @@ export default function AdminMenu() {
         }
         saving={menuItemSaveMutation.isPending}
         onSubmit={async (values) => menuItemSaveMutation.mutateAsync(values)}
+        onDelete={
+          editingItem
+            ? async () => {
+                if (confirm("Are you sure you want to delete this item?")) {
+                  await menuItemDeleteMutation.mutateAsync(editingItem.id);
+                }
+              }
+            : undefined
+        }
       />
     </section>
   );
 }
-
