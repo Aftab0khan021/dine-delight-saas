@@ -10,6 +10,7 @@ import Home from "./apps/public-website/pages/Home";
 import PublicMenu from "./apps/public-website/pages/Menu";
 import TrackOrder from "./apps/public-website/pages/TrackOrder";
 import RestaurantProfile from "./apps/public-website/pages/RestaurantProfile";
+import QrResolver from "./apps/public-website/pages/QrResolver";
 
 // Admin Panel
 import AdminAuth from "./apps/admin-panel/pages/Auth";
@@ -45,6 +46,7 @@ const App = () => (
           {/* Public Website */}
           <Route path="/" element={<Home />} />
           <Route path="/r/:restaurantSlug" element={<RestaurantProfile />} />
+          <Route path="/q/:code" element={<QrResolver />} />
           <Route path="/menu" element={<PublicMenu />} />
           <Route path="/track" element={<TrackOrder />} />
 
