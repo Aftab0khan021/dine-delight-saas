@@ -91,15 +91,14 @@ export default function TrackOrder() {
           filter: order?.id ? `id=eq.${order.id}` : undefined
         },
         (payload) => {
-          console.log("Realtime Update Received:", payload);
           // When an update comes in, re-fetch the fresh data securely
           fetchOrder();
-          
+
           // Optional: Show a toast notification
           if (payload.new && (payload.new as any).status !== (payload.old as any).status) {
-             const newStatus = (payload.new as any).status;
-             if (newStatus === 'in_progress') toast({ title: "Order Update", description: "Your food is being prepared!" });
-             if (newStatus === 'ready') toast({ title: "Order Ready!", description: "Please pick up your order." });
+            const newStatus = (payload.new as any).status;
+            if (newStatus === 'in_progress') toast({ title: "Order Update", description: "Your food is being prepared!" });
+            if (newStatus === 'ready') toast({ title: "Order Ready!", description: "Please pick up your order." });
           }
         }
       )
@@ -133,12 +132,12 @@ export default function TrackOrder() {
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-md mx-auto space-y-6">
-        
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <Button variant="ghost" size="sm" asChild>
             <Link to={backLink} className="flex items-center gap-2 text-gray-600">
-              <ArrowLeft className="h-4 w-4" /> 
+              <ArrowLeft className="h-4 w-4" />
               {order.restaurant?.slug ? "Back to Menu" : "Back to Home"}
             </Link>
           </Button>
@@ -157,16 +156,16 @@ export default function TrackOrder() {
             <p className="text-sm text-gray-500">#{order.id.slice(0, 8).toUpperCase()}</p>
           </CardHeader>
           <CardContent className="space-y-8 pt-6">
-            
+
             {!isCancelled ? (
               <div className="relative flex justify-between px-2">
                 {/* Progress Bar Background */}
                 <div className="absolute top-4 left-4 right-4 h-0.5 bg-gray-200 -z-10" />
-                
+
                 {/* Active Progress Bar */}
-                <div 
-                  className="absolute top-4 left-4 h-0.5 bg-green-500 -z-10 transition-all duration-500" 
-                  style={{ width: `${(Math.max(0, currentStepIndex) / (steps.length - 1)) * 90}%` }} 
+                <div
+                  className="absolute top-4 left-4 h-0.5 bg-green-500 -z-10 transition-all duration-500"
+                  style={{ width: `${(Math.max(0, currentStepIndex) / (steps.length - 1)) * 90}%` }}
                 />
 
                 {steps.map((step, idx) => {
@@ -187,7 +186,7 @@ export default function TrackOrder() {
                 This order has been cancelled. Please contact the restaurant.
               </div>
             )}
-            
+
             {(order.status === 'ready' || order.status === 'completed') && (
               <div className="bg-green-100 text-green-800 p-4 rounded-lg text-center font-medium animate-pulse">
                 Your order is ready! Please pick it up.
@@ -216,9 +215,9 @@ export default function TrackOrder() {
                 </div>
               ))}
             </div>
-            
+
             <Separator />
-            
+
             <div className="flex justify-between font-bold text-lg">
               <span>Total</span>
               <span>{formatMoney(order.total_cents, order.currency_code)}</span>

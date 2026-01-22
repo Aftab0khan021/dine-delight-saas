@@ -104,7 +104,7 @@ export default function AdminBranding() {
     mutationFn: async (values: BrandingFormValues) => {
       // Preserve existing settings while updating specific fields
       const currentSettings = normalizeSettings(restaurantData?.settings);
-      
+
       const nextSettings = {
         ...currentSettings,
         contact_email: values.contact_email || null,
@@ -117,12 +117,14 @@ export default function AdminBranding() {
         },
       };
 
-      await supabase.from("restaurants").update({
+      const { error } = await supabase.from("restaurants").update({
         name: values.name,
         description: values.description || null,
         logo_url: values.logo_url || null,
         settings: nextSettings
       }).eq("id", restaurant!.id);
+
+      if (error) throw error;
     },
     onSuccess: () => {
       toast({ title: "Saved", description: "Branding updated successfully." });
@@ -166,7 +168,7 @@ export default function AdminBranding() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* LEFT COLUMN: Editor Form */}
         <div className="lg:col-span-2 space-y-6">
-          
+
           {/* Card 1: Basic Info */}
           <Card className="shadow-sm">
             <CardHeader>
@@ -262,7 +264,7 @@ export default function AdminBranding() {
 
         {/* RIGHT COLUMN: Live Preview & Link */}
         <div className="space-y-6">
-          
+
           {/* 1. Website Link Card */}
           <Card className="shadow-sm border-primary/20 bg-primary/5">
             <CardHeader className="pb-3">
@@ -284,9 +286,9 @@ export default function AdminBranding() {
                 </div>
               </div>
               <Button className="w-full" variant="outline" asChild>
-                <a 
-                  href={restaurantData?.slug ? getPublicUrl(restaurantData.slug) : "#"} 
-                  target="_blank" 
+                <a
+                  href={restaurantData?.slug ? getPublicUrl(restaurantData.slug) : "#"}
+                  target="_blank"
                   rel="noreferrer"
                 >
                   <ExternalLink className="mr-2 h-4 w-4" /> Visit Live Site
@@ -305,7 +307,7 @@ export default function AdminBranding() {
             <CardContent className="p-0">
               {/* Mockup Container */}
               <div className="relative bg-white min-h-[450px] flex flex-col">
-                
+
                 {/* Header (Cover Image + Logo) */}
                 <div className="relative h-32 w-full bg-gray-100">
                   {w.cover_image_url ? (
@@ -315,7 +317,7 @@ export default function AdminBranding() {
                       <ImageIcon className="h-8 w-8" />
                     </div>
                   )}
-                  
+
                   {/* Logo Overlay */}
                   <div className="absolute -bottom-6 left-1/2 -translate-x-1/2">
                     <div className="h-16 w-16 rounded-full border-4 border-white bg-white shadow-md overflow-hidden flex items-center justify-center">
@@ -333,7 +335,7 @@ export default function AdminBranding() {
                   <h3 className="font-bold text-lg text-gray-900 leading-tight">
                     {w.name || "Your Restaurant"}
                   </h3>
-                  
+
                   <p className="text-xs text-gray-500 mt-2 line-clamp-3">
                     {w.description || "Delicious food served daily. Order online for pickup or dine-in."}
                   </p>
@@ -354,11 +356,11 @@ export default function AdminBranding() {
 
                   {/* CTA Button */}
                   <div className="mt-auto pt-6">
-                    <div 
+                    <div
                       className="w-full py-3 rounded-full text-sm font-bold shadow-lg transition-transform"
-                      style={{ 
-                        backgroundColor: w.primary_color || "#000000", 
-                        color: w.accent_color || "#ffffff" 
+                      style={{
+                        backgroundColor: w.primary_color || "#000000",
+                        color: w.accent_color || "#ffffff"
                       }}
                     >
                       Browse Menu

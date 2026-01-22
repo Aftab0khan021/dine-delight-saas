@@ -171,32 +171,64 @@ export default function AdminStaff() {
 
   const changeRoleMutation = useMutation({
     mutationFn: async () => {
-      if (!restaurant?.id || !roleTarget) return;
+      if (!restaurant?.id || !roleTarget) throw new Error("Missing data");
+
       const { error } = await supabase.from("user_roles")
         .update({ role: newRole })
-        .eq("restaurant_id", restaurant.id).eq("user_id", roleTarget.id);
+        .eq("restaurant_id", restaurant.id)
+        .eq("user_id", roleTarget.id);
+
       if (error) throw error;
 
-      await supabase.from("activity_logs").insert({
-        restaurant_id: restaurant.id, action: "role_changed",
-        message: `Changed ${roleTarget.name}'s role to ${newRole}`,
-        actor_user_id: (await supabase.auth.getUser()).data.user?.id
-      });
+      // Log activity
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        await supabase.from("activity_logs").insert({
+          restaurant_id: restaurant.id,
+          entity_type: "user_role",
+          entity_id: roleTarget.id,
+          action: "role_changed",
+          message: `Changed ${roleTarget.name}'s role to ${newRole}`,
+          actor_user_id: user?.id
+        });
+      } catch (logError) {
+        console.error("Failed to log activity:", logError);
+      }
     },
     onSuccess: () => {
       setRoleDialogOpen(false);
-      toast({ title: "Role updated" });
+      toast({ title: "Role updated", description: `${roleTarget?.name} is now ${newRole}` });
       qc.invalidateQueries({ queryKey: ["admin", "staff"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to update role",
+        description: error.message || "Please try again",
+        variant: "destructive"
+      });
     }
   });
 
   const deactivateMutation = useMutation({
     mutationFn: async (userId: string) => {
-      await supabase.from("user_roles").delete().eq("restaurant_id", restaurant!.id).eq("user_id", userId);
+      const { error } = await supabase
+        .from("user_roles")
+        .delete()
+        .eq("restaurant_id", restaurant!.id)
+        .eq("user_id", userId);
+
+      if (error) throw error;
     },
     onSuccess: () => {
-      toast({ title: "Staff removed" });
+      toast({ title: "Staff removed", description: "User has been removed from your team" });
       qc.invalidateQueries({ queryKey: ["admin", "staff"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to remove staff",
+        description: error.message || "Please try again",
+        variant: "destructive"
+      });
     }
   });
 

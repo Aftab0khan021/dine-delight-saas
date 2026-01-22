@@ -69,13 +69,14 @@ export default function AdminQrMenu() {
       const userId = session?.user?.id;
 
       if (qrType === "general") {
-        await supabase.from("qr_codes").insert({
+        const { error } = await supabase.from("qr_codes").insert({
           restaurant_id: restaurant.id,
           code: crypto.randomUUID(),
           destination_path: "/menu",
           created_by: userId,
           is_active: true,
         });
+        if (error) throw error;
       } else {
         const rows = Array.from({ length: toTable - fromTable + 1 }, (_, i) => {
           const label = buildTableLabel(prefix, fromTable + i);
@@ -88,7 +89,8 @@ export default function AdminQrMenu() {
             is_active: true,
           };
         });
-        await supabase.from("qr_codes").insert(rows);
+        const { error } = await supabase.from("qr_codes").insert(rows);
+        if (error) throw error;
       }
     },
     onSuccess: () => {
@@ -102,23 +104,34 @@ export default function AdminQrMenu() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from("qr_codes").delete().eq("id", id);
+      const { error } = await supabase.from("qr_codes").delete().eq("id", id).eq("restaurant_id", restaurant!.id);
+      if (error) throw error;
     },
     onSuccess: () => {
-      toast({ title: "Deleted", description: "QR code removed." });
       qc.invalidateQueries({ queryKey: ["admin", "qr"] });
+      toast({ title: "Deleted", description: "QR code removed." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, state }: { id: string; state: boolean }) => {
-      await supabase.from("qr_codes").update({ is_active: state }).eq("id", id);
+      const { error } = await supabase.from("qr_codes").update({ is_active: state }).eq("id", id).eq("restaurant_id", restaurant!.id);
+      if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "qr"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "qr"] });
+      toast({ title: "Updated", description: "QR code status changed." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
   });
 
   // --- FIXED: Action Handlers ---
-  
+
   const handlePrint = () => {
     // Triggers the browser's native print dialog
     window.print();
@@ -261,9 +274,9 @@ export default function AdminQrMenu() {
               <Button variant="secondary" className="flex-1" onClick={handlePrint}>
                 <Printer className="mr-2 h-4 w-4" /> Print
               </Button>
-              <Button 
-                className="flex-1" 
-                onClick={() => generateMutation.mutate()} 
+              <Button
+                className="flex-1"
+                onClick={() => generateMutation.mutate()}
                 disabled={generateMutation.isPending}
               >
                 {generateMutation.isPending ? "Generating..." : "Generate"}
@@ -284,77 +297,77 @@ export default function AdminQrMenu() {
           </CardHeader>
           <CardContent>
             {qrCodes.length === 0 ? (
-               <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground border-dashed border rounded-xl print:hidden">
-                 <QrCode className="h-10 w-10 mb-3 opacity-20" />
-                 <p>No codes generated yet.</p>
-                 <p className="text-xs">Use the generator to create your first batch.</p>
-               </div>
+              <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground border-dashed border rounded-xl print:hidden">
+                <QrCode className="h-10 w-10 mb-3 opacity-20" />
+                <p>No codes generated yet.</p>
+                <p className="text-xs">Use the generator to create your first batch.</p>
+              </div>
             ) : (
-            <div className={cn(
-              "grid gap-3 sm:grid-cols-2 lg:grid-cols-3 max-h-[600px] overflow-y-auto pr-2",
-              "print:max-h-none print:overflow-visible print:grid-cols-3 print:gap-4",
-              layout === "stickers" && "sm:grid-cols-3 lg:grid-cols-4 print:grid-cols-4"
-            )}>
-              {qrCodes.map((qr: any) => (
-                <div
-                  key={qr.id}
-                  className={cn(
-                    "relative group rounded-xl border border-border bg-background p-4 shadow-sm transition-all hover:shadow-md",
-                    "print:border-2 print:shadow-none print:break-inside-avoid",
-                    layout === "stickers" && "p-3"
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold">{qr.table_label || "General"}</div>
-                      <div className="mt-1 truncate text-[10px] text-muted-foreground font-mono print:text-black">
-                        {qr.destination_path}
+              <div className={cn(
+                "grid gap-3 sm:grid-cols-2 lg:grid-cols-3 max-h-[600px] overflow-y-auto pr-2",
+                "print:max-h-none print:overflow-visible print:grid-cols-3 print:gap-4",
+                layout === "stickers" && "sm:grid-cols-3 lg:grid-cols-4 print:grid-cols-4"
+              )}>
+                {qrCodes.map((qr: any) => (
+                  <div
+                    key={qr.id}
+                    className={cn(
+                      "relative group rounded-xl border border-border bg-background p-4 shadow-sm transition-all hover:shadow-md",
+                      "print:border-2 print:shadow-none print:break-inside-avoid",
+                      layout === "stickers" && "p-3"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold">{qr.table_label || "General"}</div>
+                        <div className="mt-1 truncate text-[10px] text-muted-foreground font-mono print:text-black">
+                          {qr.destination_path}
+                        </div>
+                      </div>
+
+                      {/* 3-Dot Menu (Hidden on Print) */}
+                      <div className="print:hidden">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 -mr-2">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => copyUrl(qr.destination_path)}>
+                              <Copy className="mr-2 h-4 w-4" /> Copy URL
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => toggleMutation.mutate({ id: qr.id, state: !qr.is_active })}>
+                              <Power className="mr-2 h-4 w-4" /> {qr.is_active ? "Disable" : "Enable"}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive" onClick={() => deleteMutation.mutate(qr.id)}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
-                    
-                    {/* 3-Dot Menu (Hidden on Print) */}
-                    <div className="print:hidden">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 -mr-2">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => copyUrl(qr.destination_path)}>
-                            <Copy className="mr-2 h-4 w-4" /> Copy URL
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => toggleMutation.mutate({ id: qr.id, state: !qr.is_active })}>
-                            <Power className="mr-2 h-4 w-4" /> {qr.is_active ? "Disable" : "Enable"}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive" onClick={() => deleteMutation.mutate(qr.id)}>
-                            <Trash2 className="mr-2 h-4 w-4" /> Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
 
-                  <div className={cn("mt-4 grid place-items-center", layout === "stickers" && "mt-2")}>
-                    <div className={cn(
-                      "grid place-items-center rounded-2xl bg-accent text-accent-foreground print:bg-white print:text-black",
-                      layout === "cards" ? "h-28 w-28" : "h-16 w-16 rounded-lg"
-                    )}>
-                      {/* Icon acts as placeholder for real QR */}
-                      <QrCode className={cn("h-10 w-10", layout === "stickers" && "h-8 w-8")} />
+                    <div className={cn("mt-4 grid place-items-center", layout === "stickers" && "mt-2")}>
+                      <div className={cn(
+                        "grid place-items-center rounded-2xl bg-accent text-accent-foreground print:bg-white print:text-black",
+                        layout === "cards" ? "h-28 w-28" : "h-16 w-16 rounded-lg"
+                      )}>
+                        {/* Icon acts as placeholder for real QR */}
+                        <QrCode className={cn("h-10 w-10", layout === "stickers" && "h-8 w-8")} />
+                      </div>
+
+                      {!qr.is_active && (
+                        <Badge variant="destructive" className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 print:hidden">
+                          Disabled
+                        </Badge>
+                      )}
                     </div>
-                    
-                    {!qr.is_active && (
-                      <Badge variant="destructive" className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 print:hidden">
-                        Disabled
-                      </Badge>
-                    )}
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -368,10 +381,10 @@ export default function AdminQrMenu() {
             <div className="rounded-xl border border-border bg-background p-3">
               <div className="text-sm font-medium">Test URL</div>
               <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Input 
-                  readOnly 
-                  value={`${window.location.origin}/menu${qrType === 'table' ? `?table=${prefix}1` : ''}`} 
-                  className="bg-muted/50 font-mono text-xs" 
+                <Input
+                  readOnly
+                  value={`${window.location.origin}/menu${qrType === 'table' ? `?table=${prefix}1` : ''}`}
+                  className="bg-muted/50 font-mono text-xs"
                 />
                 <Button variant="secondary" className="sm:w-auto" onClick={() => copyUrl(`/menu${qrType === 'table' ? `?table=${prefix}1` : ''}`)}>
                   <Copy className="mr-2 h-4 w-4" /> Copy
