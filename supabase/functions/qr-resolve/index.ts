@@ -65,7 +65,7 @@ serve(async (req) => {
 
   const { data: qr, error } = await admin
     .from("qr_codes")
-    .select("destination_path,is_active")
+    .select("destination_path,is_active, restaurant:restaurants(slug)")
     .eq("code", code)
     .maybeSingle();
 
@@ -83,8 +83,15 @@ serve(async (req) => {
     );
   }
 
+  let finalPath = qr.destination_path;
+
+  // Fix legacy paths that are missing the restaurant slug
+  if ((finalPath === "/menu" || finalPath.startsWith("/menu?")) && qr.restaurant?.slug) {
+    finalPath = `/r/${qr.restaurant.slug}${finalPath}`;
+  }
+
   return json(
-    { destination_path: qr.destination_path },
+    { destination_path: finalPath },
     { status: 200, headers: { "access-control-allow-origin": "*" } },
   );
 });

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Download, MoreHorizontal, Printer, QrCode, Trash2, Power, FileSpreadsheet } from "lucide-react";
+import { Copy, Download, MoreHorizontal, Printer, QrCode as QrIcon, Trash2, Power, FileSpreadsheet } from "lucide-react";
+import QRCode from "react-qr-code";
 import { z } from "zod";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -72,7 +73,7 @@ export default function AdminQrMenu() {
         const { error } = await supabase.from("qr_codes").insert({
           restaurant_id: restaurant.id,
           code: crypto.randomUUID(),
-          destination_path: "/menu",
+          destination_path: `/r/${restaurant.slug}/menu`,
           created_by: userId,
           is_active: true,
         });
@@ -83,7 +84,7 @@ export default function AdminQrMenu() {
           return {
             restaurant_id: restaurant.id,
             code: crypto.randomUUID(),
-            destination_path: `/menu?table=${label}`,
+            destination_path: `/r/${restaurant.slug}/menu?table=${label}`,
             table_label: label,
             created_by: userId,
             is_active: true,
@@ -298,7 +299,7 @@ export default function AdminQrMenu() {
           <CardContent>
             {qrCodes.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground border-dashed border rounded-xl print:hidden">
-                <QrCode className="h-10 w-10 mb-3 opacity-20" />
+                <QrIcon className="h-10 w-10 mb-3 opacity-20" />
                 <p>No codes generated yet.</p>
                 <p className="text-xs">Use the generator to create your first batch.</p>
               </div>
@@ -352,17 +353,23 @@ export default function AdminQrMenu() {
 
                     <div className={cn("mt-4 grid place-items-center", layout === "stickers" && "mt-2")}>
                       <div className={cn(
-                        "grid place-items-center rounded-2xl bg-accent text-accent-foreground print:bg-white print:text-black",
+                        "grid place-items-center rounded-2xl bg-white p-2",
                         layout === "cards" ? "h-28 w-28" : "h-16 w-16 rounded-lg"
                       )}>
-                        {/* Icon acts as placeholder for real QR */}
-                        <QrCode className={cn("h-10 w-10", layout === "stickers" && "h-8 w-8")} />
+                        <QRCode
+                          value={`${window.location.origin}${qr.destination_path}`}
+                          size={256}
+                          style={{ height: "100%", width: "100%", maxWidth: "100%" }}
+                          viewBox={`0 0 256 256`}
+                        />
                       </div>
 
                       {!qr.is_active && (
-                        <Badge variant="destructive" className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 print:hidden">
-                          Disabled
-                        </Badge>
+                        <div className="absolute inset-0 bg-background/80 flex items-center justify-center rounded-xl">
+                          <Badge variant="destructive" className="print:hidden">
+                            Disabled
+                          </Badge>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -383,10 +390,10 @@ export default function AdminQrMenu() {
               <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Input
                   readOnly
-                  value={`${window.location.origin}/menu${qrType === 'table' ? `?table=${prefix}1` : ''}`}
+                  value={`${window.location.origin}/r/${restaurant?.slug}/menu${qrType === 'table' ? `?table=${prefix}1` : ''}`}
                   className="bg-muted/50 font-mono text-xs"
                 />
-                <Button variant="secondary" className="sm:w-auto" onClick={() => copyUrl(`/menu${qrType === 'table' ? `?table=${prefix}1` : ''}`)}>
+                <Button variant="secondary" className="sm:w-auto" onClick={() => copyUrl(`/r/${restaurant?.slug}/menu${qrType === 'table' ? `?table=${prefix}1` : ''}`)}>
                   <Copy className="mr-2 h-4 w-4" /> Copy
                 </Button>
               </div>

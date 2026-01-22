@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Search, ShoppingBag, ArrowLeft, ImageOff, Plus, Minus, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,6 +38,8 @@ export default function PublicMenu() {
   const { restaurantSlug } = useParams();
   const slug = (restaurantSlug ?? "").trim();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const tableParam = searchParams.get("table");
   const { toast } = useToast();
 
   const [activeCategory, setActiveCategory] = useState<string>("all");
@@ -46,7 +48,14 @@ export default function PublicMenu() {
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
   // --- Cart Hook ---
-  const { items: cartItems, addItem, increment, decrement, clear, itemCount, subtotalCents } = useRestaurantCart(slug);
+  const { items: cartItems, addItem, increment, decrement, clear, itemCount, subtotalCents, tableLabel, setTableLabel } = useRestaurantCart(slug);
+
+  // Capture table param
+  useEffect(() => {
+    if (tableParam && tableParam !== tableLabel) {
+      setTableLabel(tableParam);
+    }
+  }, [tableParam, tableLabel, setTableLabel]);
 
   // 1. Fetch Restaurant
   const { data: restaurant, isLoading: loadingRest } = useQuery({
@@ -138,11 +147,21 @@ export default function PublicMenu() {
         throw new Error("Configuration Error: Missing Supabase URL or Key.");
       }
 
-      // 2. Prepare Request
       // CRITICAL FIX: We use the 'anonKey' for the Authorization header.
       // This ensures the Supabase Gateway accepts the request as a valid Public API call,
       // avoiding the 401 Unauthorized error caused by User Token conflicts.
       // The Edge Function itself handles security via IP Rate Limiting and Service Role checks.
+
+      // DEBUG: Show user what we are sending
+      /*
+      toast({
+        title: "Debug Info",
+        description: `Sending Table: ${tableLabel || "None"}`,
+      });
+      */
+
+      const finalTableLabel = tableLabel || searchParams.get("table");
+
       const response = await fetch(`${supabaseUrl}/functions/v1/place-order`, {
         method: "POST",
         headers: {
@@ -155,7 +174,8 @@ export default function PublicMenu() {
           items: cartItems.map(i => ({
             menu_item_id: i.menu_item_id,
             quantity: i.quantity
-          }))
+          })),
+          table_label: finalTableLabel // Add table label to order
         })
       });
 
@@ -217,7 +237,9 @@ export default function PublicMenu() {
               </div>
             </SheetTrigger>
             <SheetContent className="flex flex-col w-full sm:max-w-md">
-              <SheetHeader><SheetTitle>Your Order</SheetTitle></SheetHeader>
+              <SheetHeader><SheetTitle>Your Order</SheetTitle>
+                {tableLabel && <div className="text-sm text-muted-foreground">Table: <span className="font-semibold text-foreground">{tableLabel}</span></div>}
+              </SheetHeader>
               <div className="flex-1 overflow-hidden mt-4">
                 {cartItems.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-2"><ShoppingBag className="h-12 w-12 opacity-20" /><p>Your cart is empty.</p></div>

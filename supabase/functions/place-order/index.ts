@@ -57,11 +57,16 @@ serve(async (req) => {
       return json({ error: "Invalid JSON" }, 400);
     }
 
-    const { restaurant_id, items } = payload;
+    const { restaurant_id, items, table_label } = payload;
 
     // Validate required fields
     if (!restaurant_id || !items) {
       return json({ error: "Missing required fields: restaurant_id and items" }, 400);
+    }
+
+    // Validate table_label length if present
+    if (table_label && typeof table_label === 'string' && table_label.length > 20) {
+      return json({ error: "Table label is too long (max 20 chars)" }, 400);
     }
 
     // Validate items array
@@ -179,7 +184,8 @@ serve(async (req) => {
         subtotal_cents: totalCents,
         total_cents: totalCents,
         currency_code: 'USD',
-        ip_address: clientIp
+        ip_address: clientIp,
+        table_label: table_label || null
       })
       .select()
       .single();

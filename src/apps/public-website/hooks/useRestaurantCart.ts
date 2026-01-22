@@ -9,6 +9,7 @@ export type CartItem = {
 
 type CartState = {
   items: CartItem[];
+  tableLabel?: string | null;
 };
 
 function storageKey(slug: string) {
@@ -16,7 +17,7 @@ function storageKey(slug: string) {
 }
 
 function safeParseCart(raw: string | null): CartState {
-  if (!raw) return { items: [] };
+  if (!raw) return { items: [], tableLabel: null };
   try {
     const parsed = JSON.parse(raw) as Partial<CartState>;
     const items = Array.isArray(parsed.items) ? parsed.items : [];
@@ -29,30 +30,35 @@ function safeParseCart(raw: string | null): CartState {
           quantity: Math.max(0, Number(i.quantity ?? 0)),
         }))
         .filter((i) => i.menu_item_id && i.quantity > 0),
+      tableLabel: parsed.tableLabel || null,
     };
   } catch {
-    return { items: [] };
+    return { items: [], tableLabel: null };
   }
 }
 
 export function useRestaurantCart(restaurantSlug: string) {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [tableLabel, setTableLabel] = useState<string | null>(null);
 
   // load when slug changes
   useEffect(() => {
     if (!restaurantSlug) {
       setItems([]);
+      setTableLabel(null);
       return;
     }
-    setItems(safeParseCart(localStorage.getItem(storageKey(restaurantSlug))).items);
+    const saved = safeParseCart(localStorage.getItem(storageKey(restaurantSlug)));
+    setItems(saved.items);
+    if (saved.tableLabel) setTableLabel(saved.tableLabel);
   }, [restaurantSlug]);
 
   // persist
   useEffect(() => {
     if (!restaurantSlug) return;
-    const state: CartState = { items };
+    const state: CartState = { items, tableLabel };
     localStorage.setItem(storageKey(restaurantSlug), JSON.stringify(state));
-  }, [items, restaurantSlug]);
+  }, [items, tableLabel, restaurantSlug]);
 
   const addItem = useCallback(
     (payload: { menu_item_id: string; name: string; price_cents: number }) => {
@@ -87,7 +93,10 @@ export function useRestaurantCart(restaurantSlug: string) {
     setItems((prev) => prev.filter((i) => i.menu_item_id !== menu_item_id));
   }, []);
 
-  const clear = useCallback(() => setItems([]), []);
+  const clear = useCallback(() => {
+    setItems([]);
+    setTableLabel(null);
+  }, []);
 
   const itemCount = useMemo(() => items.reduce((sum, i) => sum + i.quantity, 0), [items]);
   const subtotalCents = useMemo(
@@ -97,6 +106,8 @@ export function useRestaurantCart(restaurantSlug: string) {
 
   return {
     items,
+    tableLabel,
+    setTableLabel,
     addItem,
     increment,
     decrement,
