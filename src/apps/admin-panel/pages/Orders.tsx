@@ -121,6 +121,8 @@ export default function AdminOrders() {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("today");
   const [search, setSearch] = useState("");
   const [advancingId, setAdvancingId] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const ORDERS_PER_PAGE = 50;
 
   // Time Range Logic
   const { startISO, endISO } = useMemo(() => {
@@ -155,14 +157,15 @@ export default function AdminOrders() {
     queryKey: ["admin", "orders", restaurant?.id, timeFilter],
     enabled: !!restaurant?.id,
     queryFn: async () => {
-      // Fetch Orders
-      const { data: orders, error } = await supabase
+      // Fetch Orders with pagination
+      const { data: orders, error, count } = await supabase
         .from("orders")
-        .select("id, status, placed_at, table_label")
+        .select("id, status, placed_at, table_label", { count: 'exact' })
         .eq("restaurant_id", restaurant!.id)
         .gte("placed_at", startISO)
         .lt("placed_at", endISO)
-        .order("placed_at", { ascending: false });
+        .order("placed_at", { ascending: false })
+        .range(page * ORDERS_PER_PAGE, (page + 1) * ORDERS_PER_PAGE - 1);
 
       if (error) throw error;
 
@@ -176,11 +179,13 @@ export default function AdminOrders() {
         .in("order_id", orderIds);
 
       // Combine them
-      return orders.map(o => {
+      const ordersWithSummary = orders.map(o => {
         const myItems = items?.filter(i => i.order_id === o.id) || [];
         const summary = myItems.map(i => `${i.quantity}x ${i.name_snapshot}`).join(", ");
         return { ...o, items_summary: summary };
       });
+
+      return { orders: ordersWithSummary, totalCount: count || 0 };
     }
   });
 
@@ -260,7 +265,9 @@ export default function AdminOrders() {
 
 
   // --- 4. Filtering & Grouping ---
-  const orders = ordersQuery.data || [];
+  const orders = ordersQuery.data?.orders || [];
+  const totalCount = ordersQuery.data?.totalCount || 0;
+  const totalPages = Math.ceil(totalCount / ORDERS_PER_PAGE);
 
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
@@ -369,6 +376,31 @@ export default function AdminOrders() {
           </Card>
         ))}
       </section>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 mt-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={page === 0}
+          >
+            Previous
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {page + 1} of {totalPages} ({totalCount} total orders)
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+          >
+            Next
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
