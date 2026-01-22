@@ -5,9 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Loader2, CheckCircle2, Clock, ChefHat, ShoppingBag, ArrowLeft } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 // Types
-type OrderStatus = 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled';
+type OrderStatus = 'pending' | 'in_progress' | 'ready' | 'completed' | 'cancelled';
 
 interface OrderDetails {
   id: string;
@@ -35,11 +36,34 @@ function formatMoney(cents: number, currency: string) {
 export default function TrackOrder() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
+  const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [order, setOrder] = useState<OrderDetails | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
+
+  // 1. Initial Fetch (Secure)
+  const fetchOrder = async () => {
+    if (!token) return;
+    try {
+      const { data, error } = await supabase.functions.invoke("order-lookup", {
+        body: { token }
+      });
+
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+
+      setOrder(data.order);
+      setItems(data.items);
+    } catch (err: any) {
+      console.error("Fetch error:", err);
+      // Only set error on first load to avoid flickering during realtime updates
+      if (!order) setError(err.message || "Failed to load order.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!token) {
@@ -48,29 +72,44 @@ export default function TrackOrder() {
       return;
     }
 
-    const fetchOrder = async () => {
-      try {
-        const { data, error } = await supabase.functions.invoke("order-lookup", {
-          body: { token }
-        });
-
-        if (error) throw error;
-        if (data.error) throw new Error(data.error);
-
-        setOrder(data.order);
-        setItems(data.items);
-      } catch (err: any) {
-        setError(err.message || "Failed to load order.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
+    // Load initial data
     fetchOrder();
-    // Poll every 15 seconds for updates
-    const interval = setInterval(fetchOrder, 15000);
-    return () => clearInterval(interval);
-  }, [token]);
+
+    // 2. Realtime Subscription (The Fix)
+    // We listen for any UPDATE to the 'orders' table.
+    // Note: We filter by the specific Order ID once we have it, 
+    // or we just re-fetch whenever ANY order changes (simplest for now).
+    const channel = supabase
+      .channel('public-order-tracking')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'orders',
+          // Performance Optimization: Only listen for THIS order if we have the ID
+          filter: order?.id ? `id=eq.${order.id}` : undefined
+        },
+        (payload) => {
+          console.log("Realtime Update Received:", payload);
+          // When an update comes in, re-fetch the fresh data securely
+          fetchOrder();
+          
+          // Optional: Show a toast notification
+          if (payload.new && (payload.new as any).status !== (payload.old as any).status) {
+             const newStatus = (payload.new as any).status;
+             if (newStatus === 'in_progress') toast({ title: "Order Update", description: "Your food is being prepared!" });
+             if (newStatus === 'ready') toast({ title: "Order Ready!", description: "Please pick up your order." });
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [token, order?.id]); // Re-subscribe if order ID loads (to tighten the filter)
 
   if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>;
   if (error) return <div className="h-screen flex flex-col items-center justify-center gap-4 text-red-500"><p>{error}</p><Button asChild variant="outline"><Link to="/">Return Home</Link></Button></div>;
@@ -79,17 +118,17 @@ export default function TrackOrder() {
   // Status Logic
   const steps = [
     { id: 'pending', label: 'Order Placed', icon: Clock },
-    { id: 'preparing', label: 'Preparing', icon: ChefHat },
+    { id: 'in_progress', label: 'Preparing', icon: ChefHat }, // Updated to match DB value 'in_progress'
     { id: 'ready', label: 'Ready', icon: CheckCircle2 },
   ];
 
-  const currentStepIndex = steps.findIndex(s => s.id === order.status);
-  const isCancelled = order.status === 'cancelled';
+  // Map DB status to Step Index
+  let currentStepIndex = 0;
+  if (order.status === 'in_progress') currentStepIndex = 1;
+  if (order.status === 'ready' || order.status === 'completed') currentStepIndex = 2;
 
-  // FIX: Dynamic Back Link using the restaurant slug
-  const backLink = order.restaurant?.slug 
-    ? `/r/${order.restaurant.slug}/menu` 
-    : "/";
+  const isCancelled = order.status === 'cancelled';
+  const backLink = order.restaurant?.slug ? `/r/${order.restaurant.slug}/menu` : "/";
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
@@ -149,7 +188,7 @@ export default function TrackOrder() {
               </div>
             )}
             
-            {order.status === 'ready' && (
+            {(order.status === 'ready' || order.status === 'completed') && (
               <div className="bg-green-100 text-green-800 p-4 rounded-lg text-center font-medium animate-pulse">
                 Your order is ready! Please pick it up.
               </div>

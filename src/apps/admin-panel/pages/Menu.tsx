@@ -8,7 +8,9 @@ import {
   Plus, 
   Search, 
   Trash2,
-  RefreshCw
+  RefreshCw,
+  Pencil,
+  GripVertical
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -441,7 +443,56 @@ function CategorySheet({ open, onOpenChange, data, onSave, onDelete }: any) {
 
 // --- Subcomponent: Item Sheet ---
 function ItemSheet({ open, onOpenChange, data, categories, onSave, onDelete }: any) {
-  const form = useForm();
+ const form = useForm();
+ const [uploading, setUploading] = useState(false);
+   const handleReplaceImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  if (!e.target.files?.length) return;
+
+  const file = e.target.files[0];
+  const fileExt = file.name.split(".").pop();
+  const fileName = `${crypto.randomUUID()}.${fileExt}`;
+
+  setUploading(true);
+  try {
+    const { error } = await supabase.storage
+      .from("menu-items")
+      .upload(fileName, file, { upsert: true });
+
+    if (error) throw error;
+
+    const { data } = supabase.storage
+      .from("menu-items")
+      .getPublicUrl(fileName);
+
+    form.setValue("image_url", data.publicUrl, { shouldDirty: true });
+  } finally {
+    setUploading(false);
+  }
+  };
+ const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  if (!e.target.files?.length) return;
+
+  const file = e.target.files[0];
+  const fileExt = file.name.split(".").pop();
+  const fileName = `${crypto.randomUUID()}.${fileExt}`;
+
+  setUploading(true);
+  try {
+    const { error } = await supabase.storage
+      .from("menu-items")
+      .upload(fileName, file);
+
+    if (error) throw error;
+
+    const { data } = supabase.storage
+      .from("menu-items")
+      .getPublicUrl(fileName);
+
+    form.setValue("image_url", data.publicUrl, { shouldDirty: true });
+  } finally {
+    setUploading(false);
+  }
+ };
 
   useMemo(() => {
     if (open) {
@@ -503,9 +554,40 @@ function ItemSheet({ open, onOpenChange, data, categories, onSave, onDelete }: a
           </div>
 
           <div className="space-y-2">
-            <Label>Image URL</Label>
-            <Input {...form.register("image_url")} placeholder="https://..." />
-          </div>
+  <Label>Item Image</Label>
+
+  {/* Upload from device */}
+  <Input
+    type="file"
+    accept="image/png, image/jpeg, image/webp"
+    onChange={handleImageUpload}
+    disabled={uploading}
+  />
+
+  {/* OR paste URL */}
+  <Input
+    {...form.register("image_url")}
+    placeholder="https://example.com/image.jpg"
+  />
+
+  {form.watch("image_url") && (
+  <div className="space-y-2">
+    <img
+      src={form.watch("image_url")}
+      alt="Preview"
+      className="h-32 w-full object-cover rounded-md border"
+    />
+
+    {/* Replace Image */}
+    <Input
+      type="file"
+      accept="image/png, image/jpeg, image/webp"
+      onChange={handleReplaceImage}
+      disabled={uploading}
+    />
+  </div>
+)}
+</div>
 
           <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
             <div className="space-y-0.5">
