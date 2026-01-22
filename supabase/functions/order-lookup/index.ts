@@ -13,13 +13,14 @@ function json(body: unknown, init: ResponseInit = {}) {
 }
 
 serve(async (req) => {
+  // 1. Handle CORS (Allowing all necessary headers)
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
       headers: {
         "access-control-allow-origin": "*",
         "access-control-allow-methods": "POST, OPTIONS",
-        "access-control-allow-headers": "content-type, authorization",
+        "access-control-allow-headers": "content-type, authorization, x-client-info, apikey",
       },
     });
   }
@@ -51,9 +52,21 @@ serve(async (req) => {
     auth: { persistSession: false },
   });
 
+  // 2. Fetch Order AND Restaurant Details (FIX: Added restaurant join)
   const { data: order, error: orderError } = await admin
     .from("orders")
-    .select("id,status,placed_at,subtotal_cents,total_cents,currency_code")
+    .select(`
+      id,
+      status,
+      placed_at,
+      subtotal_cents,
+      total_cents,
+      currency_code,
+      restaurant:restaurants (
+        name,
+        slug
+      )
+    `)
     .eq("order_token", token)
     .maybeSingle();
 
@@ -65,6 +78,7 @@ serve(async (req) => {
     return json({ error: "Order not found" }, { status: 404, headers: { "access-control-allow-origin": "*" } });
   }
 
+  // 3. Fetch Items
   const { data: items, error: itemsError } = await admin
     .from("order_items")
     .select("id,name_snapshot,quantity,unit_price_cents,line_total_cents")

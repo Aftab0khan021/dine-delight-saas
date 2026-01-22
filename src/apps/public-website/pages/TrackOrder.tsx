@@ -1,172 +1,196 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Loader2, CheckCircle2, Clock, ChefHat, ShoppingBag, ArrowLeft } from "lucide-react";
 
-type LookupOrder = {
+// Types
+type OrderStatus = 'pending' | 'preparing' | 'ready' | 'completed' | 'cancelled';
+
+interface OrderDetails {
   id: string;
-  status: string;
+  status: OrderStatus;
   placed_at: string;
-  subtotal_cents: number;
   total_cents: number;
   currency_code: string;
-};
+  restaurant?: {
+    name: string;
+    slug: string;
+  };
+}
 
-type LookupOrderItem = {
+interface OrderItem {
   id: string;
   name_snapshot: string;
   quantity: number;
-  unit_price_cents: number;
   line_total_cents: number;
-};
+}
 
-function formatMoney(cents: number, currency = "USD") {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-    }).format((cents ?? 0) / 100);
-  } catch {
-    return `$${((cents ?? 0) / 100).toFixed(2)}`;
-  }
+function formatMoney(cents: number, currency: string) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
 }
 
 export default function TrackOrder() {
-  const [params] = useSearchParams();
-  const initialToken = (params.get("token") ?? "").trim();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get("token");
 
-  const [token, setToken] = useState(initialToken);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [order, setOrder] = useState<LookupOrder | null>(null);
-  const [items, setItems] = useState<LookupOrderItem[]>([]);
-
-  const currency = useMemo(() => order?.currency_code ?? "USD", [order?.currency_code]);
+  const [order, setOrder] = useState<OrderDetails | null>(null);
+  const [items, setItems] = useState<OrderItem[]>([]);
 
   useEffect(() => {
-    document.title = "Track Order";
-  }, []);
-
-  const lookup = async (t: string) => {
-    const cleaned = t.trim();
-    if (!cleaned) {
-      setError("Enter your order token.");
-      setOrder(null);
-      setItems([]);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    setOrder(null);
-    setItems([]);
-
-    const { data, error: fnError } = await supabase.functions.invoke("order-lookup", {
-      body: { token: cleaned },
-    });
-
-    if (fnError) {
+    if (!token) {
+      setError("No order token provided.");
       setLoading(false);
-      setError(fnError.message || "Could not look up that order.");
       return;
     }
 
-    if (!data?.order) {
-      setLoading(false);
-      setError("Order not found.");
-      return;
-    }
+    const fetchOrder = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("order-lookup", {
+          body: { token }
+        });
 
-    setOrder(data.order as LookupOrder);
-    setItems((data.items ?? []) as LookupOrderItem[]);
-    setLoading(false);
-  };
+        if (error) throw error;
+        if (data.error) throw new Error(data.error);
 
-  useEffect(() => {
-    if (initialToken) void lookup(initialToken);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+        setOrder(data.order);
+        setItems(data.items);
+      } catch (err: any) {
+        setError(err.message || "Failed to load order.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrder();
+    // Poll every 15 seconds for updates
+    const interval = setInterval(fetchOrder, 15000);
+    return () => clearInterval(interval);
+  }, [token]);
+
+  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>;
+  if (error) return <div className="h-screen flex flex-col items-center justify-center gap-4 text-red-500"><p>{error}</p><Button asChild variant="outline"><Link to="/">Return Home</Link></Button></div>;
+  if (!order) return null;
+
+  // Status Logic
+  const steps = [
+    { id: 'pending', label: 'Order Placed', icon: Clock },
+    { id: 'preparing', label: 'Preparing', icon: ChefHat },
+    { id: 'ready', label: 'Ready', icon: CheckCircle2 },
+  ];
+
+  const currentStepIndex = steps.findIndex(s => s.id === order.status);
+  const isCancelled = order.status === 'cancelled';
+
+  // FIX: Dynamic Back Link using the restaurant slug
+  const backLink = order.restaurant?.slug 
+    ? `/r/${order.restaurant.slug}/menu` 
+    : "/";
 
   return (
-    <main className="min-h-screen bg-background">
-      <header className="border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4 max-w-3xl flex items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold tracking-tight">Track order</h1>
-          <Link to="/menu">
-            <Button variant="outline" size="sm">
-              Back to menu
-            </Button>
-          </Link>
+    <div className="min-h-screen bg-gray-50 py-8 px-4">
+      <div className="max-w-md mx-auto space-y-6">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" size="sm" asChild>
+            <Link to={backLink} className="flex items-center gap-2 text-gray-600">
+              <ArrowLeft className="h-4 w-4" /> 
+              {order.restaurant?.slug ? "Back to Menu" : "Back to Home"}
+            </Link>
+          </Button>
+          {order.restaurant?.name && (
+            <span className="font-semibold text-sm text-gray-500">{order.restaurant.name}</span>
+          )}
         </div>
-      </header>
 
-      <div className="container mx-auto px-4 py-8 max-w-3xl">
-        <Card className="p-4">
-          <form
-            className="flex flex-col sm:flex-row gap-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void lookup(token);
-            }}
-          >
-            <Input
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder="Paste your order token"
-              autoComplete="off"
-            />
-            <Button type="submit" disabled={loading}>
-              {loading ? "Looking up…" : "Lookup"}
-            </Button>
-          </form>
+        {/* Status Card */}
+        <Card className="border-none shadow-lg overflow-hidden">
+          <div className={`h-2 w-full ${isCancelled ? 'bg-red-500' : 'bg-green-500'}`} />
+          <CardHeader className="text-center pb-2">
+            <CardTitle className="text-2xl">
+              {isCancelled ? "Order Cancelled" : "Order Status"}
+            </CardTitle>
+            <p className="text-sm text-gray-500">#{order.id.slice(0, 8).toUpperCase()}</p>
+          </CardHeader>
+          <CardContent className="space-y-8 pt-6">
+            
+            {!isCancelled ? (
+              <div className="relative flex justify-between px-2">
+                {/* Progress Bar Background */}
+                <div className="absolute top-4 left-4 right-4 h-0.5 bg-gray-200 -z-10" />
+                
+                {/* Active Progress Bar */}
+                <div 
+                  className="absolute top-4 left-4 h-0.5 bg-green-500 -z-10 transition-all duration-500" 
+                  style={{ width: `${(Math.max(0, currentStepIndex) / (steps.length - 1)) * 90}%` }} 
+                />
 
-          {error ? (
-            <p className="mt-3 text-sm text-destructive">{error}</p>
-          ) : null}
+                {steps.map((step, idx) => {
+                  const isActive = idx <= currentStepIndex;
+                  const Icon = step.icon;
+                  return (
+                    <div key={step.id} className="flex flex-col items-center gap-2 bg-white px-2">
+                      <div className={`h-8 w-8 rounded-full flex items-center justify-center border-2 transition-colors ${isActive ? 'border-green-500 bg-green-50 text-green-600' : 'border-gray-200 text-gray-300'}`}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <span className={`text-xs font-medium ${isActive ? 'text-gray-900' : 'text-gray-400'}`}>{step.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center text-red-500 py-4 bg-red-50 rounded-lg">
+                This order has been cancelled. Please contact the restaurant.
+              </div>
+            )}
+            
+            {order.status === 'ready' && (
+              <div className="bg-green-100 text-green-800 p-4 rounded-lg text-center font-medium animate-pulse">
+                Your order is ready! Please pick it up.
+              </div>
+            )}
+
+          </CardContent>
         </Card>
 
-        {order ? (
-          <section className="mt-6 space-y-3" aria-label="Order details">
-            <Card className="p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm text-muted-foreground">Status</p>
-                  <p className="font-medium">{order.status}</p>
+        {/* Receipt Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <ShoppingBag className="h-5 w-5 text-gray-500" /> Order Summary
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3">
+              {items.map((item) => (
+                <div key={item.id} className="flex justify-between text-sm">
+                  <div className="flex gap-2">
+                    <span className="font-bold w-6 text-center bg-gray-100 rounded text-gray-600">{item.quantity}x</span>
+                    <span>{item.name_snapshot}</span>
+                  </div>
+                  <span className="text-gray-600">{formatMoney(item.line_total_cents, order.currency_code)}</span>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm text-muted-foreground">Total</p>
-                  <p className="font-medium tabular-nums">{formatMoney(order.total_cents, currency)}</p>
-                </div>
-              </div>
+              ))}
+            </div>
+            
+            <Separator />
+            
+            <div className="flex justify-between font-bold text-lg">
+              <span>Total</span>
+              <span>{formatMoney(order.total_cents, order.currency_code)}</span>
+            </div>
+            <div className="text-xs text-gray-400 text-center pt-2">
+              Placed at {new Date(order.placed_at).toLocaleString()}
+            </div>
+          </CardContent>
+        </Card>
 
-              <Separator className="my-4" />
-
-              <div className="space-y-2">
-                {items.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No items found.</p>
-                ) : (
-                  items.map((it) => (
-                    <div key={it.id} className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-medium truncate">{it.name_snapshot}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {it.quantity} × {formatMoney(it.unit_price_cents, currency)}
-                        </p>
-                      </div>
-                      <p className="font-medium tabular-nums whitespace-nowrap">
-                        {formatMoney(it.line_total_cents, currency)}
-                      </p>
-                    </div>
-                  ))
-                )}
-              </div>
-            </Card>
-          </section>
-        ) : null}
       </div>
-    </main>
+    </div>
   );
 }
