@@ -8,8 +8,7 @@ import { MoreHorizontal, RefreshCw, Shield, UserPlus, UserX } from "lucide-react
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
-import { buildInviteToken, sha256Hex, type StaffRole } from "../components/staff/staff-utils";
-import { addDays } from "date-fns";
+import { type StaffRole } from "../components/staff/staff-utils";
 
 // UI Components
 import { Badge } from "@/components/ui/badge";
@@ -142,38 +141,31 @@ export default function AdminStaff() {
   const createInviteMutation = useMutation({
     mutationFn: async (values: InviteForm) => {
       if (!restaurant?.id) throw new Error("Missing restaurant");
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      const token = buildInviteToken();
-      const token_hash = await sha256Hex(token);
-      const expires_at = addDays(new Date(), 7).toISOString();
 
-      // Check existing
-      const { data: existing } = await supabase.from("staff_invites")
-        .select("id").eq("restaurant_id", restaurant.id).eq("email", values.email).eq("status", "pending").maybeSingle();
-      
-      if (existing) return { created: false };
-
-      const { data: inserted, error } = await supabase.from("staff_invites").insert({
-        restaurant_id: restaurant.id, email: values.email, role: values.role as any, status: "pending",
-        token_hash, expires_at, invited_by: session?.user.id
-      }).select().single();
-
-      if (error) throw error;
-
-      // Log activity
-      await supabase.from("activity_logs").insert({
-        restaurant_id: restaurant.id, action: "staff_invited", 
-        message: `Invited ${values.email}`, actor_user_id: session?.user.id
+      const { data, error } = await supabase.functions.invoke("invite-staff", {
+        body: {
+          email: values.email,
+          role: values.role,
+          restaurant_id: restaurant.id,
+        },
       });
 
-      return { created: true };
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
     },
-    onSuccess: (res) => {
+    onSuccess: () => {
       setInviteOpen(false);
       inviteForm.reset();
-      toast({ title: res.created ? "Invite sent" : "Invite already pending" });
+      toast({ title: "Invitation sent", description: "Staff member invited successfully." });
       qc.invalidateQueries({ queryKey: ["admin", "staff"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to invite staff.",
+        variant: "destructive"
+      });
     }
   });
 
@@ -210,10 +202,31 @@ export default function AdminStaff() {
 
   const resendInviteMutation = useMutation({
     mutationFn: async ({ id, email }: { id: string, email: string }) => {
-      await supabase.from("staff_invites").update({ updated_at: new Date().toISOString() }).eq("id", id);
-      toast({ title: `Resent to ${email}` });
+      if (!restaurant?.id) throw new Error("Missing restaurant");
+
+      const { data, error } = await supabase.functions.invoke("invite-staff", {
+        body: {
+          email: email,
+          restaurant_id: restaurant.id,
+          action: "resend",
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "staff"] })
+    onSuccess: (_, variables) => {
+      toast({ title: `Resent to ${variables.email}` });
+      qc.invalidateQueries({ queryKey: ["admin", "staff"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to resend invitation.",
+        variant: "destructive"
+      });
+    }
   });
 
   // --- 3. Merging Data for the UI ---
@@ -289,70 +302,70 @@ export default function AdminStaff() {
           <CardHeader><CardTitle className="text-base">Team</CardTitle></CardHeader>
           <CardContent>
             {tableData.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground border-dashed border rounded-lg">No staff found. Invite someone!</div>
+              <div className="text-center py-8 text-muted-foreground border-dashed border rounded-lg">No staff found. Invite someone!</div>
             ) : (
-            <div className="rounded-xl border border-border bg-background">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Staff</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {tableData.map((s) => (
-                    <TableRow key={s.id} className="align-middle">
-                      <TableCell>
-                        <div className="font-medium">{s.name}</div>
-                        <div className="mt-0.5 text-xs text-muted-foreground">{s.contact}</div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={roleBadgeVariant(s.role)}>{s.role === 'restaurant_admin' ? 'Admin' : 'Staff'}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={statusBadgeVariant(s.status)}>{s.status}</Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            
-                            {/* Actions for ACTIVE users */}
-                            {s.type === 'active' && (
-                              <>
-                                <DropdownMenuItem onClick={() => {
-                                  setRoleTarget({ id: s.id, name: s.name, role: s.role });
-                                  setNewRole(s.role as StaffRole);
-                                  setRoleDialogOpen(true);
-                                }}>
-                                  <Shield className="mr-2 h-4 w-4" /> Change role
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="text-destructive" onClick={() => deactivateMutation.mutate(s.id)}>
-                                  <UserX className="mr-2 h-4 w-4" /> Deactivate
-                                </DropdownMenuItem>
-                              </>
-                            )}
-
-                            {/* Actions for INVITED users */}
-                            {s.type === 'invited' && (
-                              <DropdownMenuItem onClick={() => resendInviteMutation.mutate({ id: s.id, email: s.contact })}>
-                                <RefreshCw className="mr-2 h-4 w-4" /> Resend invite
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
+              <div className="rounded-xl border border-border bg-background">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Staff</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {tableData.map((s) => (
+                      <TableRow key={s.id} className="align-middle">
+                        <TableCell>
+                          <div className="font-medium">{s.name}</div>
+                          <div className="mt-0.5 text-xs text-muted-foreground">{s.contact}</div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={roleBadgeVariant(s.role)}>{s.role === 'restaurant_admin' ? 'Admin' : 'Staff'}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={statusBadgeVariant(s.status)}>{s.status}</Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+
+                              {/* Actions for ACTIVE users */}
+                              {s.type === 'active' && (
+                                <>
+                                  <DropdownMenuItem onClick={() => {
+                                    setRoleTarget({ id: s.id, name: s.name, role: s.role });
+                                    setNewRole(s.role as StaffRole);
+                                    setRoleDialogOpen(true);
+                                  }}>
+                                    <Shield className="mr-2 h-4 w-4" /> Change role
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="text-destructive" onClick={() => deactivateMutation.mutate(s.id)}>
+                                    <UserX className="mr-2 h-4 w-4" /> Deactivate
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+
+                              {/* Actions for INVITED users */}
+                              {s.type === 'invited' && (
+                                <DropdownMenuItem onClick={() => resendInviteMutation.mutate({ id: s.id, email: s.contact })}>
+                                  <RefreshCw className="mr-2 h-4 w-4" /> Resend invite
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -368,7 +381,7 @@ export default function AdminStaff() {
               </div>
             ))}
             {(activityQuery.data || []).length === 0 && (
-                <div className="text-xs text-muted-foreground p-2">No recent activity.</div>
+              <div className="text-xs text-muted-foreground p-2">No recent activity.</div>
             )}
           </CardContent>
         </Card>
