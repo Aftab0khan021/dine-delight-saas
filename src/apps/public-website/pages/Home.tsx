@@ -12,7 +12,7 @@ export default function Home() {
               <Button variant="outline">Restaurant Login</Button>
             </Link>
             <Link to="/super-admin/auth">
-              <Button variant="ghost">Admin</Button>
+              <Button variant="ghost">Super-Admin</Button>
             </Link>
           </nav>
         </div>
