@@ -1,4 +1,7 @@
-project_id = "tzpgifvkhwpiawlyuork"
+project_id = "itxbbdvqopfmuvwxxmtk"
+
+[functions.invite-staff]
+verify_jwt = false
 
 [functions.order-lookup]
 verify_jwt = false
