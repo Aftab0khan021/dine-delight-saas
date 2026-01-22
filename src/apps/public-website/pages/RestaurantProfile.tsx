@@ -47,7 +47,7 @@ export default function RestaurantProfile() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      
+
       {/* --- HERO SECTION --- */}
       <div className="relative h-[55vh] w-full bg-muted overflow-hidden">
         {settings.cover_image_url ? (
@@ -55,10 +55,10 @@ export default function RestaurantProfile() {
         ) : (
           <div className="h-full w-full bg-gradient-to-br from-slate-800 to-slate-900" />
         )}
-        
+
         {/* Overlay Content */}
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 space-y-6 bg-black/30">
-          
+
           {/* Logo */}
           <div className="h-28 w-28 md:h-36 md:w-36 rounded-full border-4 border-background bg-background shadow-xl overflow-hidden shrink-0">
             {restaurant.logo_url ? (
@@ -69,7 +69,7 @@ export default function RestaurantProfile() {
               </div>
             )}
           </div>
-          
+
           {/* Text */}
           <div className="space-y-2 max-w-2xl text-white drop-shadow-md">
             <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
@@ -81,8 +81,8 @@ export default function RestaurantProfile() {
           </div>
 
           {/* CTA Button */}
-          <Button 
-            size="lg" 
+          <Button
+            size="lg"
             className="rounded-full px-8 h-12 text-base font-bold shadow-lg hover:scale-105 transition-transform"
             style={{ backgroundColor: themeColor, borderColor: themeColor }}
             asChild
@@ -96,7 +96,7 @@ export default function RestaurantProfile() {
 
       {/* --- DETAILS SECTION --- */}
       <div className="flex-1 max-w-5xl mx-auto w-full p-6 md:p-12 space-y-12">
-        
+
         {/* About */}
         <section className="space-y-4 text-center">
           <div className="inline-flex items-center justify-center p-3 bg-muted rounded-full mb-2">
@@ -115,7 +115,8 @@ export default function RestaurantProfile() {
             <Clock className="h-8 w-8 text-primary/60" />
             <h3 className="font-semibold">Opening Hours</h3>
             <p className="text-sm text-muted-foreground">
-              Mon-Sun: 10:00 AM - 10:00 PM<br/>(Open all week)
+              {settings?.business_hours || "Mon-Sun: 10:00 AM - 10:00 PM"}<br />
+              {!settings?.business_hours && "(Hours not set)"}
             </p>
           </div>
 
@@ -135,7 +136,7 @@ export default function RestaurantProfile() {
             <MapPin className="h-8 w-8 text-primary/60" />
             <h3 className="font-semibold">Location</h3>
             <p className="text-sm text-muted-foreground">
-              123 Foodie Lane <br/> Culinary District
+              {settings?.address || "Address not available"}
             </p>
           </div>
         </div>
