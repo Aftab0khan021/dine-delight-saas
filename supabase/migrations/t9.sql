@@ -1,0 +1,1 @@
+drop policy if exists "Users can view all profiles" on public.profiles;
