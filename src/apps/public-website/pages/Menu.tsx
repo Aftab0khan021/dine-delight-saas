@@ -39,7 +39,7 @@ export default function PublicMenu() {
   const slug = (restaurantSlug ?? "").trim();
   const navigate = useNavigate();
   const { toast } = useToast();
-  
+
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -80,6 +80,28 @@ export default function PublicMenu() {
     },
   });
 
+  // 4. Fetch availability status for cart items
+  const { data: cartItemsAvailability = [] } = useQuery({
+    queryKey: ["public", "cart-items-availability", restaurant?.id, cartItems.map(i => i.menu_item_id)],
+    enabled: !!restaurant?.id && cartItems.length > 0,
+    queryFn: async () => {
+      const itemIds = cartItems.map(i => i.menu_item_id);
+      const { data } = await supabase
+        .from("menu_items")
+        .select("id, is_active")
+        .in("id", itemIds);
+      return data || [];
+    },
+  });
+
+  // Check if any cart items are unavailable
+  const hasUnavailableItems = useMemo(() => {
+    return cartItems.some(cartItem => {
+      const menuItem = cartItemsAvailability.find(mi => mi.id === cartItem.menu_item_id);
+      return menuItem && !menuItem.is_active;
+    });
+  }, [cartItems, cartItemsAvailability]);
+
   // --- Filtering ---
   const filteredItems = useMemo(() => {
     let filtered = items;
@@ -105,7 +127,7 @@ export default function PublicMenu() {
   const handlePlaceOrder = async () => {
     if (!restaurant) return;
     setIsPlacingOrder(true);
-    
+
     try {
       // 1. Retrieve Config (URL & Anon Key)
       // We look in environment variables first, then fallback to the active client config.
@@ -153,7 +175,7 @@ export default function PublicMenu() {
       // 4. Success
       clear();
       setIsCartOpen(false);
-      
+
       if (data?.order_token) {
         navigate(`/track?token=${data.order_token}`);
       } else {
@@ -162,10 +184,10 @@ export default function PublicMenu() {
 
     } catch (err: any) {
       console.error("Order Error:", err);
-      toast({ 
-        title: "Order Failed", 
-        description: err.message || "Please try again.", 
-        variant: "destructive" 
+      toast({
+        title: "Order Failed",
+        description: err.message || "Please try again.",
+        variant: "destructive"
       });
     } finally {
       setIsPlacingOrder(false);
@@ -179,7 +201,7 @@ export default function PublicMenu() {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      
+
       {/* Header */}
       <header className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b">
         <div className="container max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
@@ -202,18 +224,29 @@ export default function PublicMenu() {
                 ) : (
                   <ScrollArea className="h-full pr-4">
                     <div className="space-y-4">
-                      {cartItems.map((item) => (
-                        <div key={item.menu_item_id} className="flex items-start justify-between gap-3">
-                          <div className="flex-1 min-w-0"><div className="font-medium truncate">{item.name}</div><div className="text-sm text-muted-foreground">{formatMoney(item.price_cents)}</div></div>
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-2 border rounded-md p-0.5">
-                              <button onClick={() => decrement(item.menu_item_id)} className="h-6 w-6 flex items-center justify-center hover:bg-muted rounded text-muted-foreground"><Minus className="h-3 w-3" /></button>
-                              <span className="text-sm w-4 text-center font-medium">{item.quantity}</span>
-                              <button onClick={() => increment(item.menu_item_id)} className="h-6 w-6 flex items-center justify-center hover:bg-muted rounded text-muted-foreground"><Plus className="h-3 w-3" /></button>
+                      {cartItems.map((item) => {
+                        const menuItem = cartItemsAvailability.find(mi => mi.id === item.menu_item_id);
+                        const isUnavailable = menuItem && !menuItem.is_active;
+
+                        return (
+                          <div key={item.menu_item_id} className={`flex items-start justify-between gap-3 ${isUnavailable ? 'opacity-60' : ''}`}>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium truncate">{item.name}</div>
+                              {isUnavailable && (
+                                <div className="text-xs text-destructive font-medium mt-0.5">Unavailable</div>
+                              )}
+                              <div className="text-sm text-muted-foreground">{formatMoney(item.price_cents)}</div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-2 border rounded-md p-0.5">
+                                <button onClick={() => decrement(item.menu_item_id)} className="h-6 w-6 flex items-center justify-center hover:bg-muted rounded text-muted-foreground"><Minus className="h-3 w-3" /></button>
+                                <span className="text-sm w-4 text-center font-medium">{item.quantity}</span>
+                                <button onClick={() => increment(item.menu_item_id)} className="h-6 w-6 flex items-center justify-center hover:bg-muted rounded text-muted-foreground"><Plus className="h-3 w-3" /></button>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </ScrollArea>
                 )}
@@ -221,8 +254,13 @@ export default function PublicMenu() {
               {cartItems.length > 0 && (
                 <div className="pt-4 space-y-4">
                   <Separator />
+                  {hasUnavailableItems && (
+                    <div className="bg-destructive/10 border border-destructive/20 rounded-md p-3 text-sm text-destructive">
+                      ⚠️ Some items are no longer available. Please remove them to continue.
+                    </div>
+                  )}
                   <div className="flex items-center justify-between font-bold text-lg"><span>Total</span><span>{formatMoney(subtotalCents)}</span></div>
-                  <Button className="w-full h-12 text-base font-bold" size="lg" style={{ backgroundColor: themeColor }} onClick={handlePlaceOrder} disabled={isPlacingOrder}>
+                  <Button className="w-full h-12 text-base font-bold" size="lg" style={{ backgroundColor: themeColor }} onClick={handlePlaceOrder} disabled={isPlacingOrder || hasUnavailableItems}>
                     {isPlacingOrder ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Placing Order...</> : "Place Order"}
                   </Button>
                 </div>
@@ -244,18 +282,18 @@ export default function PublicMenu() {
       <main className="container max-w-3xl mx-auto px-4 py-6 space-y-8">
         <div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search items..." className="pl-10 bg-card" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
         {activeCategory === "all" && groupedItems ? (
-           categories.map(cat => {
-             const catItems = groupedItems[cat.id];
-             if (!catItems?.length) return null;
-             return (
-               <div key={cat.id} className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                 <h2 className="font-bold text-lg">{cat.name}</h2>
-                 <div className="grid gap-4 sm:grid-cols-2">
-                   {catItems.map(item => <MenuItemCard key={item.id} item={item} onAdd={() => { addItem({ menu_item_id: item.id, name: item.name, price_cents: item.price_cents }); toast({ title: "Added", description: `${item.name} added to cart.` }); }} />)}
-                 </div>
-               </div>
-             );
-           })
+          categories.map(cat => {
+            const catItems = groupedItems[cat.id];
+            if (!catItems?.length) return null;
+            return (
+              <div key={cat.id} className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <h2 className="font-bold text-lg">{cat.name}</h2>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {catItems.map(item => <MenuItemCard key={item.id} item={item} onAdd={() => { addItem({ menu_item_id: item.id, name: item.name, price_cents: item.price_cents }); toast({ title: "Added", description: `${item.name} added to cart.` }); }} />)}
+                </div>
+              </div>
+            );
+          })
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
             {filteredItems.map(item => <MenuItemCard key={item.id} item={item} onAdd={() => { addItem({ menu_item_id: item.id, name: item.name, price_cents: item.price_cents }); toast({ title: "Added", description: `${item.name} added to cart.` }); }} />)}
@@ -263,7 +301,7 @@ export default function PublicMenu() {
           </div>
         )}
         {activeCategory === "all" && groupedItems?.["uncategorized"]?.length ? (
-           <div className="space-y-3"><h2 className="font-bold text-lg">Other</h2><div className="grid gap-4 sm:grid-cols-2">{groupedItems["uncategorized"].map(item => <MenuItemCard key={item.id} item={item} onAdd={() => { addItem({ menu_item_id: item.id, name: item.name, price_cents: item.price_cents }); toast({ title: "Added", description: `${item.name} added to cart.` }); }} />)}</div></div>
+          <div className="space-y-3"><h2 className="font-bold text-lg">Other</h2><div className="grid gap-4 sm:grid-cols-2">{groupedItems["uncategorized"].map(item => <MenuItemCard key={item.id} item={item} onAdd={() => { addItem({ menu_item_id: item.id, name: item.name, price_cents: item.price_cents }); toast({ title: "Added", description: `${item.name} added to cart.` }); }} />)}</div></div>
         ) : null}
       </main>
     </div>
