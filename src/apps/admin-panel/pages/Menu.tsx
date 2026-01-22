@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
-import { 
-  Grip, 
-  Image as ImageIcon, 
-  MoreHorizontal, 
-  Plus, 
-  Search, 
+import {
+  Grip,
+  Image as ImageIcon,
+  MoreHorizontal,
+  Plus,
+  Search,
   Trash2,
   RefreshCw,
   Pencil,
@@ -48,8 +48,8 @@ type CategoryRow = {
   name: string;
   description: string | null;
   sort_order: number;
-  is_active: boolean; 
-  restaurant_id: string; 
+  is_active: boolean;
+  restaurant_id: string;
 };
 
 type MenuItemRow = {
@@ -75,11 +75,11 @@ export default function AdminMenu() {
   // --- State ---
   const [search, setSearch] = useState("");
   const [draggedCatId, setDraggedCatId] = useState<string | null>(null);
-  
+
   // Sheet States
   const [catSheetOpen, setCatSheetOpen] = useState(false);
   const [editCat, setEditCat] = useState<CategoryRow | null>(null);
-  
+
   const [itemSheetOpen, setItemSheetOpen] = useState(false);
   const [editItem, setEditItem] = useState<MenuItemRow | null>(null);
 
@@ -92,7 +92,7 @@ export default function AdminMenu() {
         .from("categories")
         .select("*")
         .eq("restaurant_id", restaurant!.id)
-        .is("deleted_at", null) 
+        .is("deleted_at", null)
         .order("sort_order");
       if (error) throw error;
       return data as CategoryRow[];
@@ -152,7 +152,7 @@ export default function AdminMenu() {
   };
 
   const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault(); 
+    e.preventDefault();
   };
 
   const handleDrop = (e: React.DragEvent, targetId: string) => {
@@ -161,7 +161,7 @@ export default function AdminMenu() {
 
     const oldIndex = categories.findIndex(c => c.id === draggedCatId);
     const newIndex = categories.findIndex(c => c.id === targetId);
-    
+
     if (oldIndex === -1 || newIndex === -1) return;
 
     const newCategories = [...categories];
@@ -220,44 +220,114 @@ export default function AdminMenu() {
         name: values.name,
         description: values.description,
         price_cents: Number(values.price_cents),
-        // FIX: Ensure category_id is NULL if empty string to prevent UUID errors
         category_id: values.category_id === "" ? null : values.category_id,
         image_url: values.image_url || null,
         is_active: values.is_active,
         restaurant_id: restaurant!.id
       };
 
+      let result;
       if (editItem) {
-        const { error } = await supabase.from("menu_items").update(payload).eq("id", editItem.id);
+        const { data, error } = await supabase
+          .from("menu_items")
+          .update(payload)
+          .eq("id", editItem.id)
+          .eq("restaurant_id", restaurant!.id)
+          .select()
+          .single();
         if (error) throw error;
+        if (!data) throw new Error("Menu item not found");
+        result = { data, action: "updated" };
       } else {
-        const { error } = await supabase.from("menu_items").insert({ ...payload, sort_order: items.length });
+        const { data, error } = await supabase
+          .from("menu_items")
+          .insert({ ...payload, sort_order: items.length })
+          .select()
+          .single();
         if (error) throw error;
+        result = { data, action: "created" };
       }
+
+      // Log activity
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        await supabase.from("activity_logs").insert({
+          restaurant_id: restaurant!.id,
+          entity_type: "menu_item",
+          entity_id: result.data.id,
+          action: `menu_item_${result.action}`,
+          message: `${result.action === "created" ? "Created" : "Updated"} menu item: ${result.data.name}`,
+          actor_user_id: user?.id
+        });
+      } catch (logError) {
+        console.error("Failed to log activity:", logError);
+      }
+
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       setItemSheetOpen(false);
       qc.invalidateQueries({ queryKey: ["admin", "menu"] });
-      toast({ title: "Saved", description: "Menu item updated." });
+      toast({
+        title: result.action === "created" ? "Item created" : "Item updated",
+        description: `${result.data.name} has been saved.`
+      });
     },
     onError: (err: any) => {
       console.error("Save Item Error:", err);
-      toast({ title: "Failed to Save", description: err.message || "Check database permissions", variant: "destructive" });
+      toast({
+        title: "Failed to save item",
+        description: err.message || "Please try again",
+        variant: "destructive"
+      });
     }
   });
 
   const deleteItem = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("menu_items").update({ deleted_at: new Date().toISOString() } as any).eq("id", id);
+      const item = items.find(i => i.id === id);
+      const { data, error } = await supabase
+        .from("menu_items")
+        .update({ deleted_at: new Date().toISOString() } as any)
+        .eq("id", id)
+        .eq("restaurant_id", restaurant!.id)
+        .select()
+        .single();
       if (error) throw error;
+      if (!data) throw new Error("Menu item not found");
+
+      // Log activity
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        await supabase.from("activity_logs").insert({
+          restaurant_id: restaurant!.id,
+          entity_type: "menu_item",
+          entity_id: id,
+          action: "menu_item_deleted",
+          message: `Deleted menu item: ${item?.name || "Unknown"}`,
+          actor_user_id: user?.id
+        });
+      } catch (logError) {
+        console.error("Failed to log activity:", logError);
+      }
+
+      return { name: item?.name || "Item" };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       setItemSheetOpen(false);
       qc.invalidateQueries({ queryKey: ["admin", "menu"] });
-      toast({ title: "Deleted", description: "Item removed." });
+      toast({
+        title: "Item deleted",
+        description: `${result.name} has been removed.`
+      });
     },
     onError: (err: any) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      console.error("Delete Item Error:", err);
+      toast({
+        title: "Failed to delete item",
+        description: err.message || "Please try again",
+        variant: "destructive"
+      });
     }
   });
 
@@ -269,10 +339,10 @@ export default function AdminMenu() {
           <p className="mt-1 text-sm text-muted-foreground">Manage your food and drink offerings.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-           {/* Add Refresh Button for troubleshooting */}
-           <Button variant="outline" size="icon" onClick={() => qc.invalidateQueries({ queryKey: ["admin", "menu"] })}>
-             <RefreshCw className="h-4 w-4" />
-           </Button>
+          {/* Add Refresh Button for troubleshooting */}
+          <Button variant="outline" size="icon" onClick={() => qc.invalidateQueries({ queryKey: ["admin", "menu"] })}>
+            <RefreshCw className="h-4 w-4" />
+          </Button>
           <Button variant="secondary" onClick={() => { setEditCat(null); setCatSheetOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" /> Add Category
           </Button>
@@ -290,8 +360,8 @@ export default function AdminMenu() {
           </CardHeader>
           <CardContent className="space-y-2">
             {categories.map((cat) => (
-              <div 
-                key={cat.id} 
+              <div
+                key={cat.id}
                 draggable={true}
                 onDragStart={(e) => handleDragStart(e, cat.id)}
                 onDragOver={handleDragOver}
@@ -328,9 +398,9 @@ export default function AdminMenu() {
             <CardTitle className="text-base">Menu Items</CardTitle>
             <div className="relative w-full max-w-xs">
               <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search items..." 
-                className="pl-9 h-9" 
+              <Input
+                placeholder="Search items..."
+                className="pl-9 h-9"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -339,8 +409,8 @@ export default function AdminMenu() {
           <CardContent>
             <div className="space-y-2">
               {filteredItems.map((item) => (
-                <div 
-                  key={item.id} 
+                <div
+                  key={item.id}
                   className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background p-3 transition-all hover:shadow-sm"
                 >
                   <div className="flex items-center gap-3 min-w-0">
@@ -351,7 +421,7 @@ export default function AdminMenu() {
                         <ImageIcon className="h-5 w-5 text-muted-foreground/50" />
                       )}
                     </div>
-                    
+
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium">{item.name}</div>
                       <div className="flex items-center gap-2 mt-0.5">
@@ -375,19 +445,19 @@ export default function AdminMenu() {
       </div>
 
       {/* --- EDITORS --- */}
-      
-      <CategorySheet 
-        open={catSheetOpen} 
-        onOpenChange={setCatSheetOpen} 
-        data={editCat} 
+
+      <CategorySheet
+        open={catSheetOpen}
+        onOpenChange={setCatSheetOpen}
+        data={editCat}
         onSave={(vals: any) => saveCategory.mutate(vals)}
         onDelete={(id: string) => deleteCategory.mutate(id)}
       />
 
-      <ItemSheet 
-        open={itemSheetOpen} 
-        onOpenChange={setItemSheetOpen} 
-        data={editItem} 
+      <ItemSheet
+        open={itemSheetOpen}
+        onOpenChange={setItemSheetOpen}
+        data={editItem}
         categories={categories}
         onSave={(vals: any) => saveItem.mutate(vals)}
         onDelete={(id: string) => deleteItem.mutate(id)}
@@ -399,7 +469,7 @@ export default function AdminMenu() {
 // --- Subcomponent: Category Sheet ---
 function CategorySheet({ open, onOpenChange, data, onSave, onDelete }: any) {
   const form = useForm();
-  
+
   useMemo(() => {
     if (open) {
       form.reset({
@@ -443,56 +513,56 @@ function CategorySheet({ open, onOpenChange, data, onSave, onDelete }: any) {
 
 // --- Subcomponent: Item Sheet ---
 function ItemSheet({ open, onOpenChange, data, categories, onSave, onDelete }: any) {
- const form = useForm();
- const [uploading, setUploading] = useState(false);
-   const handleReplaceImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  if (!e.target.files?.length) return;
+  const form = useForm();
+  const [uploading, setUploading] = useState(false);
+  const handleReplaceImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.length) return;
 
-  const file = e.target.files[0];
-  const fileExt = file.name.split(".").pop();
-  const fileName = `${crypto.randomUUID()}.${fileExt}`;
+    const file = e.target.files[0];
+    const fileExt = file.name.split(".").pop();
+    const fileName = `${crypto.randomUUID()}.${fileExt}`;
 
-  setUploading(true);
-  try {
-    const { error } = await supabase.storage
-      .from("menu-items")
-      .upload(fileName, file, { upsert: true });
+    setUploading(true);
+    try {
+      const { error } = await supabase.storage
+        .from("menu-items")
+        .upload(fileName, file, { upsert: true });
 
-    if (error) throw error;
+      if (error) throw error;
 
-    const { data } = supabase.storage
-      .from("menu-items")
-      .getPublicUrl(fileName);
+      const { data } = supabase.storage
+        .from("menu-items")
+        .getPublicUrl(fileName);
 
-    form.setValue("image_url", data.publicUrl, { shouldDirty: true });
-  } finally {
-    setUploading(false);
-  }
+      form.setValue("image_url", data.publicUrl, { shouldDirty: true });
+    } finally {
+      setUploading(false);
+    }
   };
- const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  if (!e.target.files?.length) return;
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.length) return;
 
-  const file = e.target.files[0];
-  const fileExt = file.name.split(".").pop();
-  const fileName = `${crypto.randomUUID()}.${fileExt}`;
+    const file = e.target.files[0];
+    const fileExt = file.name.split(".").pop();
+    const fileName = `${crypto.randomUUID()}.${fileExt}`;
 
-  setUploading(true);
-  try {
-    const { error } = await supabase.storage
-      .from("menu-items")
-      .upload(fileName, file);
+    setUploading(true);
+    try {
+      const { error } = await supabase.storage
+        .from("menu-items")
+        .upload(fileName, file);
 
-    if (error) throw error;
+      if (error) throw error;
 
-    const { data } = supabase.storage
-      .from("menu-items")
-      .getPublicUrl(fileName);
+      const { data } = supabase.storage
+        .from("menu-items")
+        .getPublicUrl(fileName);
 
-    form.setValue("image_url", data.publicUrl, { shouldDirty: true });
-  } finally {
-    setUploading(false);
-  }
- };
+      form.setValue("image_url", data.publicUrl, { shouldDirty: true });
+    } finally {
+      setUploading(false);
+    }
+  };
 
   useMemo(() => {
     if (open) {
@@ -503,7 +573,7 @@ function ItemSheet({ open, onOpenChange, data, categories, onSave, onDelete }: a
         // FIX: Default to first category if available, else empty string (which mutation converts to null)
         category_id: data?.category_id || (categories.length > 0 ? categories[0].id : ""),
         image_url: data?.image_url || "",
-        is_active: data?.is_active ?? true 
+        is_active: data?.is_active ?? true
       });
     }
   }, [open, data, categories]);
@@ -522,7 +592,7 @@ function ItemSheet({ open, onOpenChange, data, categories, onSave, onDelete }: a
             <Label>Name</Label>
             <Input {...form.register("name", { required: true })} placeholder="e.g. Cheeseburger" />
           </div>
-          
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Price (Cents)</Label>
@@ -531,8 +601,8 @@ function ItemSheet({ open, onOpenChange, data, categories, onSave, onDelete }: a
             </div>
             <div className="space-y-2">
               <Label>Category</Label>
-              <Select 
-                onValueChange={(v) => form.setValue("category_id", v)} 
+              <Select
+                onValueChange={(v) => form.setValue("category_id", v)}
                 value={form.watch("category_id")} // Use watch to control value
               >
                 <SelectTrigger>
@@ -554,49 +624,49 @@ function ItemSheet({ open, onOpenChange, data, categories, onSave, onDelete }: a
           </div>
 
           <div className="space-y-2">
-  <Label>Item Image</Label>
+            <Label>Item Image</Label>
 
-  {/* Upload from device */}
-  <Input
-    type="file"
-    accept="image/png, image/jpeg, image/webp"
-    onChange={handleImageUpload}
-    disabled={uploading}
-  />
+            {/* Upload from device */}
+            <Input
+              type="file"
+              accept="image/png, image/jpeg, image/webp"
+              onChange={handleImageUpload}
+              disabled={uploading}
+            />
 
-  {/* OR paste URL */}
-  <Input
-    {...form.register("image_url")}
-    placeholder="https://example.com/image.jpg"
-  />
+            {/* OR paste URL */}
+            <Input
+              {...form.register("image_url")}
+              placeholder="https://example.com/image.jpg"
+            />
 
-  {form.watch("image_url") && (
-  <div className="space-y-2">
-    <img
-      src={form.watch("image_url")}
-      alt="Preview"
-      className="h-32 w-full object-cover rounded-md border"
-    />
+            {form.watch("image_url") && (
+              <div className="space-y-2">
+                <img
+                  src={form.watch("image_url")}
+                  alt="Preview"
+                  className="h-32 w-full object-cover rounded-md border"
+                />
 
-    {/* Replace Image */}
-    <Input
-      type="file"
-      accept="image/png, image/jpeg, image/webp"
-      onChange={handleReplaceImage}
-      disabled={uploading}
-    />
-  </div>
-)}
-</div>
+                {/* Replace Image */}
+                <Input
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp"
+                  onChange={handleReplaceImage}
+                  disabled={uploading}
+                />
+              </div>
+            )}
+          </div>
 
           <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
             <div className="space-y-0.5">
               <Label>Available</Label>
               <div className="text-xs text-muted-foreground">Show on public menu</div>
             </div>
-            <Switch 
-              checked={form.watch("is_active")} 
-              onCheckedChange={(v) => form.setValue("is_active", v)} 
+            <Switch
+              checked={form.watch("is_active")}
+              onCheckedChange={(v) => form.setValue("is_active", v)}
             />
           </div>
 

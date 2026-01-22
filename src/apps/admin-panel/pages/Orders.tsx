@@ -138,13 +138,13 @@ export default function AdminOrders() {
     if (!restaurant?.id) return;
 
     const channel = supabase.channel("admin-orders-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `restaurant_id=eq.${restaurant.id}` }, 
-      (payload) => {
-        qc.invalidateQueries({ queryKey: ["admin", "orders"] });
-        if (payload.eventType === "INSERT") {
-          toast({ title: "New Order!", description: `Order ${shortId((payload.new as any).id)} received.` });
-        }
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `restaurant_id=eq.${restaurant.id}` },
+        (payload) => {
+          qc.invalidateQueries({ queryKey: ["admin", "orders"] });
+          if (payload.eventType === "INSERT") {
+            toast({ title: "New Order!", description: `Order ${shortId((payload.new as any).id)} received.` });
+          }
+        })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -163,7 +163,7 @@ export default function AdminOrders() {
         .gte("placed_at", startISO)
         .lt("placed_at", endISO)
         .order("placed_at", { ascending: false });
-      
+
       if (error) throw error;
 
       // Fetch Items for these orders (to show summary)
@@ -184,35 +184,84 @@ export default function AdminOrders() {
     }
   });
 
+
   // --- 3. Mutation (Advance Order) ---
   const advanceMutation = useMutation({
     mutationFn: async ({ id, currentStatus }: { id: string, currentStatus: OrderStatus }) => {
       setAdvancingId(id);
+
+      // Determine next status (existing logic preserved)
       let next: OrderStatus | null = null;
       if (currentStatus === "pending") next = "in_progress";
       else if (currentStatus === "in_progress") next = "ready";
       else if (currentStatus === "ready") next = "completed";
 
-      if (next) {
-        await supabase.from("orders").update({ 
-          status: next, 
-          completed_at: next === "completed" ? new Date().toISOString() : null 
-        }).eq("id", id);
+      // Validate transition
+      if (!next) {
+        throw new Error("Cannot advance order from this status");
       }
+
+      // Update order with error checking
+      const { data, error } = await supabase
+        .from("orders")
+        .update({
+          status: next,
+          completed_at: next === "completed" ? new Date().toISOString() : null
+        })
+        .eq("id", id)
+        .eq("restaurant_id", restaurant!.id) // Security: ensure same restaurant
+        .select()
+        .single();
+
+      if (error) throw error;
+      if (!data) throw new Error("Order not found");
+
+      // Log activity
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        await supabase.from("activity_logs").insert({
+          restaurant_id: restaurant!.id,
+          entity_type: "order",
+          entity_id: id,
+          action: "order_status_changed",
+          message: `Order ${shortId(id)} moved to ${STATUS_MAP[next]}`,
+          actor_user_id: user?.id,
+          metadata: {
+            order_id: id,
+            old_status: currentStatus,
+            new_status: next
+          }
+        });
+      } catch (logError) {
+        // Don't fail the mutation if logging fails
+        console.error("Failed to log activity:", logError);
+      }
+
+      return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["admin", "orders"] });
       setAdvancingId(null);
+      toast({
+        title: "Order updated",
+        description: `Order moved to ${STATUS_MAP[data.status]}`
+      });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to update order.", variant: "destructive" });
+    onError: (error: Error) => {
+      console.error("Order status update failed:", error);
+      toast({
+        title: "Failed to update order",
+        description: error.message || "Please try again",
+        variant: "destructive"
+      });
       setAdvancingId(null);
     }
   });
 
+
   // --- 4. Filtering & Grouping ---
   const orders = ordersQuery.data || [];
-  
+
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
       const matchesSearch = search ? o.id.includes(search) || o.table_label?.toLowerCase().includes(search.toLowerCase()) : true;
@@ -303,9 +352,9 @@ export default function AdminOrders() {
             </CardHeader>
             <CardContent className="space-y-2 px-0 md:px-6 pb-0 md:pb-6">
               {byColumn[col].map((o) => (
-                <OrderCard 
-                  key={o.id} 
-                  order={o} 
+                <OrderCard
+                  key={o.id}
+                  order={o}
                   onAdvance={(id, status) => advanceMutation.mutate({ id, currentStatus: status })}
                   loadingId={advancingId}
                 />
