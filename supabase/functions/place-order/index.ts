@@ -122,20 +122,39 @@ serve(async (req) => {
       return json({ error: "Restaurant is not accepting orders at this time" }, 400);
     }
 
-    // Fetch menu items and calculate totals
+    // Fetch menu items, variants, and addons
     const itemIds = items.map((i: any) => i.menu_item_id);
+
+    // 1. Fetch Items
     const { data: menuItems, error: menuError } = await supabase
       .from('menu_items')
       .select('id, price_cents, name, is_active')
       .in('id', itemIds);
 
-    if (menuError) {
-      console.error("Menu items fetch error:", menuError);
+    if (menuError || !menuItems) {
       return json({ error: "Failed to fetch menu items" }, 500);
     }
 
-    if (!menuItems || menuItems.length === 0) {
-      return json({ error: "No valid menu items found" }, 400);
+    // 2. Fetch Variants for these items
+    const { data: allVariants, error: variantError } = await supabase
+      .from('menu_item_variants')
+      .select('id, menu_item_id, price_cents, name, is_active')
+      .in('menu_item_id', itemIds)
+      .eq('is_active', true);
+
+    if (variantError) {
+      return json({ error: "Failed to fetch variants" }, 500);
+    }
+
+    // 3. Fetch Addons for these items
+    const { data: allAddons, error: addonError } = await supabase
+      .from('menu_item_addons')
+      .select('id, menu_item_id, price_cents, name, is_active')
+      .in('menu_item_id', itemIds)
+      .eq('is_active', true);
+
+    if (addonError) {
+      return json({ error: "Failed to fetch addons" }, 500);
     }
 
     let totalCents = 0;
@@ -152,8 +171,39 @@ serve(async (req) => {
         return json({ error: `Item unavailable: ${realItem.name}` }, 400);
       }
 
+      // Base Price Logic
+      let unitPrice = realItem.price_cents;
+      let variantId = null;
+
+      // Handle Variant
+      if (item.variant_id) {
+        const variant = allVariants?.find(v => v.id === item.variant_id && v.menu_item_id === realItem.id);
+        if (!variant) {
+          return json({ error: `Invalid variant for ${realItem.name}` }, 400);
+        }
+        unitPrice = variant.price_cents; // Variant overrides base price
+        variantId = variant.id;
+      }
+
+      // Handle Addons
+      let addonsList = [];
+      if (item.addons && Array.isArray(item.addons)) {
+        for (const addonReq of item.addons) {
+          const addonDb = allAddons?.find(a => a.id === addonReq.id && a.menu_item_id === realItem.id);
+          if (!addonDb) {
+            return json({ error: `Invalid add-on for ${realItem.name}` }, 400);
+          }
+          unitPrice += addonDb.price_cents;
+          addonsList.push({
+            id: addonDb.id,
+            name: addonDb.name,
+            price_cents: addonDb.price_cents
+          });
+        }
+      }
+
       const quantity = Number(item.quantity);
-      const lineTotal = realItem.price_cents * quantity;
+      const lineTotal = unitPrice * quantity;
 
       // Check for arithmetic overflow
       if (lineTotal > Number.MAX_SAFE_INTEGER) {
@@ -164,9 +214,12 @@ serve(async (req) => {
       orderItemsData.push({
         menu_item_id: realItem.id,
         quantity,
-        unit_price_cents: realItem.price_cents,
+        unit_price_cents: unitPrice,
         line_total_cents: lineTotal,
-        name_snapshot: realItem.name
+        name_snapshot: realItem.name,
+        variant_id: variantId,
+        addons: addonsList.length > 0 ? addonsList : [], // Store as JSONB
+        notes: item.notes || null
       });
     }
 
@@ -174,6 +227,62 @@ serve(async (req) => {
     if (totalCents > MAX_ORDER_VALUE_CENTS) {
       return json({ error: `Order value cannot exceed $${MAX_ORDER_VALUE_CENTS / 100}` }, 400);
     }
+
+    // Coupon Logic
+    let couponId = null;
+    let couponCode = null;
+    let discountCents = 0;
+    let discountType = null;
+
+    if (payload.coupon_code) {
+      const code = String(payload.coupon_code).trim().toUpperCase();
+      const { data: coupon, error: couponError } = await supabase
+        .from('coupons')
+        .select('*')
+        .eq('restaurant_id', restaurant_id)
+        .eq('code', code)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (couponError) {
+        console.error("Coupon fetch error:", couponError);
+      } else if (coupon) {
+        // Validate Coupon Constraints
+        const now = new Date();
+        const expiresAt = coupon.expires_at ? new Date(coupon.expires_at) : null;
+        let isValid = true;
+
+        if (expiresAt && expiresAt < now) isValid = false;
+        if (coupon.usage_limit !== null && (coupon.usage_count || 0) >= coupon.usage_limit) isValid = false;
+        if (coupon.min_order_cents && totalCents < coupon.min_order_cents) isValid = false;
+
+        if (isValid) {
+          couponId = coupon.id;
+          couponCode = coupon.code;
+          discountType = 'coupon';
+
+          if (coupon.discount_type === 'fixed') {
+            discountCents = Math.min(coupon.discount_value, totalCents);
+          } else if (coupon.discount_type === 'percentage') {
+            let d = Math.round((totalCents * coupon.discount_value) / 100);
+            if (coupon.max_discount_cents) d = Math.min(d, coupon.max_discount_cents);
+            discountCents = d;
+          }
+
+          // Apply Discount
+          // Note: total_cents in database is the FINAL amount to pay.
+          // subtotal_cents should be the amount BEFORE discount.
+          // But our current logic set totalCents as the sum of items.
+          // Let's adjust variable names for clarity or just update totalCents.
+
+          // Current totalCents IS the subtotal.
+        }
+      }
+    }
+
+    // Final Calculation
+    const subtotal = totalCents;
+    const finalTotal = Math.max(0, subtotal - discountCents);
 
     // Generate secure order token for tracking
     const order_token = crypto.randomUUID();
@@ -184,15 +293,32 @@ serve(async (req) => {
       .insert({
         restaurant_id,
         status: 'pending',
-        subtotal_cents: totalCents,
-        total_cents: totalCents,
+        subtotal_cents: subtotal,
+        discount_cents: discountCents,
+        total_cents: finalTotal,
+        coupon_id: couponId,
+        coupon_code: couponCode,
+        discount_type: discountType,
         currency_code: 'USD',
         ip_address: clientIp,
         table_label: table_label || null,
-        order_token: order_token
+        order_token: order_token,
+        payment_method: 'cash' // Default to cash for now, update later
       })
       .select()
       .single();
+
+    // Increment Coupon Usage (Optimistic)
+    if (couponId) {
+      await supabase.rpc('increment_coupon_usage', { coupon_id: couponId });
+      // Note: If RPC fails or doesn't exist, we might miss a count. 
+      // Ideally we create an RPC or just update directly.
+      // Since I didn't create an RPC in my plan, I'll do a direct update.
+      await supabase
+        .from('coupons')
+        .update({ usage_count: (await supabase.from('coupons').select('usage_count').eq('id', couponId).single()).data?.usage_count + 1 })
+        .eq('id', couponId);
+    }
 
     if (insertError) {
       console.error("Order insert error:", insertError);

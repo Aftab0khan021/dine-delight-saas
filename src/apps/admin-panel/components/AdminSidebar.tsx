@@ -1,17 +1,18 @@
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { 
-  ChefHat, 
-  CreditCard, 
-  LayoutDashboard, 
-  Palette, 
-  QrCode, 
-  ReceiptText, 
-  Users, 
-  Salad, 
-  ChevronLeft, 
-  ChevronRight 
+import {
+  ChefHat,
+  CreditCard,
+  LayoutDashboard,
+  Palette,
+  QrCode,
+  ReceiptText,
+  Users,
+  Salad,
+  ChevronLeft,
+  ChevronRight,
+  Ticket
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -24,16 +25,17 @@ const navItems = [
   { to: "/admin/staff", label: "Staff", icon: Users },
   { to: "/admin/branding", label: "Branding", icon: Palette },
   { to: "/admin/billing", label: "Billing", icon: CreditCard },
+  { to: "/admin/coupons", label: "Coupons", icon: Ticket },
 ];
 
 export function AdminSidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
-    <aside 
+    <aside
       className={cn(
         "hidden md:flex flex-col border-r border-border bg-card transition-all duration-300 ease-in-out",
-        "h-[calc(100vh-3.5rem)] sticky top-14", 
+        "h-[calc(100vh-3.5rem)] sticky top-14",
         isCollapsed ? "w-[70px]" : "w-64"
       )}
     >
@@ -46,7 +48,7 @@ export function AdminSidebar() {
           <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground shadow-sm">
             <ChefHat className="h-4 w-4" />
           </div>
-          
+
           <div className={cn(
             "leading-tight transition-all duration-300 overflow-hidden whitespace-nowrap",
             isCollapsed ? "w-0 opacity-0" : "w-auto opacity-100"
@@ -68,8 +70,8 @@ export function AdminSidebar() {
                 className={({ isActive }) =>
                   cn(
                     "flex items-center rounded-lg transition-colors",
-                    isCollapsed 
-                      ? "justify-center h-10 w-10 mx-auto" 
+                    isCollapsed
+                      ? "justify-center h-10 w-10 mx-auto"
                       : "gap-3 px-3 py-2",
                     isActive
                       ? "bg-primary/10 text-primary shadow-sm"
@@ -81,11 +83,11 @@ export function AdminSidebar() {
                 {({ isActive }) => (
                   <>
                     <item.icon className={cn(
-                      "shrink-0", 
+                      "shrink-0",
                       isCollapsed ? "h-5 w-5" : "h-4 w-4",
                       !isActive && !isCollapsed && "opacity-70"
                     )} />
-                    
+
                     {!isCollapsed && (
                       <span className="text-sm font-medium truncate">{item.label}</span>
                     )}
@@ -112,13 +114,13 @@ export function AdminSidebar() {
           variant="ghost"
           size="icon"
           className={cn(
-            "w-full flex items-center", 
+            "w-full flex items-center",
             isCollapsed ? "justify-center" : "justify-between px-3"
           )}
           onClick={() => setIsCollapsed(!isCollapsed)}
         >
           {isCollapsed ? (
-             <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
           ) : (
             <>
               <span className="text-xs text-muted-foreground">Collapse</span>

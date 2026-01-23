@@ -1,7 +1,7 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, ExternalLink, Globe, Image as ImageIcon, Palette, Save, Store, X, Phone, Mail } from "lucide-react";
+import { Copy, ExternalLink, Globe, Image as ImageIcon, Palette, Save, Store, X, Phone, Mail, Clock } from "lucide-react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
 import { useFeatureAccess } from "../hooks/useFeatureAccess";
+import { OperatingHoursEditor } from "../components/branding/OperatingHoursEditor";
 
 // UI Components
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 
 // --- Validation Schema (Restored from your original file) ---
 const hexSchema = z
@@ -59,6 +61,20 @@ export default function AdminBranding() {
   const { isFeatureEnabled } = useFeatureAccess(restaurant?.id);
   const customDomainEnabled = isFeatureEnabled('custom_domain');
 
+  // Operating hours state
+  const [operatingHours, setOperatingHours] = useState<any>({
+    monday: [],
+    tuesday: [],
+    wednesday: [],
+    thursday: [],
+    friday: [],
+    saturday: [],
+    sunday: [],
+  });
+  const [isHolidayMode, setIsHolidayMode] = useState(false);
+  const [holidayMessage, setHolidayMessage] = useState("");
+  const [maxVariants, setMaxVariants] = useState(5);
+
   // --- Data Fetching ---
   const { data: restaurantData, isLoading } = useQuery({
     queryKey: ["admin", "restaurant", restaurant?.id],
@@ -66,7 +82,7 @@ export default function AdminBranding() {
     queryFn: async () => {
       const { data } = await supabase
         .from("restaurants")
-        .select("id, name, description, logo_url, slug, settings")
+        .select("id, name, description, logo_url, slug, settings, operating_hours, is_holiday_mode, holiday_mode_message, max_variants_per_item")
         .eq("id", restaurant!.id)
         .single();
       return data;
@@ -102,6 +118,14 @@ export default function AdminBranding() {
         primary_color: s.theme?.primary_color || "#000000",
         accent_color: s.theme?.accent_color || "#ffffff"
       });
+
+      // Sync operating hours
+      if (restaurantData.operating_hours && typeof restaurantData.operating_hours === 'object') {
+        setOperatingHours(restaurantData.operating_hours);
+      }
+      setIsHolidayMode(restaurantData.is_holiday_mode || false);
+      setHolidayMessage(restaurantData.holiday_mode_message || "");
+      setMaxVariants(restaurantData.max_variants_per_item || 5);
     }
   }, [restaurantData]);
 
@@ -127,7 +151,11 @@ export default function AdminBranding() {
         name: values.name,
         description: values.description || null,
         logo_url: values.logo_url || null,
-        settings: nextSettings
+        settings: nextSettings,
+        operating_hours: operatingHours,
+        is_holiday_mode: isHolidayMode,
+        holiday_mode_message: holidayMessage || null,
+        max_variants_per_item: maxVariants
       }).eq("id", restaurant!.id);
 
       if (error) throw error;
@@ -263,6 +291,56 @@ export default function AdminBranding() {
                   {form.formState.errors.accent_color && <p className="text-xs text-destructive">{form.formState.errors.accent_color.message}</p>}
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Card 4: Operating Hours */}
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                Operating Hours & Settings
+              </CardTitle>
+              <CardDescription>
+                Set your weekly schedule and holiday mode
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Holiday Mode Toggle */}
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="space-y-0.5">
+                  <Label className="text-base">Holiday Mode</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Temporarily close your restaurant
+                  </p>
+                </div>
+                <Switch
+                  checked={isHolidayMode}
+                  onCheckedChange={setIsHolidayMode}
+                />
+              </div>
+
+              {isHolidayMode && (
+                <div className="space-y-2">
+                  <Label>Holiday Message</Label>
+                  <Textarea
+                    value={holidayMessage}
+                    onChange={(e) => setHolidayMessage(e.target.value)}
+                    placeholder="e.g., Closed for vacation. We'll be back on Monday!"
+                    className="h-20 resize-none"
+                  />
+                </div>
+              )}
+
+              <Separator />
+
+              {/* Operating Hours Editor */}
+              <OperatingHoursEditor
+                value={operatingHours}
+                onChange={setOperatingHours}
+                maxVariantsPerItem={maxVariants}
+                onMaxVariantsChange={setMaxVariants}
+              />
             </CardContent>
           </Card>
 

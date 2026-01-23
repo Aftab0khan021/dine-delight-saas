@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { MapPin, Phone, Clock, ArrowRight, Utensils, Mail } from "lucide-react";
+import { MapPin, Phone, Clock, ArrowRight, Utensils, Mail, AlertCircle } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,38 @@ import { Button } from "@/components/ui/button";
 // Helper to safely access settings
 function normalizeSettings(settings: any | null) {
   return settings && typeof settings === "object" && !Array.isArray(settings) ? settings : {};
+}
+
+// Helper to format operating hours
+function formatOperatingHours(operatingHours: any) {
+  if (!operatingHours || typeof operatingHours !== 'object') {
+    return null;
+  }
+
+  const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  const dayLabels: Record<string, string> = {
+    monday: 'Mon',
+    tuesday: 'Tue',
+    wednesday: 'Wed',
+    thursday: 'Thu',
+    friday: 'Fri',
+    saturday: 'Sat',
+    sunday: 'Sun'
+  };
+
+  const schedule: string[] = [];
+
+  days.forEach(day => {
+    const slots = operatingHours[day];
+    if (!slots || slots.length === 0) {
+      schedule.push(`${dayLabels[day]}: Closed`);
+    } else {
+      const times = slots.map((slot: any) => `${slot.open}-${slot.close}`).join(', ');
+      schedule.push(`${dayLabels[day]}: ${times}`);
+    }
+  });
+
+  return schedule;
 }
 
 export default function RestaurantProfile() {
@@ -94,6 +126,21 @@ export default function RestaurantProfile() {
         </div>
       </div>
 
+      {/* Holiday Mode Banner */}
+      {restaurant.is_holiday_mode && (
+        <div className="bg-amber-50 border-l-4 border-amber-500 p-4">
+          <div className="max-w-5xl mx-auto flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+            <div>
+              <h3 className="font-semibold text-amber-900">Temporarily Closed</h3>
+              <p className="text-sm text-amber-800 mt-1">
+                {restaurant.holiday_mode_message || "We're currently closed. Please check back later!"}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* --- DETAILS SECTION --- */}
       <div className="flex-1 max-w-5xl mx-auto w-full p-6 md:p-12 space-y-12">
 
@@ -114,10 +161,15 @@ export default function RestaurantProfile() {
           <div className="p-6 bg-card border rounded-2xl flex flex-col items-center text-center gap-3 shadow-sm">
             <Clock className="h-8 w-8 text-primary/60" />
             <h3 className="font-semibold">Opening Hours</h3>
-            <p className="text-sm text-muted-foreground">
-              {settings?.business_hours || "Mon-Sun: 10:00 AM - 10:00 PM"}<br />
-              {!settings?.business_hours && "(Hours not set)"}
-            </p>
+            <div className="text-sm text-muted-foreground space-y-1">
+              {(() => {
+                const hours = formatOperatingHours(restaurant.operating_hours);
+                if (hours && hours.length > 0) {
+                  return hours.map((line, idx) => <p key={idx}>{line}</p>);
+                }
+                return <p>Hours not set</p>;
+              })()}
+            </div>
           </div>
 
           {/* Contact */}

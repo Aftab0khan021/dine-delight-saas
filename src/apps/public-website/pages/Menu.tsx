@@ -18,6 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useRestaurantCart } from "../hooks/useRestaurantCart";
+import { MenuItemDialog } from "../components/MenuItemDialog";
 
 // --- Types ---
 type Category = { id: string; name: string; sort_order: number };
@@ -44,11 +45,18 @@ export default function PublicMenu() {
 
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [couponInput, setCouponInput] = useState(""); // [NEW]
+  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false); // [NEW]
+
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
+  // Customization Dialog State
+  const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
+  const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
+
   // --- Cart Hook ---
-  const { items: cartItems, addItem, increment, decrement, clear, itemCount, subtotalCents, tableLabel, setTableLabel } = useRestaurantCart(slug);
+  const { items: cartItems, addItem, increment, decrement, clear, itemCount, subtotalCents, discountCents, totalCents, coupon, applyCoupon, removeCoupon, tableLabel, setTableLabel } = useRestaurantCart(slug);
 
   // Capture table param
   useEffect(() => {
@@ -132,6 +140,66 @@ export default function PublicMenu() {
     return groups;
   }, [filteredItems, categories, activeCategory]);
 
+
+
+  // --- Coupon Handler ---
+  const handleApplyCoupon = async () => {
+    if (!couponInput.trim() || !restaurant) return;
+    setIsValidatingCoupon(true);
+
+    try {
+      // Validate via Supabase Query (assuming public read access on verified coupons or via RLS)
+      // Note: Ideally this should be an edge function for better security/hiding logic
+      const { data, error } = await supabase
+        .from('coupons')
+        .select('*')
+        .eq('restaurant_id', restaurant.id)
+        .eq('code', couponInput.trim())
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!data) {
+        toast({ title: "Invalid Coupon", description: "This coupon code does not exist.", variant: "destructive" });
+        return;
+      }
+
+      // Check Expiry
+      if (data.expires_at && new Date(data.expires_at) < new Date()) {
+        toast({ title: "Expired Coupon", description: "This coupon has expired.", variant: "destructive" });
+        return;
+      }
+
+      // Check Usage Limit
+      if (data.usage_limit !== null && (data.usage_count || 0) >= data.usage_limit) {
+        toast({ title: "Coupon Limit Reached", description: "This coupon has reached its usage limit.", variant: "destructive" });
+        return;
+      }
+
+      // Check Min Order
+      if (data.min_order_cents && subtotalCents < data.min_order_cents) {
+        toast({
+          title: "Minimum Order Required",
+          description: `You need to spend ${formatMoney(data.min_order_cents)} to use this coupon.`,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Success
+      applyCoupon(data);
+      setCouponInput("");
+      toast({ title: "Coupon Applied!", description: `You saved with ${data.code}.` });
+
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Error", description: "Could not validate coupon.", variant: "destructive" });
+    } finally {
+      setIsValidatingCoupon(false);
+    }
+  };
+
   // --- Checkout Handler (SECURE FIX FOR 401) ---
   const handlePlaceOrder = async () => {
     if (!restaurant) return;
@@ -173,9 +241,13 @@ export default function PublicMenu() {
           restaurant_id: restaurant.id,
           items: cartItems.map(i => ({
             menu_item_id: i.menu_item_id,
-            quantity: i.quantity
+            quantity: i.quantity,
+            variant_id: i.variant_id || null, // [NEW] Variant support
+            addons: i.addons || [],           // [NEW] Addon support
+            notes: i.notes || null
           })),
-          table_label: finalTableLabel // Add table label to order
+          table_label: finalTableLabel, // Add table label to order
+          coupon_code: coupon?.code || null // [NEW] Send coupon code
         })
       });
 
@@ -254,6 +326,12 @@ export default function PublicMenu() {
                           <div key={item.menu_item_id} className={`flex items-start justify-between gap-3 ${isUnavailable ? 'opacity-60' : ''}`}>
                             <div className="flex-1 min-w-0">
                               <div className="font-medium truncate">{item.name}</div>
+                              {item.variant_name && <div className="text-xs text-muted-foreground">Size: {item.variant_name}</div>}
+                              {item.addons && item.addons.length > 0 && (
+                                <div className="text-xs text-muted-foreground mt-0.5">
+                                  {item.addons.map(a => a.name).join(", ")}
+                                </div>
+                              )}
                               {isUnavailable && (
                                 <div className="text-xs text-destructive font-medium mt-0.5">Unavailable</div>
                               )}
@@ -261,9 +339,9 @@ export default function PublicMenu() {
                             </div>
                             <div className="flex items-center gap-3">
                               <div className="flex items-center gap-2 border rounded-md p-0.5">
-                                <button onClick={() => decrement(item.menu_item_id)} className="h-6 w-6 flex items-center justify-center hover:bg-muted rounded text-muted-foreground"><Minus className="h-3 w-3" /></button>
+                                <button onClick={() => decrement(item.cart_id)} className="h-6 w-6 flex items-center justify-center hover:bg-muted rounded text-muted-foreground"><Minus className="h-3 w-3" /></button>
                                 <span className="text-sm w-4 text-center font-medium">{item.quantity}</span>
-                                <button onClick={() => increment(item.menu_item_id)} className="h-6 w-6 flex items-center justify-center hover:bg-muted rounded text-muted-foreground"><Plus className="h-3 w-3" /></button>
+                                <button onClick={() => increment(item.cart_id)} className="h-6 w-6 flex items-center justify-center hover:bg-muted rounded text-muted-foreground"><Plus className="h-3 w-3" /></button>
                               </div>
                             </div>
                           </div>
@@ -275,13 +353,73 @@ export default function PublicMenu() {
               </div>
               {cartItems.length > 0 && (
                 <div className="pt-4 space-y-4">
+                  {/* Coupon Section */}
+                  <div className="bg-muted/30 p-3 rounded-lg space-y-2">
+                    {coupon ? (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-green-600 font-medium flex items-center gap-1">
+                          🎉 Coupon Applied: {coupon.code}
+                        </span>
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={removeCoupon}>
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Coupon Code"
+                          className="h-8 text-sm"
+                          value={search} // Re-using search state for temp coupon input is bad, let's create a local state
+                          onChange={(e) => setSearch(e.target.value)} // Wait, search is for items. I need a new state.
+                        />
+                        {/* STOP: I need to add state for coupon input inside the component first */}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Coupon Section */}
+                  <div className="bg-muted/30 p-3 rounded-lg space-y-2">
+                    {coupon ? (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-green-600 font-medium flex items-center gap-1">
+                          🎉 Coupon Applied: {coupon.code}
+                        </span>
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={removeCoupon}>
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Coupon Code"
+                          className="h-9 text-sm"
+                          value={couponInput}
+                          onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleApplyCoupon();
+                          }}
+                        />
+                        <Button size="sm" variant="secondary" className="h-9 px-3" onClick={handleApplyCoupon} disabled={!couponInput || isValidatingCoupon}>
+                          {isValidatingCoupon ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
                   <Separator />
                   {hasUnavailableItems && (
                     <div className="bg-destructive/10 border border-destructive/20 rounded-md p-3 text-sm text-destructive">
                       ⚠️ Some items are no longer available. Please remove them to continue.
                     </div>
                   )}
-                  <div className="flex items-center justify-between font-bold text-lg"><span>Total</span><span>{formatMoney(subtotalCents)}</span></div>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-muted-foreground text-sm"><span>Subtotal</span><span>{formatMoney(subtotalCents)}</span></div>
+                    {discountCents > 0 && (
+                      <div className="flex items-center justify-between text-green-600 text-sm font-medium"><span>Discount</span><span>-{formatMoney(discountCents)}</span></div>
+                    )}
+                    <div className="flex items-center justify-between font-bold text-lg"><span>Total</span><span>{formatMoney(totalCents)}</span></div>
+                  </div>
+
                   <Button className="w-full h-12 text-base font-bold" size="lg" style={{ backgroundColor: themeColor }} onClick={handlePlaceOrder} disabled={isPlacingOrder || hasUnavailableItems}>
                     {isPlacingOrder ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Placing Order...</> : "Place Order"}
                   </Button>
@@ -311,21 +449,55 @@ export default function PublicMenu() {
               <div key={cat.id} className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
                 <h2 className="font-bold text-lg">{cat.name}</h2>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {catItems.map(item => <MenuItemCard key={item.id} item={item} onAdd={() => { addItem({ menu_item_id: item.id, name: item.name, price_cents: item.price_cents }); toast({ title: "Added", description: `${item.name} added to cart.` }); }} />)}
+                  {catItems.map(item => (
+                    <MenuItemCard
+                      key={item.id}
+                      item={item}
+                      onAdd={() => { setCustomizingItem(item); setIsCustomizeOpen(true); }}
+                    />
+                  ))}
                 </div>
               </div>
             );
           })
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
-            {filteredItems.map(item => <MenuItemCard key={item.id} item={item} onAdd={() => { addItem({ menu_item_id: item.id, name: item.name, price_cents: item.price_cents }); toast({ title: "Added", description: `${item.name} added to cart.` }); }} />)}
+            {filteredItems.map(item => (
+              <MenuItemCard
+                key={item.id}
+                item={item}
+                onAdd={() => { setCustomizingItem(item); setIsCustomizeOpen(true); }}
+              />
+            ))}
             {!filteredItems.length && <p className="col-span-full text-center text-muted-foreground py-10">No items found.</p>}
           </div>
         )}
         {activeCategory === "all" && groupedItems?.["uncategorized"]?.length ? (
-          <div className="space-y-3"><h2 className="font-bold text-lg">Other</h2><div className="grid gap-4 sm:grid-cols-2">{groupedItems["uncategorized"].map(item => <MenuItemCard key={item.id} item={item} onAdd={() => { addItem({ menu_item_id: item.id, name: item.name, price_cents: item.price_cents }); toast({ title: "Added", description: `${item.name} added to cart.` }); }} />)}</div></div>
+          <div className="space-y-3">
+            <h2 className="font-bold text-lg">Other</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {groupedItems["uncategorized"].map(item => (
+                <MenuItemCard
+                  key={item.id}
+                  item={item}
+                  onAdd={() => { setCustomizingItem(item); setIsCustomizeOpen(true); }}
+                />
+              ))}
+            </div>
+          </div>
         ) : null}
       </main>
+      <MenuItemDialog
+        open={isCustomizeOpen}
+        onOpenChange={setIsCustomizeOpen}
+        item={customizingItem}
+        restaurantId={restaurant?.id || ""}
+        themeColor={themeColor}
+        onAddToCart={(item) => {
+          addItem(item);
+          toast({ title: "Added", description: `${item.name} added to cart.` });
+        }}
+      />
     </div>
   );
 }

@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addDays, startOfDay, subHours } from "date-fns";
-import { Search, Download, Lock } from "lucide-react";
+import { Search, Download, Lock, Bell, BellOff, Printer } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
 import { useFeatureAccess } from "../hooks/useFeatureAccess";
+import { orderNotificationService } from "../services/OrderNotificationService";
+import { ManualDiscountDialog } from "../components/orders/ManualDiscountDialog";
+import { generateKOTHtml } from "../components/orders/KOTTemplate";
 
 // UI Components
 import { Badge } from "@/components/ui/badge";
@@ -80,10 +83,41 @@ function OrderCard({
             {formatTime(order.placed_at)} • {order.table_label || "Takeaway"}
           </div>
         </div>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground"
+          title="Print KOT"
+          onClick={() => {
+            const popup = window.open('', '_blank', 'width=400,height=600');
+            if (popup) {
+              popup.document.write(generateKOTHtml(order));
+              popup.document.close();
+            }
+          }}
+        >
+          <Printer className="h-4 w-4" />
+        </Button>
       </div>
 
       <div className="mt-2 text-sm line-clamp-2">
         {order.items_summary || "Loading items..."}
+      </div>
+
+      {/* Payment & Discount Info */}
+      <div className="mt-2 flex flex-wrap gap-2 text-xs">
+        {order.payment_method && (
+          <Badge variant="secondary" className="text-[10px] h-5 px-1.5 capitalize">
+            {order.payment_method}
+          </Badge>
+        )}
+        {order.discount_cents > 0 && (
+          <Badge variant="destructive" className="text-[10px] h-5 px-1.5">
+            -${(order.discount_cents / 100).toFixed(2)}
+            {/* {order.discount_reason && ` (${order.discount_reason})`} */}
+          </Badge>
+        )}
       </div>
 
       <div className="mt-3 grid gap-2">
@@ -107,6 +141,11 @@ function OrderCard({
             Completed
           </Button>
         )}
+
+        {/* Manual Discount Action - Only if no discount yet and not completed */}
+        {order.status !== "completed" && order.discount_cents === 0 && (
+          <ManualDiscountDialog orderId={order.id} orderTotalCents={order.total_cents} />
+        )}
       </div>
     </div>
   );
@@ -126,9 +165,44 @@ export default function AdminOrders() {
   const [page, setPage] = useState(0);
   const ORDERS_PER_PAGE = 50;
 
+  // Notification state
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+
   // Check if online ordering is enabled
   const { isFeatureEnabled } = useFeatureAccess(restaurant?.id);
   const onlineOrderingEnabled = isFeatureEnabled('online_ordering');
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if (orderNotificationService.isSupported()) {
+      setNotificationPermission(orderNotificationService.getPermissionStatus());
+      if (orderNotificationService.getPermissionStatus() === 'granted') {
+        setNotificationsEnabled(true);
+      }
+    }
+  }, []);
+
+  // Handle notification toggle
+  const toggleNotifications = async () => {
+    if (!notificationsEnabled) {
+      const granted = await orderNotificationService.requestPermission();
+      if (granted) {
+        setNotificationsEnabled(true);
+        setNotificationPermission('granted');
+        toast({ title: "Notifications Enabled", description: "You'll receive alerts for new orders." });
+      } else {
+        toast({
+          title: "Permission Denied",
+          description: "Please enable notifications in your browser settings.",
+          variant: "destructive"
+        });
+      }
+    } else {
+      setNotificationsEnabled(false);
+      toast({ title: "Notifications Disabled", description: "You won't receive order alerts." });
+    }
+  };
 
   // Time Range Logic
   const { startISO, endISO } = useMemo(() => {
@@ -147,16 +221,41 @@ export default function AdminOrders() {
 
     const channel = supabase.channel("admin-orders-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `restaurant_id=eq.${restaurant.id}` },
-        (payload) => {
+        async (payload) => {
           qc.invalidateQueries({ queryKey: ["admin", "orders"] });
+
           if (payload.eventType === "INSERT") {
-            toast({ title: "New Order!", description: `Order ${shortId((payload.new as any).id)} received.` });
+            const newOrder = payload.new as any;
+
+            // Show toast notification
+            toast({
+              title: "🔔 New Order!",
+              description: `Order ${shortId(newOrder.id)} received.${newOrder.table_label ? ` Table ${newOrder.table_label}` : ''}`
+            });
+
+            // Trigger sound and desktop notification if enabled
+            if (notificationsEnabled) {
+              // Fetch order items count for better notification
+              const { data: items } = await supabase
+                .from("order_items")
+                .select("quantity")
+                .eq("order_id", newOrder.id);
+
+              const itemsCount = items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+
+              orderNotificationService.notifyNewOrder({
+                id: newOrder.id,
+                table_label: newOrder.table_label,
+                total_cents: newOrder.total_cents || 0,
+                items_count: itemsCount
+              });
+            }
           }
         })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [restaurant?.id]);
+  }, [restaurant?.id, notificationsEnabled]);
 
   // --- 2. Data Fetching ---
   const ordersQuery = useQuery({
@@ -166,7 +265,7 @@ export default function AdminOrders() {
       // Fetch Orders with pagination
       const { data: orders, error, count } = await supabase
         .from("orders")
-        .select("id, status, placed_at, table_label", { count: 'exact' })
+        .select("id, status, placed_at, table_label, discount_cents, discount_type, discount_reason, payment_method, total_cents", { count: 'exact' })
         .eq("restaurant_id", restaurant!.id)
         .gte("placed_at", startISO)
         .lt("placed_at", endISO)
@@ -181,14 +280,35 @@ export default function AdminOrders() {
 
       const { data: items } = await supabase
         .from("order_items")
-        .select("order_id, name_snapshot, quantity")
+        .select(`
+          order_id, 
+          name_snapshot, 
+          quantity, 
+          addons, 
+          notes,
+          variant:menu_item_variants(name)
+        `)
         .in("order_id", orderIds);
 
       // Combine them
       const ordersWithSummary = orders.map(o => {
-        const myItems = items?.filter(i => i.order_id === o.id) || [];
-        const summary = myItems.map(i => `${i.quantity}x ${i.name_snapshot}`).join(", ");
-        return { ...o, items_summary: summary };
+        // Flatten variant name for consistency (KOT template expects variant_name)
+        const myItems = (items?.filter(i => i.order_id === o.id) || []).map((i: any) => ({
+          ...i,
+          variant_name: i.variant?.name || i.variant_name
+        }));
+
+        // Helper for concise summary
+        const summary = myItems.map(i => {
+          let text = `${i.quantity}x ${i.name_snapshot}`;
+          if (i.variant_name) text += ` (${i.variant_name})`;
+          if (i.addons && Array.isArray(i.addons) && i.addons.length > 0) {
+            text += ` + ${i.addons.map((a: any) => a.name).join(", ")}`;
+          }
+          if (i.notes) text += ` [Note: ${i.notes}]`;
+          return text;
+        }).join(", ");
+        return { ...o, items_summary: summary, item_details: myItems };
       });
 
       return { orders: ordersWithSummary, totalCount: count || 0 };
@@ -305,13 +425,34 @@ export default function AdminOrders() {
             </p>
           </div>
 
-          <div className="inline-flex items-center gap-2 self-start rounded-full border border-border bg-background px-3 py-1.5 text-sm shadow-sm">
-            <span className="relative inline-flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/40 motion-reduce:hidden" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-            </span>
-            <span className="font-medium text-primary">Live Feed</span>
-            <Badge variant="outline" className="text-[10px] h-5">Connected</Badge>
+          <div className="flex items-center gap-2">
+            <div className="inline-flex items-center gap-2 self-start rounded-full border border-border bg-background px-3 py-1.5 text-sm shadow-sm">
+              <span className="relative inline-flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/40 motion-reduce:hidden" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+              </span>
+              <span className="font-medium text-primary">Live Feed</span>
+              <Badge variant="outline" className="text-[10px] h-5">Connected</Badge>
+            </div>
+
+            <Button
+              variant={notificationsEnabled ? "default" : "outline"}
+              size="sm"
+              onClick={toggleNotifications}
+              className="gap-2"
+            >
+              {notificationsEnabled ? (
+                <>
+                  <Bell className="h-4 w-4" />
+                  Alerts On
+                </>
+              ) : (
+                <>
+                  <BellOff className="h-4 w-4" />
+                  Alerts Off
+                </>
+              )}
+            </Button>
           </div>
         </div>
 

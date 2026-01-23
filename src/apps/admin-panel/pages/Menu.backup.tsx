@@ -544,14 +544,6 @@ function CategorySheet({ open, onOpenChange, data, onSave, onDelete }: any) {
             <Button type="submit">Save Changes</Button>
           </SheetFooter>
         </form>
-
-        {/* Variants & Add-ons */}
-        {data && restaurantId && (
-          <div className="space-y-4 mt-6 pt-6 border-t">
-            <VariantEditor menuItemId={data.id} restaurantId={restaurantId} />
-            <AddonEditor menuItemId={data.id} restaurantId={restaurantId} />
-          </div>
-        )}
       </SheetContent>
     </Sheet>
   );
@@ -725,22 +717,6 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
             <Button type="submit">Save Item</Button>
           </SheetFooter>
         </form>
-
-        {/* Variants & Add-ons */}
-        {/* Variants & Add-ons */}
-        <div className="space-y-4 mt-6 pt-6 border-t">
-          <h3 className="font-medium">Variants & Add-ons</h3>
-          {data && restaurantId ? (
-            <>
-              <VariantEditor menuItemId={data.id} restaurantId={restaurantId} />
-              <AddonEditor menuItemId={data.id} restaurantId={restaurantId} />
-            </>
-          ) : (
-            <div className="rounded-md bg-muted p-4 text-center text-sm text-muted-foreground">
-              Please save the item first to add variants and add-ons.
-            </div>
-          )}
-        </div>
       </SheetContent>
     </Sheet>
   );

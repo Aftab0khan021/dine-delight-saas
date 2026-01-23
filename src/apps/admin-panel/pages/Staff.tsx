@@ -381,7 +381,7 @@ export default function AdminStaff() {
             {tableData.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground border-dashed border rounded-lg">No staff found. Invite someone!</div>
             ) : (
-              <div className="rounded-xl border border-border bg-background">
+              <div className="rounded-xl border border-border bg-background overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>

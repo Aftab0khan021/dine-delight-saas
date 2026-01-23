@@ -22,6 +22,7 @@ import AdminQrMenu from "./apps/admin-panel/pages/QrMenu";
 import AdminStaff from "./apps/admin-panel/pages/Staff";
 import AdminBranding from "./apps/admin-panel/pages/Branding";
 import AdminBilling from "./apps/admin-panel/pages/Billing";
+import AdminCoupons from "./apps/admin-panel/pages/Coupons";
 
 // Super Admin
 import SuperAdminAuth from "./apps/super-admin/pages/Auth";
@@ -70,6 +71,7 @@ const App = () => (
             <Route path="staff" element={<AdminStaff />} />
             <Route path="branding" element={<AdminBranding />} />
             <Route path="billing" element={<AdminBilling />} />
+            <Route path="coupons" element={<AdminCoupons />} />
           </Route>
 
           {/* Super Admin Routes */}
