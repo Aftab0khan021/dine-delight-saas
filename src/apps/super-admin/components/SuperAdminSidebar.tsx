@@ -7,6 +7,7 @@ import {
   ShieldAlert,
   Store,
   Tag,
+  Flag,
 } from "lucide-react";
 
 import { NavLink } from "@/components/NavLink";
@@ -27,6 +28,7 @@ const items = [
   { title: "Restaurants", url: "/superadmin/restaurants", icon: Store },
   { title: "Plans", url: "/superadmin/plans", icon: Tag },
   { title: "Subscriptions", url: "/superadmin/subscriptions", icon: CreditCard },
+  { title: "Feature Flags", url: "/superadmin/features", icon: Flag },
   { title: "Invoices", url: "/superadmin/invoices", icon: Receipt },
   { title: "Activity", url: "/superadmin/activity", icon: Activity },
   { title: "Abuse", url: "/superadmin/abuse", icon: ShieldAlert },
