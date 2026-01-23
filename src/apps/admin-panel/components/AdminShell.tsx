@@ -1,14 +1,14 @@
 import { PropsWithChildren, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { 
-  LogOut, 
-  Store, 
-  Bell, 
-  ChevronDown, 
-  Settings, 
+import {
+  LogOut,
+  Store,
+  Bell,
+  ChevronDown,
+  Settings,
   User,
-  Menu 
+  Menu
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -61,9 +61,9 @@ function timeAgo(dateString: string) {
 export function AdminShell({ children }: PropsWithChildren) {
   const navigate = useNavigate();
   const { loading, restaurant, role, accessDenied, refresh } = useRestaurantContext();
-  
+
   const [userEmail, setUserEmail] = useState<string>("Admin");
-  
+
   // Local state for the "Create Restaurant" form
   const [newRestName, setNewRestName] = useState("");
   const [newRestSlug, setNewRestSlug] = useState("");
@@ -89,7 +89,7 @@ export function AdminShell({ children }: PropsWithChildren) {
       return data || [];
     },
     // Refresh every minute to check for new activity
-    refetchInterval: 60000 
+    refetchInterval: 60000
   });
 
   const handleLogout = async () => {
@@ -100,7 +100,7 @@ export function AdminShell({ children }: PropsWithChildren) {
   const handleCreateRestaurant = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newRestName || !newRestSlug) return;
-    
+
     try {
       setCreating(true);
       const { data: { user } } = await supabase.auth.getUser();
@@ -126,7 +126,7 @@ export function AdminShell({ children }: PropsWithChildren) {
       if (linkError) throw linkError;
 
       await refresh();
-      
+
     } catch (err: any) {
       alert("Error creating restaurant: " + err.message);
     } finally {
@@ -177,9 +177,9 @@ export function AdminShell({ children }: PropsWithChildren) {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="rest-name">Restaurant Name</Label>
-                <Input 
-                  id="rest-name" 
-                  placeholder="e.g. Joe's Burgers" 
+                <Input
+                  id="rest-name"
+                  placeholder="e.g. Joe's Burgers"
                   value={newRestName}
                   onChange={e => setNewRestName(e.target.value)}
                   required
@@ -189,9 +189,9 @@ export function AdminShell({ children }: PropsWithChildren) {
                 <Label htmlFor="rest-slug">URL Slug</Label>
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground">.../menu/</span>
-                  <Input 
-                    id="rest-slug" 
-                    placeholder="joes-burgers" 
+                  <Input
+                    id="rest-slug"
+                    placeholder="joes-burgers"
                     value={newRestSlug}
                     onChange={e => setNewRestSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
                     required
@@ -214,11 +214,11 @@ export function AdminShell({ children }: PropsWithChildren) {
   // CASE 3: Normal Dashboard (Has Role & Restaurant)
   return (
     <div className="min-h-screen w-full bg-muted/10">
-      
+
       {/* --- HEADER --- */}
       <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-14 items-center gap-3 px-4 lg:px-8">
-          
+
           {/* Mobile Menu Icon */}
           <div className="md:hidden -ml-2 p-2 text-muted-foreground">
             <Menu className="h-5 w-5" />
@@ -260,7 +260,7 @@ export function AdminShell({ children }: PropsWithChildren) {
             <DropdownMenuContent align="end" className="w-[340px]">
               <DropdownMenuLabel>Notifications</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              
+
               {/* Loop through REAL Activity Logs */}
               {notifications.length > 0 ? (
                 notifications.map((n: any) => (
@@ -277,7 +277,7 @@ export function AdminShell({ children }: PropsWithChildren) {
                   No new notifications
                 </div>
               )}
-              
+
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-xs justify-center text-primary font-medium">
                 View Activity Log

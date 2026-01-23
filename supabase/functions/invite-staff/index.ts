@@ -39,13 +39,32 @@ serve(async (req) => {
       throw new Error("Unauthorized");
     }
 
-    // 2. Parse Payload
+    // 2. Rate Limiting - Prevent abuse
+    // Check how many invites this user has sent in the last 15 minutes
+    const { count: recentInvites } = await supabase
+      .from("staff_invites")
+      .select("*", { count: "exact", head: true })
+      .eq("invited_by", user.id)
+      .gte("created_at", new Date(Date.now() - 15 * 60 * 1000).toISOString());
+
+    if (recentInvites !== null && recentInvites >= 10) {
+      console.warn(`Rate limit exceeded for user: ${user.id}`);
+      return new Response(
+        JSON.stringify({ error: "Too many invite requests. Please wait 15 minutes." }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 429,
+        }
+      );
+    }
+
+    // 3. Parse Payload
     const payload = await req.json();
     const { email, restaurant_id, role, action } = payload;
 
     if (!restaurant_id) throw new Error("Missing restaurant_id");
 
-    // 3. Authorize User (Check Permissions)
+    // 4. Authorize User (Check Permissions)
     const { data: userRole, error: roleError } = await supabase
       .from("user_roles")
       .select("role")
@@ -57,7 +76,7 @@ serve(async (req) => {
       throw new Error("Forbidden: You do not have permission to manage staff for this restaurant.");
     }
 
-    // 4. Perform Action
+    // 5. Perform Action
     if (action === "resend") {
       if (!email) throw new Error("Missing email for resend");
       const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {

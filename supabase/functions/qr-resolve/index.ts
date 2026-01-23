@@ -63,6 +63,34 @@ serve(async (req) => {
     auth: { persistSession: false },
   });
 
+  // Rate Limiting - Prevent QR code scanning abuse
+  const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
+
+  if (clientIp !== 'unknown') {
+    const { count } = await admin
+      .from('activity_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('action', 'qr_resolve')
+      .eq('ip', clientIp)
+      .gte('created_at', new Date(Date.now() - 60 * 1000).toISOString());
+
+    if (count !== null && count >= 60) {
+      console.warn(`Rate limit exceeded for QR resolve, IP: ${clientIp}`);
+      return json(
+        { error: "Too many requests. Please wait 1 minute." },
+        { status: 429, headers: { "access-control-allow-origin": "*" } }
+      );
+    }
+
+    // Log the resolution attempt (fire and forget)
+    admin.from('activity_logs').insert({
+      action: 'qr_resolve',
+      entity_type: 'qr_code',
+      ip: clientIp,
+      metadata: { code_length: code.length }
+    }).then();
+  }
+
   const { data: qr, error } = await admin
     .from("qr_codes")
     .select("destination_path,is_active, restaurant:restaurants(slug)")

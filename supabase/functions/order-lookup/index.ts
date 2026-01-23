@@ -52,6 +52,34 @@ serve(async (req) => {
     auth: { persistSession: false },
   });
 
+  // Rate Limiting - Prevent token enumeration attacks
+  const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
+
+  if (clientIp !== 'unknown') {
+    const { count } = await admin
+      .from('activity_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('action', 'order_lookup')
+      .eq('ip', clientIp)
+      .gte('created_at', new Date(Date.now() - 5 * 60 * 1000).toISOString());
+
+    if (count !== null && count >= 30) {
+      console.warn(`Rate limit exceeded for order lookup, IP: ${clientIp}`);
+      return json(
+        { error: "Too many lookup requests. Please wait 5 minutes." },
+        { status: 429, headers: { "access-control-allow-origin": "*" } }
+      );
+    }
+
+    // Log the lookup attempt (fire and forget - don't await)
+    admin.from('activity_logs').insert({
+      action: 'order_lookup',
+      entity_type: 'order',
+      ip: clientIp,
+      metadata: { token_length: token.length }
+    }).then();
+  }
+
   // 2. Fetch Order AND Restaurant Details (FIX: Added restaurant join)
   const { data: order, error: orderError } = await admin
     .from("orders")

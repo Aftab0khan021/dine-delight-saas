@@ -4,6 +4,12 @@
 
 **URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
 
+## Documentation
+
+- 📖 [Testing Guide](./TESTING.md) - How to run and write tests
+- 🚀 [Deployment Guide](./DEPLOYMENT.md) - How to deploy to production
+- 🔒 [Security Improvements](./security_improvements_summary.md) - Recent security enhancements
+
 ## How can I edit this code?
 
 There are several ways of editing your application.
@@ -60,9 +66,26 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+## Testing
+
+```bash
+# Run E2E tests
+npm run test:e2e
+
+# Run unit tests
+npm run test
+
+# Run tests in watch mode
+npm run test:watch
+```
+
+See [TESTING.md](./TESTING.md) for more details.
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+
+For manual deployment, see [DEPLOYMENT.md](./DEPLOYMENT.md).
 
 ## Can I connect a custom domain to my Lovable project?
 
@@ -71,3 +94,15 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+
+## Security Features
+
+This project includes:
+- ✅ Rate limiting on Edge Functions
+- ✅ Row-Level Security (RLS) policies
+- ✅ JWT authentication
+- ✅ Activity logging for monitoring
+- ✅ Error boundaries for graceful error handling
+- ✅ TypeScript strict mode enabled
+
+See the [Security Improvements Summary](./security_improvements_summary.md) for details.
