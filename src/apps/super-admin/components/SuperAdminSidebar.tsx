@@ -6,6 +6,7 @@ import {
   Settings,
   ShieldAlert,
   Store,
+  Tag,
 } from "lucide-react";
 
 import { NavLink } from "@/components/NavLink";
@@ -24,6 +25,7 @@ import {
 const items = [
   { title: "Dashboard", url: "/superadmin/dashboard", icon: LayoutDashboard },
   { title: "Restaurants", url: "/superadmin/restaurants", icon: Store },
+  { title: "Plans", url: "/superadmin/plans", icon: Tag },
   { title: "Subscriptions", url: "/superadmin/subscriptions", icon: CreditCard },
   { title: "Invoices", url: "/superadmin/invoices", icon: Receipt },
   { title: "Activity", url: "/superadmin/activity", icon: Activity },

@@ -28,6 +28,8 @@ import SuperAdminAuth from "./apps/super-admin/pages/Auth";
 import { SuperAdminLayout } from "./apps/super-admin/components/SuperAdminLayout";
 import SuperAdminDashboard from "./apps/super-admin/pages/Dashboard";
 import SuperAdminRestaurants from "./apps/super-admin/pages/Restaurants";
+import SuperAdminRestaurantDetails from "./apps/super-admin/pages/RestaurantDetails";
+import SuperAdminPlans from "./apps/super-admin/pages/Plans";
 import SuperAdminSubscriptions from "./apps/super-admin/pages/Subscriptions";
 import SuperAdminInvoices from "./apps/super-admin/pages/Invoices";
 import SuperAdminActivity from "./apps/super-admin/pages/Activity";
@@ -72,6 +74,8 @@ const App = () => (
             <Route index element={<Navigate to="/superadmin/dashboard" replace />} />
             <Route path="dashboard" element={<SuperAdminDashboard />} />
             <Route path="restaurants" element={<SuperAdminRestaurants />} />
+            <Route path="restaurants/:id" element={<SuperAdminRestaurantDetails />} />
+            <Route path="plans" element={<SuperAdminPlans />} />
             <Route path="subscriptions" element={<SuperAdminSubscriptions />} />
             <Route path="invoices" element={<SuperAdminInvoices />} />
             <Route path="activity" element={<SuperAdminActivity />} />
