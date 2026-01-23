@@ -36,7 +36,10 @@ import SuperAdminFeatureAccess from "./apps/super-admin/pages/FeatureAccess";
 import SuperAdminInvoices from "./apps/super-admin/pages/Invoices";
 import SuperAdminActivity from "./apps/super-admin/pages/Activity";
 import SuperAdminAbuse from "./apps/super-admin/pages/Abuse";
+import SuperAdminSupport from "./apps/super-admin/pages/Support";
+import SuperAdminErrors from "./apps/super-admin/pages/Errors";
 import SuperAdminSettings from "./apps/super-admin/pages/Settings";
+import SuperAdminUsers from "./apps/super-admin/pages/Users";
 
 const queryClient = new QueryClient();
 
@@ -84,6 +87,9 @@ const App = () => (
             <Route path="invoices" element={<SuperAdminInvoices />} />
             <Route path="activity" element={<SuperAdminActivity />} />
             <Route path="abuse" element={<SuperAdminAbuse />} />
+            <Route path="support" element={<SuperAdminSupport />} />
+            <Route path="errors" element={<SuperAdminErrors />} />
+            <Route path="users" element={<SuperAdminUsers />} />
             <Route path="settings" element={<SuperAdminSettings />} />
           </Route>
 

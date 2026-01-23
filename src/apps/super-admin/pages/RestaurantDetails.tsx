@@ -39,6 +39,7 @@ import {
     UserCog,
     Trash2,
     Settings,
+    AlertTriangle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -246,12 +247,60 @@ export default function RestaurantDetails() {
         }
     };
 
+    // Impersonation state
+    const [impersonateDialogOpen, setImpersonateDialogOpen] = useState(false);
+    const [impersonateReadOnly, setImpersonateReadOnly] = useState(true);
+    const [impersonating, setImpersonating] = useState(false);
+
     const handleImpersonate = () => {
-        // TODO: Implement impersonation
-        toast({
-            title: "Coming Soon",
-            description: "Impersonation feature will be implemented next",
-        });
+        setImpersonateDialogOpen(true);
+    };
+
+    const confirmImpersonate = async () => {
+        if (!id || !restaurant) return;
+
+        // Get the primary owner/admin user
+        const owner = restaurant.user_roles?.find(ur => ur.role === 'owner' || ur.role === 'restaurant_admin');
+
+        if (!owner) {
+            toast({
+                title: "Error",
+                description: "No admin user found for this restaurant",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        setImpersonating(true);
+
+        try {
+            const { startImpersonation } = await import("../lib/impersonation");
+
+            const session = await startImpersonation(
+                id,
+                owner.user_id,
+                impersonateReadOnly
+            );
+
+            toast({
+                title: "Impersonation Started",
+                description: `Opening admin panel as ${owner.profiles?.email}`,
+            });
+
+            // Open in new tab
+            window.open(session.impersonation_url, '_blank');
+
+            setImpersonateDialogOpen(false);
+        } catch (error: any) {
+            console.error("Impersonation error:", error);
+            toast({
+                title: "Error",
+                description: error.message || "Failed to start impersonation",
+                variant: "destructive",
+            });
+        } finally {
+            setImpersonating(false);
+        }
     };
 
     const handleFeatureOverride = (featureKey: string) => {
@@ -768,6 +817,79 @@ export default function RestaurantDetails() {
                                 Remove Override
                             </Button>
                         )}
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Impersonation Dialog */}
+            <Dialog open={impersonateDialogOpen} onOpenChange={setImpersonateDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Impersonate Restaurant Admin</DialogTitle>
+                        <DialogDescription>
+                            Access this restaurant's admin panel for debugging and support purposes.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+                            <div className="flex items-start gap-3">
+                                <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                                <div className="space-y-1">
+                                    <p className="text-sm font-medium text-yellow-900">
+                                        Security Notice
+                                    </p>
+                                    <p className="text-sm text-yellow-700">
+                                        This action will be logged in the audit trail. The session will expire in 1 hour.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div>
+                                <Label className="text-sm font-medium">Restaurant</Label>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                    {restaurant.name} (/{restaurant.slug})
+                                </p>
+                            </div>
+
+                            <div>
+                                <Label className="text-sm font-medium">Target User</Label>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                    {restaurant.user_roles?.find(ur => ur.role === 'owner' || ur.role === 'restaurant_admin')?.profiles?.email || 'N/A'}
+                                </p>
+                            </div>
+
+                            <Separator />
+
+                            <div className="flex items-center justify-between">
+                                <div className="space-y-0.5">
+                                    <Label className="text-base">Read-Only Mode</Label>
+                                    <p className="text-sm text-muted-foreground">
+                                        Prevent destructive actions (recommended)
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={impersonateReadOnly}
+                                    onCheckedChange={setImpersonateReadOnly}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setImpersonateDialogOpen(false)}
+                            disabled={impersonating}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={confirmImpersonate}
+                            disabled={impersonating}
+                        >
+                            {impersonating ? "Starting..." : "Start Impersonation"}
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

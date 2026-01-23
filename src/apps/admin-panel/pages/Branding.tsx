@@ -8,10 +8,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
+import { useFeatureAccess } from "../hooks/useFeatureAccess";
 
 // UI Components
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -52,6 +54,10 @@ export default function AdminBranding() {
   const { restaurant } = useRestaurantContext();
   const qc = useQueryClient();
   const { toast } = useToast();
+
+  // Check if custom domain feature is enabled
+  const { isFeatureEnabled } = useFeatureAccess(restaurant?.id);
+  const customDomainEnabled = isFeatureEnabled('custom_domain');
 
   // --- Data Fetching ---
   const { data: restaurantData, isLoading } = useQuery({

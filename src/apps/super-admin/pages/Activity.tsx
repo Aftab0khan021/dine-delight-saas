@@ -7,6 +7,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Download, Search } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -37,6 +39,7 @@ export default function SuperAdminActivity() {
   const { toast } = useToast();
   const [restaurantId, setRestaurantId] = useState<string>("all");
   const [action, setAction] = useState<string>("all");
+  const [search, setSearch] = useState("");
 
   const restaurantsQuery = useQuery({
     queryKey: ["superadmin", "restaurants", "for-filters"],
@@ -89,6 +92,61 @@ export default function SuperAdminActivity() {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [logsQuery.data]);
 
+  // Filtered logs based on search
+  const filteredLogs = useMemo(() => {
+    const logs = logsQuery.data?.logs ?? [];
+    if (!search) return logs;
+
+    const searchLower = search.toLowerCase();
+    return logs.filter((log) => {
+      const restaurantName = restaurantNameById.get(log.restaurant_id) || "";
+      const actorEmail = log.actor_user_id ? logsQuery.data?.actorEmailById.get(log.actor_user_id) || "" : "";
+
+      return (
+        log.action.toLowerCase().includes(searchLower) ||
+        log.entity_type.toLowerCase().includes(searchLower) ||
+        log.message?.toLowerCase().includes(searchLower) ||
+        restaurantName.toLowerCase().includes(searchLower) ||
+        actorEmail.toLowerCase().includes(searchLower)
+      );
+    });
+  }, [logsQuery.data, search, restaurantNameById]);
+
+  // Export to CSV
+  const handleExport = () => {
+    const logs = filteredLogs;
+    if (logs.length === 0) {
+      toast({ title: "No data", description: "No logs to export", variant: "destructive" });
+      return;
+    }
+
+    const headers = ["Timestamp", "Restaurant", "Actor Email", "Action", "Entity Type", "Message"];
+    const rows = logs.map((log) => [
+      log.created_at ? format(new Date(log.created_at), "yyyy-MM-dd HH:mm:ss") : "",
+      restaurantNameById.get(log.restaurant_id) || "",
+      log.actor_user_id ? logsQuery.data?.actorEmailById.get(log.actor_user_id) || "" : "",
+      log.action,
+      log.entity_type,
+      log.message || "",
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `activity_logs_${format(new Date(), "yyyy-MM-dd")}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({ title: "Exported", description: `${logs.length} logs exported to CSV` });
+  };
+
   const lastErrorMessageRef = useRef<string | null>(null);
   useEffect(() => {
     const err = (logsQuery.error ?? restaurantsQuery.error) as any;
@@ -102,17 +160,33 @@ export default function SuperAdminActivity() {
 
   return (
     <section className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Activity</h1>
-        <p className="text-sm text-muted-foreground">Read-only audit trail (RLS-safe).</p>
+      <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Activity</h1>
+          <p className="text-sm text-muted-foreground">Audit trail of all super admin actions</p>
+        </div>
+        <Button variant="outline" onClick={handleExport}>
+          <Download className="mr-2 h-4 w-4" />
+          Export CSV
+        </Button>
       </header>
 
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <CardTitle className="text-base">Activity logs</CardTitle>
+            <CardTitle className="text-base">Activity logs ({filteredLogs.length})</CardTitle>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative w-full sm:w-64">
+                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search logs..."
+                  className="pl-9"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+
               <div className="w-full sm:w-64">
                 <Select value={restaurantId} onValueChange={setRestaurantId}>
                   <SelectTrigger>
@@ -150,6 +224,7 @@ export default function SuperAdminActivity() {
                 onClick={() => {
                   setRestaurantId("all");
                   setAction("all");
+                  setSearch("");
                 }}
               >
                 Reset
@@ -183,14 +258,14 @@ export default function SuperAdminActivity() {
                 </TableHeader>
 
                 <TableBody>
-                  {(logsQuery.data?.logs ?? []).length === 0 ? (
+                  {filteredLogs.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="text-sm text-muted-foreground">
                         No activity logs found.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    (logsQuery.data?.logs ?? []).map((row) => (
+                    filteredLogs.map((row) => (
                       <TableRow key={row.id}>
                         <TableCell className="text-sm">
                           {row.created_at ? format(new Date(row.created_at), "PP p") : "—"}

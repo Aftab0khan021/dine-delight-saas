@@ -8,6 +8,9 @@ import {
   Store,
   Tag,
   Flag,
+  Users,
+  LifeBuoy,
+  AlertTriangle,
 } from "lucide-react";
 
 import { NavLink } from "@/components/NavLink";
@@ -31,7 +34,10 @@ const items = [
   { title: "Feature Flags", url: "/superadmin/features", icon: Flag },
   { title: "Invoices", url: "/superadmin/invoices", icon: Receipt },
   { title: "Activity", url: "/superadmin/activity", icon: Activity },
+  { title: "Users", url: "/superadmin/users", icon: Users },
   { title: "Abuse", url: "/superadmin/abuse", icon: ShieldAlert },
+  { title: "Support", url: "/superadmin/support", icon: LifeBuoy },
+  { title: "Errors", url: "/superadmin/errors", icon: AlertTriangle },
   { title: "Settings", url: "/superadmin/settings", icon: Settings },
 ] as const;
 

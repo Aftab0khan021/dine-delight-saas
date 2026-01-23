@@ -13,19 +13,21 @@ import { Link } from "react-router-dom";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
+import { useFeatureLimit } from "../hooks/useFeatureAccess";
 
 // UI Components
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 
 // --- Helpers ---
 function formatMoney(cents: number, currency = "USD") {
   const amount = (cents ?? 0) / 100;
-  return new Intl.NumberFormat("en-US", { 
-    style: "currency", 
-    currency, 
-    maximumFractionDigits: 0 
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0
   }).format(amount);
 }
 
@@ -48,6 +50,10 @@ const statusVariant = (status: string) => {
 
 export default function AdminDashboard() {
   const { restaurant } = useRestaurantContext();
+
+  // Fetch feature limits
+  const { limit: staffLimit, isUnlimited: staffUnlimited } = useFeatureLimit(restaurant?.id, 'staff_limit');
+  const { limit: menuItemsLimit, isUnlimited: menuUnlimited } = useFeatureLimit(restaurant?.id, 'menu_items_limit');
 
   // --- 1. Data Fetching (Real Data) ---
   const { startISO, endISO } = useMemo(() => {
@@ -126,12 +132,12 @@ export default function AdminDashboard() {
   const kpis = useMemo(() => {
     const todayOrders = todayOrdersQuery.data ?? [];
     const currency = todayOrders[0]?.currency_code ?? "USD";
-    
+
     // Revenue
     const revenue = todayOrders.reduce((sum, o) => sum + (o.total_cents ?? 0), 0);
-    
+
     // Avg Prep Time
-    const completed = todayOrders.filter((o) => o.completed_at).map((o) => 
+    const completed = todayOrders.filter((o) => o.completed_at).map((o) =>
       new Date(o.completed_at!).getTime() - new Date(o.placed_at).getTime()
     );
     const avgPrepMs = completed.length ? completed.reduce((a, b) => a + b, 0) / completed.length : 0;
@@ -144,7 +150,7 @@ export default function AdminDashboard() {
       const k = i.name_snapshot;
       counts.set(k, (counts.get(k) || 0) + (i.quantity || 1));
     });
-    
+
     let topItem = { name: "No sales yet", qty: 0 };
     counts.forEach((qty, name) => {
       if (qty > topItem.qty) topItem = { name, qty };
@@ -179,21 +185,21 @@ export default function AdminDashboard() {
   }, [todayOrdersQuery.data, topSellingQuery.data]);
 
   const setupChecklist = [
-    { 
-      label: "Branding", 
-      detail: "Logo uploaded", 
+    {
+      label: "Branding",
+      detail: "Logo uploaded",
       status: setupQuery.data?.logoUrl ? "Done" : "Pending",
       isDone: !!setupQuery.data?.logoUrl
     },
-    { 
-      label: "First Menu Item", 
-      detail: "At least 1 item", 
+    {
+      label: "First Menu Item",
+      detail: "At least 1 item",
       status: (setupQuery.data?.menuItemsCount ?? 0) > 0 ? "Done" : "Pending",
       isDone: (setupQuery.data?.menuItemsCount ?? 0) > 0
     },
-    { 
-      label: "QR Published", 
-      detail: "Codes generated", 
+    {
+      label: "QR Published",
+      detail: "Codes generated",
       status: (setupQuery.data?.qrCodesCount ?? 0) > 0 ? "Done" : "Pending",
       isDone: (setupQuery.data?.qrCodesCount ?? 0) > 0
     },
@@ -245,6 +251,41 @@ export default function AdminDashboard() {
           </Card>
         ))}
       </section>
+
+      {/* Feature Limits Card */}
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base">Plan Features & Limits</CardTitle>
+          <CardDescription>Your current plan's feature limits and usage</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="font-medium">Staff Members</span>
+              <span className="text-muted-foreground">
+                {staffUnlimited ? 'Unlimited' : `Limit: ${staffLimit}`}
+              </span>
+            </div>
+            {!staffUnlimited && staffLimit !== undefined && (
+              <Progress value={0} className="h-2" />
+            )}
+          </div>
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="font-medium">Menu Items</span>
+              <span className="text-muted-foreground">
+                {menuUnlimited ? 'Unlimited' : `Limit: ${menuItemsLimit}`}
+              </span>
+            </div>
+            {!menuUnlimited && menuItemsLimit !== undefined && (
+              <Progress value={0} className="h-2" />
+            )}
+          </div>
+          <Button variant="outline" className="w-full mt-4" asChild>
+            <Link to="/admin/staff">View Staff Usage</Link>
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Body grid */}
       <section className="grid gap-3 lg:grid-cols-3">
