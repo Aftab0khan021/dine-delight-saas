@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     Select,
     SelectContent,
@@ -31,10 +33,11 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, GripVertical, Check, X } from "lucide-react";
+import { Plus, Edit, GripVertical, Check, X, Code } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { SubscriptionPlan, PlanFeatures } from "../types/super-admin";
+import { FEATURE_DEFINITIONS, FEATURE_CATEGORIES, getDefaultFeatures } from "../lib/features";
 
 export default function Plans() {
     const { toast } = useToast();
@@ -50,16 +53,10 @@ export default function Plans() {
         price_cents: 0,
         billing_period: "monthly" as "monthly" | "yearly",
         trial_days: 14,
-        features: JSON.stringify({
-            online_ordering: true,
-            qr_menu: true,
-            staff_limit: 10,
-            custom_domain: false,
-            analytics: true,
-            api_access: false,
-        }, null, 2),
+        features: getDefaultFeatures(),
         is_active: true,
     });
+    const [showJsonEditor, setShowJsonEditor] = useState(false);
 
     // Fetch plans
     const { data: plans, isLoading } = useQuery({
@@ -78,13 +75,6 @@ export default function Plans() {
     // Create/Update mutation
     const savePlanMutation = useMutation({
         mutationFn: async (plan: Partial<SubscriptionPlan>) => {
-            let parsedFeatures: PlanFeatures;
-            try {
-                parsedFeatures = JSON.parse(formData.features);
-            } catch (e) {
-                throw new Error("Invalid JSON in features field");
-            }
-
             const planData = {
                 name: formData.name,
                 slug: formData.slug,
@@ -92,7 +82,7 @@ export default function Plans() {
                 price_cents: formData.price_cents,
                 billing_period: formData.billing_period,
                 trial_days: formData.trial_days,
-                features: parsedFeatures,
+                features: formData.features, // Already an object
                 is_active: formData.is_active,
             };
 
@@ -136,7 +126,7 @@ export default function Plans() {
                 price_cents: plan.price_cents,
                 billing_period: plan.billing_period,
                 trial_days: plan.trial_days,
-                features: JSON.stringify(plan.features, null, 2),
+                features: plan.features,
                 is_active: plan.is_active,
             });
         } else {
@@ -148,18 +138,22 @@ export default function Plans() {
                 price_cents: 0,
                 billing_period: "monthly",
                 trial_days: 14,
-                features: JSON.stringify({
-                    online_ordering: true,
-                    qr_menu: true,
-                    staff_limit: 10,
-                    custom_domain: false,
-                    analytics: true,
-                    api_access: false,
-                }, null, 2),
+                features: getDefaultFeatures(),
                 is_active: true,
             });
         }
         setIsDialogOpen(true);
+        setShowJsonEditor(false);
+    };
+
+    const updateFeature = (key: string, value: boolean | number) => {
+        setFormData({
+            ...formData,
+            features: {
+                ...formData.features,
+                [key]: value,
+            },
+        });
     };
 
     const handleCloseDialog = () => {
@@ -282,20 +276,103 @@ export default function Plans() {
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
-                                <Label htmlFor="features">Features (JSON)</Label>
-                                <Textarea
-                                    id="features"
-                                    value={formData.features}
-                                    onChange={(e) => setFormData({ ...formData, features: e.target.value })}
-                                    placeholder='{"online_ordering": true, "staff_limit": 10}'
-                                    rows={10}
-                                    className="font-mono text-sm"
-                                    required
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                    Configure plan features in JSON format. Use -1 for unlimited limits.
-                                </p>
+                            <Separator className="my-4" />
+
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <Label className="text-base">Plan Features</Label>
+                                        <p className="text-sm text-muted-foreground">
+                                            Configure features included in this plan
+                                        </p>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setShowJsonEditor(!showJsonEditor)}
+                                    >
+                                        <Code className="h-4 w-4 mr-2" />
+                                        {showJsonEditor ? 'Visual Editor' : 'JSON Editor'}
+                                    </Button>
+                                </div>
+
+                                {showJsonEditor ? (
+                                    <div className="space-y-2">
+                                        <Textarea
+                                            value={JSON.stringify(formData.features, null, 2)}
+                                            onChange={(e) => {
+                                                try {
+                                                    const parsed = JSON.parse(e.target.value);
+                                                    setFormData({ ...formData, features: parsed });
+                                                } catch (err) {
+                                                    // Invalid JSON, don't update
+                                                }
+                                            }}
+                                            rows={12}
+                                            className="font-mono text-sm"
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            Advanced: Edit features as JSON. Use -1 for unlimited limits.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <Tabs defaultValue="core" className="w-full">
+                                        <TabsList className="grid w-full grid-cols-4">
+                                            {FEATURE_CATEGORIES.map((cat) => (
+                                                <TabsTrigger key={cat.key} value={cat.key}>
+                                                    {cat.label}
+                                                </TabsTrigger>
+                                            ))}
+                                        </TabsList>
+
+                                        {FEATURE_CATEGORIES.map((category) => (
+                                            <TabsContent key={category.key} value={category.key} className="space-y-3 mt-4">
+                                                <p className="text-sm text-muted-foreground mb-3">
+                                                    {category.description}
+                                                </p>
+                                                {FEATURE_DEFINITIONS.filter(f => f.category === category.key).map((feature) => (
+                                                    <div key={feature.key} className="border rounded-lg p-4 space-y-3">
+                                                        <div className="flex items-start justify-between gap-4">
+                                                            <div className="flex-1">
+                                                                <Label className="text-base font-medium">
+                                                                    {feature.name}
+                                                                </Label>
+                                                                <p className="text-sm text-muted-foreground mt-1">
+                                                                    {feature.description}
+                                                                </p>
+                                                                <code className="text-xs bg-muted px-2 py-0.5 rounded mt-2 inline-block">
+                                                                    {feature.key}
+                                                                </code>
+                                                            </div>
+                                                            {feature.type === 'boolean' ? (
+                                                                <Switch
+                                                                    checked={formData.features[feature.key] === true}
+                                                                    onCheckedChange={(checked) => updateFeature(feature.key, checked)}
+                                                                />
+                                                            ) : (
+                                                                <div className="w-32">
+                                                                    <Input
+                                                                        type="number"
+                                                                        value={typeof formData.features[feature.key] === 'number' ? formData.features[feature.key] as number : 0}
+                                                                        onChange={(e) => updateFeature(feature.key, parseInt(e.target.value))}
+                                                                        placeholder="0"
+                                                                        min="-1"
+                                                                    />
+                                                                    {feature.unit && (
+                                                                        <p className="text-xs text-muted-foreground mt-1">
+                                                                            {feature.unit}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </TabsContent>
+                                        ))}
+                                    </Tabs>
+                                )}
                             </div>
 
                             <div className="flex items-center space-x-2">

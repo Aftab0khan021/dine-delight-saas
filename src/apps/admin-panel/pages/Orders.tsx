@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addDays, startOfDay, subHours } from "date-fns";
-import { Search, Download } from "lucide-react";
+import { Search, Download, Lock } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
+import { useFeatureAccess } from "../hooks/useFeatureAccess";
 
 // UI Components
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -123,6 +125,10 @@ export default function AdminOrders() {
   const [advancingId, setAdvancingId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const ORDERS_PER_PAGE = 50;
+
+  // Check if online ordering is enabled
+  const { isFeatureEnabled } = useFeatureAccess(restaurant?.id);
+  const onlineOrderingEnabled = isFeatureEnabled('online_ordering');
 
   // Time Range Logic
   const { startISO, endISO } = useMemo(() => {
@@ -346,6 +352,17 @@ export default function AdminOrders() {
           </CardContent>
         </Card>
       </header>
+
+      {/* Online Ordering Feature Check */}
+      {!onlineOrderingEnabled && (
+        <Alert variant="destructive">
+          <Lock className="h-4 w-4" />
+          <AlertTitle>Online Ordering Disabled</AlertTitle>
+          <AlertDescription>
+            Online ordering is not enabled for your plan. Upgrade to start accepting online orders.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Kanban Board */}
       <section className="grid gap-3 md:grid-cols-2 lg:grid-cols-4 items-start">

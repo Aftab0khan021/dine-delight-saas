@@ -1,16 +1,18 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { addDays, startOfDay } from "date-fns";
-import { ArrowUpRight, Plus, QrCode, ReceiptText, Sparkles } from "lucide-react";
+import { ArrowUpRight, Plus, QrCode, ReceiptText, Sparkles, Lock, TrendingUp } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { cn } from "@/lib/utils";
+import { useFeatureAccess } from "../hooks/useFeatureAccess";
 
 // UI Components
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Link } from "react-router-dom";
 
 // --- Visual Component: Sparkline (From Repo A) ---
@@ -72,6 +74,10 @@ const statusVariant = (status: string) => {
 
 export default function AdminDashboard() {
   const { restaurant } = useRestaurantContext();
+
+  // Check if analytics feature is enabled
+  const { isFeatureEnabled } = useFeatureAccess(restaurant?.id);
+  const analyticsEnabled = isFeatureEnabled('analytics');
 
   // --- 1. Data Fetching (From Repo B) ---
   const { startISO, endISO } = useMemo(() => {
@@ -138,7 +144,7 @@ export default function AdminDashboard() {
     const currency = todayOrders[0]?.currency_code ?? "USD";
 
     // Calculate Avg Prep Time
-    const completed = todayOrders.filter((o) => o.completed_at).map((o) => 
+    const completed = todayOrders.filter((o) => o.completed_at).map((o) =>
       new Date(o.completed_at!).getTime() - new Date(o.placed_at).getTime()
     );
     const avgPrep = completed.length ? Math.round(completed.reduce((a, b) => a + b, 0) / completed.length / 1000 / 60) : 0;
@@ -149,19 +155,19 @@ export default function AdminDashboard() {
         value: count.toString(),
         delta: "Since midnight",
         // Mock trend for visual flair (since we don't have historical data easily available)
-        trend: [count * 0.5, count * 0.2, count * 0.8, count], 
+        trend: [count * 0.5, count * 0.2, count * 0.8, count],
       },
       {
         label: "Revenue",
         value: formatMoney(revenue, currency),
         delta: "Gross total",
-        trend: [revenue * 0.4, revenue * 0.6, revenue * 0.5, revenue], 
+        trend: [revenue * 0.4, revenue * 0.6, revenue * 0.5, revenue],
       },
       {
         label: "Avg Prep Time",
         value: avgPrep > 0 ? `${avgPrep}m` : "—",
         delta: "Completed orders",
-        trend: [15, 12, 18, avgPrep || 15], 
+        trend: [15, 12, 18, avgPrep || 15],
       },
       {
         label: "Active Tables",
@@ -200,27 +206,41 @@ export default function AdminDashboard() {
 
       {/* KPI Cards */}
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {kpis.map((k) => (
-          <Card key={k.label} className="shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{k.label}</CardTitle>
-            </CardHeader>
-            <CardContent className="flex items-end justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-2xl font-semibold tracking-tight">{k.value}</div>
-                <div className="mt-1 text-xs text-muted-foreground">{k.delta}</div>
-              </div>
-              <div className="flex items-end gap-3 pb-1">
-                <Sparkline values={k.trend} />
-              </div>
+        {analyticsEnabled ? (
+          kpis.map((k) => (
+            <Card key={k.label} className="shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">{k.label}</CardTitle>
+              </CardHeader>
+              <CardContent className="flex items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-2xl font-semibold tracking-tight">{k.value}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{k.delta}</div>
+                </div>
+                <div className="flex items-end gap-3 pb-1">
+                  <Sparkline values={k.trend} />
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <Card className="shadow-sm sm:col-span-2 lg:col-span-4">
+            <CardContent className="p-6">
+              <Alert>
+                <Lock className="h-4 w-4" />
+                <AlertTitle>Analytics Feature Locked</AlertTitle>
+                <AlertDescription>
+                  Upgrade your plan to unlock detailed analytics, revenue tracking, and performance insights.
+                </AlertDescription>
+              </Alert>
             </CardContent>
           </Card>
-        ))}
+        )}
       </section>
 
       {/* Main Content Grid */}
       <section className="grid gap-3 lg:grid-cols-3">
-        
+
         {/* LEFT: Live Orders */}
         <Card className="shadow-sm lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between gap-4">
@@ -246,7 +266,7 @@ export default function AdminDashboard() {
                       <span className="text-xs text-muted-foreground">{o.table_label || "No Table"}</span>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {new Date(o.placed_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      {new Date(o.placed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
                   <Badge variant={statusVariant(o.status)} className="shrink-0 capitalize">
@@ -265,7 +285,7 @@ export default function AdminDashboard() {
 
         {/* RIGHT: Checklist & Quick Actions */}
         <div className="space-y-3">
-          
+
           {/* Setup Checklist */}
           <Card className="shadow-sm">
             <CardHeader><CardTitle className="text-base">Setup checklist</CardTitle></CardHeader>

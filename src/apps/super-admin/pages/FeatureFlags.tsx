@@ -195,90 +195,95 @@ export default function FeatureFlags() {
                         Manage global features and per-restaurant overrides
                     </p>
                 </div>
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button onClick={() => handleOpenDialog()}>
-                            <Plus className="h-4 w-4 mr-2" />
-                            Create Feature Flag
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl">
-                        <DialogHeader>
-                            <DialogTitle>
-                                {editingFlag ? 'Edit Feature Flag' : 'Create Feature Flag'}
-                            </DialogTitle>
-                            <DialogDescription>
-                                Configure a new feature flag for the platform
-                            </DialogDescription>
-                        </DialogHeader>
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div className="grid gap-4 md:grid-cols-2">
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => window.location.href = '/superadmin/features/access'}>
+                        View Access Matrix
+                    </Button>
+                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button onClick={() => handleOpenDialog()}>
+                                <Plus className="h-4 w-4 mr-2" />
+                                Create Feature Flag
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-2xl">
+                            <DialogHeader>
+                                <DialogTitle>
+                                    {editingFlag ? 'Edit Feature Flag' : 'Create Feature Flag'}
+                                </DialogTitle>
+                                <DialogDescription>
+                                    Configure a new feature flag for the platform
+                                </DialogDescription>
+                            </DialogHeader>
+                            <form onSubmit={handleSubmit} className="space-y-4">
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="key">Key</Label>
+                                        <Input
+                                            id="key"
+                                            value={formData.key}
+                                            onChange={(e) => setFormData({ ...formData, key: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
+                                            placeholder="e.g., new_feature"
+                                            required
+                                            disabled={!!editingFlag}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="name">Name</Label>
+                                        <Input
+                                            id="name"
+                                            value={formData.name}
+                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                            placeholder="e.g., New Feature"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+
                                 <div className="space-y-2">
-                                    <Label htmlFor="key">Key</Label>
-                                    <Input
-                                        id="key"
-                                        value={formData.key}
-                                        onChange={(e) => setFormData({ ...formData, key: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
-                                        placeholder="e.g., new_feature"
-                                        required
-                                        disabled={!!editingFlag}
+                                    <Label htmlFor="description">Description</Label>
+                                    <Textarea
+                                        id="description"
+                                        value={formData.description}
+                                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                        placeholder="What does this feature do?"
+                                        rows={2}
                                     />
                                 </div>
+
                                 <div className="space-y-2">
-                                    <Label htmlFor="name">Name</Label>
-                                    <Input
-                                        id="name"
-                                        value={formData.name}
-                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                        placeholder="e.g., New Feature"
-                                        required
+                                    <Label htmlFor="config">Configuration (JSON)</Label>
+                                    <Textarea
+                                        id="config"
+                                        value={formData.config}
+                                        onChange={(e) => setFormData({ ...formData, config: e.target.value })}
+                                        placeholder='{"rollout_percentage": 100}'
+                                        rows={4}
+                                        className="font-mono text-sm"
                                     />
                                 </div>
-                            </div>
 
-                            <div className="space-y-2">
-                                <Label htmlFor="description">Description</Label>
-                                <Textarea
-                                    id="description"
-                                    value={formData.description}
-                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                    placeholder="What does this feature do?"
-                                    rows={2}
-                                />
-                            </div>
+                                <div className="flex items-center space-x-2">
+                                    <Switch
+                                        id="is_enabled"
+                                        checked={formData.is_enabled}
+                                        onCheckedChange={(checked) => setFormData({ ...formData, is_enabled: checked })}
+                                    />
+                                    <Label htmlFor="is_enabled">Enabled by default</Label>
+                                </div>
 
-                            <div className="space-y-2">
-                                <Label htmlFor="config">Configuration (JSON)</Label>
-                                <Textarea
-                                    id="config"
-                                    value={formData.config}
-                                    onChange={(e) => setFormData({ ...formData, config: e.target.value })}
-                                    placeholder='{"rollout_percentage": 100}'
-                                    rows={4}
-                                    className="font-mono text-sm"
-                                />
-                            </div>
-
-                            <div className="flex items-center space-x-2">
-                                <Switch
-                                    id="is_enabled"
-                                    checked={formData.is_enabled}
-                                    onCheckedChange={(checked) => setFormData({ ...formData, is_enabled: checked })}
-                                />
-                                <Label htmlFor="is_enabled">Enabled by default</Label>
-                            </div>
-
-                            <DialogFooter>
-                                <Button type="button" variant="outline" onClick={handleCloseDialog}>
-                                    Cancel
-                                </Button>
-                                <Button type="submit" disabled={saveFlagMutation.isPending}>
-                                    {saveFlagMutation.isPending ? 'Saving...' : editingFlag ? 'Update' : 'Create'}
-                                </Button>
-                            </DialogFooter>
-                        </form>
-                    </DialogContent>
-                </Dialog>
+                                <DialogFooter>
+                                    <Button type="button" variant="outline" onClick={handleCloseDialog}>
+                                        Cancel
+                                    </Button>
+                                    <Button type="submit" disabled={saveFlagMutation.isPending}>
+                                        {saveFlagMutation.isPending ? 'Saving...' : editingFlag ? 'Update' : 'Create'}
+                                    </Button>
+                                </DialogFooter>
+                            </form>
+                        </DialogContent>
+                    </Dialog>
+                </div>
             </header>
 
             <Tabs defaultValue="global" className="space-y-4">
