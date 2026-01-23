@@ -175,6 +175,9 @@ serve(async (req) => {
       return json({ error: `Order value cannot exceed $${MAX_ORDER_VALUE_CENTS / 100}` }, 400);
     }
 
+    // Generate secure order token for tracking
+    const order_token = crypto.randomUUID();
+
     // Insert Order
     const { data: order, error: insertError } = await supabase
       .from('orders')
@@ -185,7 +188,8 @@ serve(async (req) => {
         total_cents: totalCents,
         currency_code: 'USD',
         ip_address: clientIp,
-        table_label: table_label || null
+        table_label: table_label || null,
+        order_token: order_token
       })
       .select()
       .single();
