@@ -1,9 +1,14 @@
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -16,6 +21,14 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {
     ArrowLeft,
     Building2,
     Users,
@@ -25,15 +38,27 @@ import {
     CheckCircle,
     UserCog,
     Trash2,
+    Settings,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow, format } from "date-fns";
+import { FeatureAccessMatrix } from "../components/FeatureAccessMatrix";
+import { FeatureLimitIndicator } from "../components/FeatureLimitIndicator";
+import { getFeatureDefinition, getLimitFeatures } from "../lib/features";
 
 export default function RestaurantDetails() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const { toast } = useToast();
+    const queryClient = useQueryClient();
+
+    // Feature override dialog state
+    const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
+    const [selectedFeature, setSelectedFeature] = useState<string | null>(null);
+    const [overrideEnabled, setOverrideEnabled] = useState(false);
+    const [overrideValue, setOverrideValue] = useState<boolean | number>(false);
+    const [overrideReason, setOverrideReason] = useState("");
 
     // Fetch restaurant details
     const { data: restaurant, isLoading, refetch } = useQuery({
@@ -73,7 +98,7 @@ export default function RestaurantDetails() {
     const { data: stats } = useQuery({
         queryKey: ['restaurant-stats', id],
         queryFn: async () => {
-            const [ordersResult, revenueResult] = await Promise.all([
+            const [ordersResult, revenueResult, menuItemsResult] = await Promise.all([
                 supabase
                     .from('orders')
                     .select('id, total_cents', { count: 'exact' })
@@ -83,6 +108,10 @@ export default function RestaurantDetails() {
                     .select('total_cents')
                     .eq('restaurant_id', id)
                     .eq('status', 'completed'),
+                supabase
+                    .from('menu_items')
+                    .select('id', { count: 'exact' })
+                    .eq('restaurant_id', id),
             ]);
 
             const totalRevenue = revenueResult.data?.reduce(
@@ -93,10 +122,50 @@ export default function RestaurantDetails() {
             return {
                 totalOrders: ordersResult.count || 0,
                 totalRevenue,
+                totalMenuItems: menuItemsResult.count || 0,
             };
         },
         enabled: !!id,
     });
+
+    // Fetch restaurant feature overrides
+    const { data: featureOverrides } = useQuery({
+        queryKey: ['restaurant-feature-overrides', id],
+        queryFn: async () => {
+            const { data, error } = await (supabase as any)
+                .from('restaurant_features')
+                .select('*')
+                .eq('restaurant_id', id);
+
+            if (error) throw error;
+            return data as Array<{
+                id: string;
+                restaurant_id: string;
+                feature_key: string;
+                is_enabled: boolean;
+                config: Record<string, any>;
+            }>;
+        },
+        enabled: !!id,
+    });
+
+    // Helper function to get effective limit (override > plan > default)
+    const getEffectiveLimit = (featureKey: string, defaultValue: number): number => {
+        // Check for override first
+        const override = featureOverrides?.find(f => f.feature_key === featureKey);
+        if (override?.config?.limit !== undefined) {
+            return override.config.limit;
+        }
+
+        // Check plan features
+        const planLimit = subscription?.subscription_plans?.features?.[featureKey];
+        if (typeof planLimit === 'number') {
+            return planLimit;
+        }
+
+        // Return default
+        return defaultValue;
+    };
 
     const handleSuspend = async () => {
         if (!id || !restaurant) return;
@@ -184,6 +253,94 @@ export default function RestaurantDetails() {
             description: "Impersonation feature will be implemented next",
         });
     };
+
+    const handleFeatureOverride = (featureKey: string) => {
+        const featureDef = getFeatureDefinition(featureKey);
+        const currentPlanValue = subscription?.subscription_plans?.features?.[featureKey];
+
+        setSelectedFeature(featureKey);
+        setOverrideDialogOpen(true);
+        setOverrideEnabled(false);
+
+        // Pre-populate with current plan value if it's a limit feature
+        if (featureDef?.type === 'limit' && typeof currentPlanValue === 'number') {
+            setOverrideValue(currentPlanValue);
+        } else if (featureDef?.type === 'boolean') {
+            setOverrideValue(currentPlanValue === true);
+        } else {
+            setOverrideValue(false);
+        }
+
+        setOverrideReason("");
+    };
+
+    const saveFeatureOverride = useMutation({
+        mutationFn: async () => {
+            if (!id || !selectedFeature) return;
+
+            const featureDef = getFeatureDefinition(selectedFeature);
+            const config = featureDef?.type === 'limit' ? { limit: overrideValue } : {};
+
+            const { error } = await (supabase as any)
+                .from('restaurant_features')
+                .upsert({
+                    restaurant_id: id,
+                    feature_key: selectedFeature,
+                    is_enabled: featureDef?.type === 'boolean' ? overrideValue : true,
+                    config,
+                }, {
+                    onConflict: 'restaurant_id,feature_key'
+                });
+
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['restaurant-feature-access', id] });
+            queryClient.invalidateQueries({ queryKey: ['restaurant-feature-overrides', id] });
+            toast({
+                title: "Success",
+                description: "Feature override saved",
+            });
+            setOverrideDialogOpen(false);
+        },
+        onError: () => {
+            toast({
+                title: "Error",
+                description: "Failed to save feature override",
+                variant: "destructive",
+            });
+        },
+    });
+
+    const removeFeatureOverride = useMutation({
+        mutationFn: async () => {
+            if (!id || !selectedFeature) return;
+
+            const { error } = await (supabase as any)
+                .from('restaurant_features')
+                .delete()
+                .eq('restaurant_id', id)
+                .eq('feature_key', selectedFeature);
+
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['restaurant-feature-access', id] });
+            queryClient.invalidateQueries({ queryKey: ['restaurant-feature-overrides', id] });
+            toast({
+                title: "Success",
+                description: "Feature override removed",
+            });
+            setOverrideDialogOpen(false);
+        },
+        onError: () => {
+            toast({
+                title: "Error",
+                description: "Failed to remove feature override",
+                variant: "destructive",
+            });
+        },
+    });
 
     if (isLoading) {
         return (
@@ -480,6 +637,140 @@ export default function RestaurantDetails() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Feature Access */}
+            <FeatureAccessMatrix restaurantId={id!} onOverride={handleFeatureOverride} />
+
+            {/* Feature Limits */}
+            {id && restaurant && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Settings className="h-5 w-5" />
+                            Feature Limits
+                        </CardTitle>
+                        <CardDescription>
+                            Current usage vs. plan limits
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <FeatureLimitIndicator
+                                limitKey="staff_limit"
+                                limitName="Staff Members"
+                                currentUsage={restaurant?.user_roles?.length || 0}
+                                maxLimit={getEffectiveLimit('staff_limit', 10)}
+                                unit="users"
+                                onEdit={() => handleFeatureOverride('staff_limit')}
+                            />
+                            <FeatureLimitIndicator
+                                limitKey="menu_items_limit"
+                                limitName="Menu Items"
+                                currentUsage={stats?.totalMenuItems || 0}
+                                maxLimit={getEffectiveLimit('menu_items_limit', 100)}
+                                unit="items"
+                                onEdit={() => handleFeatureOverride('menu_items_limit')}
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Feature Override Dialog */}
+            <Dialog open={overrideDialogOpen} onOpenChange={setOverrideDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Override Feature</DialogTitle>
+                        <DialogDescription>
+                            Create a restaurant-specific override for {selectedFeature}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label>Feature</Label>
+                            <p className="text-sm font-mono bg-muted px-2 py-1 rounded">
+                                {selectedFeature}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                                {getFeatureDefinition(selectedFeature)?.description}
+                            </p>
+                        </div>
+
+                        <Separator />
+
+                        <div className="space-y-3">
+                            <div className="space-y-2">
+                                <Label className="text-base">Override Configuration</Label>
+                                <p className="text-sm text-muted-foreground">
+                                    Enable override to set a custom value for this restaurant, overriding the plan default.
+                                </p>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <Switch
+                                    checked={overrideEnabled}
+                                    onCheckedChange={setOverrideEnabled}
+                                />
+                                <Label className="cursor-pointer" onClick={() => setOverrideEnabled(!overrideEnabled)}>
+                                    Enable Override
+                                </Label>
+                            </div>
+                        </div>
+
+                        {overrideEnabled && (
+                            <>
+                                {getFeatureDefinition(selectedFeature)?.type === 'boolean' ? (
+                                    <div className="space-y-2">
+                                        <Label>Override Value</Label>
+                                        <div className="flex items-center space-x-2">
+                                            <Switch
+                                                checked={overrideValue === true}
+                                                onCheckedChange={(checked) => setOverrideValue(checked)}
+                                            />
+                                            <span className="text-sm">
+                                                {overrideValue ? 'Enabled' : 'Disabled'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <Label>Limit Value</Label>
+                                        <Input
+                                            type="number"
+                                            value={typeof overrideValue === 'number' ? overrideValue : 0}
+                                            onChange={(e) => setOverrideValue(parseInt(e.target.value))}
+                                            placeholder="Enter limit (-1 for unlimited)"
+                                            min="-1"
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            Use -1 for unlimited
+                                        </p>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setOverrideDialogOpen(false)}
+                        >
+                            Cancel
+                        </Button>
+                        {overrideEnabled ? (
+                            <Button onClick={() => saveFeatureOverride.mutate()}>
+                                Save Override
+                            </Button>
+                        ) : (
+                            <Button
+                                variant="destructive"
+                                onClick={() => removeFeatureOverride.mutate()}
+                            >
+                                Remove Override
+                            </Button>
+                        )}
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Danger Zone */}
             <Card className="border-destructive">

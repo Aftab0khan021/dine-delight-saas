@@ -32,6 +32,7 @@ import SuperAdminRestaurantDetails from "./apps/super-admin/pages/RestaurantDeta
 import SuperAdminPlans from "./apps/super-admin/pages/Plans";
 import SuperAdminSubscriptions from "./apps/super-admin/pages/Subscriptions";
 import SuperAdminFeatureFlags from "./apps/super-admin/pages/FeatureFlags";
+import SuperAdminFeatureAccess from "./apps/super-admin/pages/FeatureAccess";
 import SuperAdminInvoices from "./apps/super-admin/pages/Invoices";
 import SuperAdminActivity from "./apps/super-admin/pages/Activity";
 import SuperAdminAbuse from "./apps/super-admin/pages/Abuse";
@@ -79,6 +80,7 @@ const App = () => (
             <Route path="plans" element={<SuperAdminPlans />} />
             <Route path="subscriptions" element={<SuperAdminSubscriptions />} />
             <Route path="features" element={<SuperAdminFeatureFlags />} />
+            <Route path="features/access" element={<SuperAdminFeatureAccess />} />
             <Route path="invoices" element={<SuperAdminInvoices />} />
             <Route path="activity" element={<SuperAdminActivity />} />
             <Route path="abuse" element={<SuperAdminAbuse />} />

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { MoreHorizontal, RefreshCw, Shield, UserPlus, UserX } from "lucide-react";
+import { MoreHorizontal, RefreshCw, Shield, UserPlus, UserX, AlertCircle } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
@@ -13,7 +13,8 @@ import { type StaffRole } from "../components/staff/staff-utils";
 // UI Components
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Dialog,
   DialogContent,
@@ -136,6 +137,25 @@ export default function AdminStaff() {
       return data ?? [];
     },
   });
+
+  // Fetch staff limit from plan/override
+  const { data: staffLimit } = useQuery({
+    queryKey: ["admin", "staff", restaurant?.id, "limit"],
+    enabled: !!restaurant?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_feature_limit_for_restaurant', {
+        p_restaurant_id: restaurant!.id,
+        p_feature_key: 'staff_limit'
+      });
+      if (error) throw error;
+      return data as number;
+    },
+  });
+
+  // Calculate current staff count and check if at limit
+  const currentStaffCount = staffQuery.data?.length || 0;
+  const isAtLimit = staffLimit !== undefined && staffLimit !== -1 && currentStaffCount >= staffLimit;
+  const isUnlimited = staffLimit === -1;
 
   // --- 2. Mutations (From Repo B) ---
   const createInviteMutation = useMutation({
@@ -292,11 +312,17 @@ export default function AdminStaff() {
           <p className="mt-1 text-sm text-muted-foreground">
             Invite staff, change roles, and review recent activity.
           </p>
+          {staffLimit !== undefined && (
+            <p className="mt-2 text-sm font-medium">
+              Staff: {currentStaffCount} / {isUnlimited ? '∞' : staffLimit}
+              {isAtLimit && <span className="text-destructive ml-2">• Limit reached</span>}
+            </p>
+          )}
         </div>
 
         <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button disabled={isAtLimit}>
               <UserPlus className="mr-2 h-4 w-4" /> Invite staff
             </Button>
           </DialogTrigger>
@@ -328,10 +354,29 @@ export default function AdminStaff() {
         </Dialog>
       </header>
 
+      {/* Staff Limit Warning */}
+      {isAtLimit && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Staff Limit Reached</AlertTitle>
+          <AlertDescription>
+            You've reached your plan's staff limit of {staffLimit} members.
+            To add more staff, please upgrade your subscription plan.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <section className="grid gap-3 lg:grid-cols-3">
         {/* Staff List */}
         <Card className="shadow-soft lg:col-span-2">
-          <CardHeader><CardTitle className="text-base">Team</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-base">Team</CardTitle>
+            {staffLimit !== undefined && !isUnlimited && (
+              <CardDescription>
+                {currentStaffCount} of {staffLimit} staff members used
+              </CardDescription>
+            )}
+          </CardHeader>
           <CardContent>
             {tableData.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground border-dashed border rounded-lg">No staff found. Invite someone!</div>

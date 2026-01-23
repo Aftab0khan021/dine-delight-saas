@@ -10,17 +10,20 @@ import {
   Trash2,
   RefreshCw,
   Pencil,
-  GripVertical
+  GripVertical,
+  AlertCircle
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
+import { useFeatureLimit } from "../hooks/useFeatureAccess";
 
 // UI Components
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -113,6 +116,12 @@ export default function AdminMenu() {
       return data as MenuItemRow[];
     },
   });
+
+  // Fetch menu items limit
+  const { limit: menuItemsLimit, isAtLimit } = useFeatureLimit(restaurant?.id, 'menu_items_limit');
+  const currentMenuItems = itemsQuery.data?.length || 0;
+  const isMenuAtLimit = isAtLimit(currentMenuItems);
+  const isUnlimited = menuItemsLimit === -1;
 
   const categories = categoriesQuery.data ?? [];
   const items = itemsQuery.data ?? [];
@@ -337,6 +346,12 @@ export default function AdminMenu() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Menu Management</h1>
           <p className="mt-1 text-sm text-muted-foreground">Manage your food and drink offerings.</p>
+          {menuItemsLimit !== undefined && (
+            <p className="mt-2 text-sm font-medium">
+              Menu Items: {currentMenuItems} / {isUnlimited ? '∞' : menuItemsLimit}
+              {isMenuAtLimit && <span className="text-destructive ml-2">• Limit reached</span>}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {/* Add Refresh Button for troubleshooting */}
@@ -346,11 +361,23 @@ export default function AdminMenu() {
           <Button variant="secondary" onClick={() => { setEditCat(null); setCatSheetOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" /> Add Category
           </Button>
-          <Button onClick={() => { setEditItem(null); setItemSheetOpen(true); }}>
+          <Button disabled={isMenuAtLimit} onClick={() => { setEditItem(null); setItemSheetOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" /> Add Item
           </Button>
         </div>
       </header>
+
+      {/* Menu Items Limit Warning */}
+      {isMenuAtLimit && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Menu Items Limit Reached</AlertTitle>
+          <AlertDescription>
+            You've reached your plan's menu items limit of {menuItemsLimit} items.
+            To add more menu items, please upgrade your subscription plan.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid gap-3 lg:grid-cols-3">
         {/* LEFT COLUMN: Categories (Draggable) */}
@@ -395,7 +422,14 @@ export default function AdminMenu() {
         {/* RIGHT COLUMN: Items */}
         <Card className="shadow-sm lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
-            <CardTitle className="text-base">Menu Items</CardTitle>
+            <div>
+              <CardTitle className="text-base">Menu Items</CardTitle>
+              {menuItemsLimit !== undefined && !isUnlimited && (
+                <CardDescription>
+                  {currentMenuItems} of {menuItemsLimit} menu items used
+                </CardDescription>
+              )}
+            </div>
             <div className="relative w-full max-w-xs">
               <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Download, MoreHorizontal, Printer, QrCode as QrIcon, Trash2, Power, FileSpreadsheet } from "lucide-react";
+import { Copy, Download, MoreHorizontal, Printer, QrCode as QrIcon, Trash2, Power, FileSpreadsheet, Lock } from "lucide-react";
 import QRCode from "react-qr-code";
 import { z } from "zod";
 
@@ -8,11 +8,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
 import { buildTableLabel, type QrType } from "../components/qr/qr-utils";
+import { useFeatureAccess } from "../hooks/useFeatureAccess";
 
 // UI Components
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -45,6 +47,10 @@ export default function AdminQrMenu() {
   const [toTable, setToTable] = useState(10);
   const [prefix, setPrefix] = useState("T-");
   const [layout, setLayout] = useState("cards");
+
+  // Check if QR menu feature is enabled
+  const { isFeatureEnabled } = useFeatureAccess(restaurant?.id);
+  const qrMenuEnabled = isFeatureEnabled('qr_menu');
 
   // --- Queries ---
   const qrCodesQuery = useQuery({
@@ -199,6 +205,17 @@ export default function AdminQrMenu() {
         </div>
       </header>
 
+      {/* QR Menu Feature Check */}
+      {!qrMenuEnabled && (
+        <Alert variant="destructive">
+          <Lock className="h-4 w-4" />
+          <AlertTitle>QR Menu Feature Disabled</AlertTitle>
+          <AlertDescription>
+            QR menu generation is not available on your current plan. Upgrade to unlock this feature.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <section className="grid gap-3 lg:grid-cols-3 print:block">
         {/* LEFT COLUMN: Generator (Hidden on Print) */}
         <Card className="shadow-sm lg:col-span-1 h-fit print:hidden">
@@ -278,9 +295,9 @@ export default function AdminQrMenu() {
               <Button
                 className="flex-1"
                 onClick={() => generateMutation.mutate()}
-                disabled={generateMutation.isPending}
+                disabled={generateMutation.isPending || !qrMenuEnabled}
               >
-                {generateMutation.isPending ? "Generating..." : "Generate"}
+                {generateMutation.isPending ? "Generating..." : qrMenuEnabled ? "Generate" : "Upgrade Required"}
               </Button>
             </div>
           </CardContent>
