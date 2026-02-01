@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { addDays, startOfDay, subHours } from "date-fns";
+import { addDays, startOfDay, subHours, subDays, subMonths, subQuarters, subYears } from "date-fns";
 import { Search, Download, Lock, Bell, BellOff, Printer } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 
 // --- Types & Helpers ---
 type OrderStatus = "pending" | "in_progress" | "ready" | "completed";
-type TimeFilter = "today" | "last_24h";
+type TimeFilter = "last_24h" | "week" | "month" | "quarter" | "year";
 
 // Mapping DB status to UI Labels
 const STATUS_MAP: Record<OrderStatus, string> = {
@@ -159,7 +159,7 @@ export default function AdminOrders() {
 
   // State
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>("today");
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>("last_24h");
   const [search, setSearch] = useState("");
   const [advancingId, setAdvancingId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -206,13 +206,30 @@ export default function AdminOrders() {
 
   // Time Range Logic
   const { startISO, endISO } = useMemo(() => {
-    if (timeFilter === "last_24h") {
-      const start = subHours(new Date(), 24);
-      return { startISO: start.toISOString(), endISO: new Date().toISOString() };
+    const now = new Date();
+    let start: Date;
+
+    switch (timeFilter) {
+      case "last_24h":
+        start = subHours(now, 24);
+        break;
+      case "week":
+        start = subDays(now, 7);
+        break;
+      case "month":
+        start = subMonths(now, 1);
+        break;
+      case "quarter":
+        start = subMonths(now, 3);
+        break;
+      case "year":
+        start = subYears(now, 1);
+        break;
+      default:
+        start = subHours(now, 24);
     }
-    const start = startOfDay(new Date());
-    const end = addDays(start, 1);
-    return { startISO: start.toISOString(), endISO: end.toISOString() };
+
+    return { startISO: start.toISOString(), endISO: now.toISOString() };
   }, [timeFilter]);
 
   // --- 1. Realtime Subscription ---
@@ -476,8 +493,11 @@ export default function AdminOrders() {
                 <SelectValue placeholder="Time" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="today">Today</SelectItem>
-                <SelectItem value="last_24h">Last 24h</SelectItem>
+                <SelectItem value="last_24h">Last 24 Hours</SelectItem>
+                <SelectItem value="week">Last Week</SelectItem>
+                <SelectItem value="month">Last Month</SelectItem>
+                <SelectItem value="quarter">Last Quarter</SelectItem>
+                <SelectItem value="year">Last Year</SelectItem>
               </SelectContent>
             </Select>
 

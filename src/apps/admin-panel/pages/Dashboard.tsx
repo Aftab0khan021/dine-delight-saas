@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { addDays, startOfDay } from "date-fns";
+import { addDays, startOfDay, subHours } from "date-fns";
 import { ArrowUpRight, Plus, QrCode, ReceiptText, Sparkles, Lock, TrendingUp } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -102,7 +102,9 @@ export default function AdminDashboard() {
     },
   });
 
-  // Fetch Latest 5 Orders for the List
+  // Fetch Latest 5 Orders from Last 24 Hours for the List
+  const last24hStart = useMemo(() => subHours(new Date(), 24).toISOString(), []);
+
   const latestOrdersQuery = useQuery({
     queryKey: ["admin", "dashboard", restaurant?.id, "latestOrders"],
     enabled: !!restaurant?.id,
@@ -111,6 +113,7 @@ export default function AdminDashboard() {
         .from("orders")
         .select("id, status, placed_at, total_cents, table_label")
         .eq("restaurant_id", restaurant!.id)
+        .gte("placed_at", last24hStart)
         .order("placed_at", { ascending: false })
         .limit(5);
       if (error) throw error;
