@@ -11,6 +11,7 @@ import {
   Users,
   LifeBuoy,
   AlertTriangle,
+  MessageSquare,
 } from "lucide-react";
 
 import { NavLink } from "@/components/NavLink";
@@ -38,6 +39,7 @@ const items = [
   { title: "Abuse", url: "/superadmin/abuse", icon: ShieldAlert },
   { title: "Support", url: "/superadmin/support", icon: LifeBuoy },
   { title: "Errors", url: "/superadmin/errors", icon: AlertTriangle },
+  { title: "WhatsApp", url: "/superadmin/whatsapp", icon: MessageSquare },
   { title: "Settings", url: "/superadmin/settings", icon: Settings },
 ] as const;
 

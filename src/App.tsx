@@ -23,6 +23,7 @@ import AdminStaff from "./apps/admin-panel/pages/Staff";
 import AdminBranding from "./apps/admin-panel/pages/Branding";
 import AdminBilling from "./apps/admin-panel/pages/Billing";
 import AdminCoupons from "./apps/admin-panel/pages/Coupons";
+import WhatsAppSettings from "./apps/admin-panel/pages/WhatsAppSettings";
 
 // Super Admin
 import SuperAdminAuth from "./apps/super-admin/pages/Auth";
@@ -41,6 +42,7 @@ import SuperAdminSupport from "./apps/super-admin/pages/Support";
 import SuperAdminErrors from "./apps/super-admin/pages/Errors";
 import SuperAdminSettings from "./apps/super-admin/pages/Settings";
 import SuperAdminUsers from "./apps/super-admin/pages/Users";
+import SuperAdminWhatsApp from "./apps/super-admin/pages/WhatsAppManagement";
 
 const queryClient = new QueryClient();
 
@@ -72,6 +74,7 @@ const App = () => (
             <Route path="branding" element={<AdminBranding />} />
             <Route path="billing" element={<AdminBilling />} />
             <Route path="coupons" element={<AdminCoupons />} />
+            <Route path="whatsapp" element={<WhatsAppSettings />} />
           </Route>
 
           {/* Super Admin Routes */}
@@ -92,6 +95,7 @@ const App = () => (
             <Route path="support" element={<SuperAdminSupport />} />
             <Route path="errors" element={<SuperAdminErrors />} />
             <Route path="users" element={<SuperAdminUsers />} />
+            <Route path="whatsapp" element={<SuperAdminWhatsApp />} />
             <Route path="settings" element={<SuperAdminSettings />} />
           </Route>
 

@@ -12,7 +12,8 @@ import {
   Salad,
   ChevronLeft,
   ChevronRight,
-  Ticket
+  Ticket,
+  MessageSquare
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ const navItems = [
   { to: "/admin/branding", label: "Branding", icon: Palette },
   { to: "/admin/billing", label: "Billing", icon: CreditCard },
   { to: "/admin/coupons", label: "Coupons", icon: Ticket },
+  { to: "/admin/whatsapp", label: "WhatsApp", icon: MessageSquare },
 ];
 
 export function AdminSidebar() {
