@@ -12,6 +12,9 @@ import {
   LifeBuoy,
   AlertTriangle,
   MessageSquare,
+  Zap,
+  BarChart3,
+  DollarSign,
 } from "lucide-react";
 
 import { NavLink } from "@/components/NavLink";
@@ -40,6 +43,9 @@ const items = [
   { title: "Support", url: "/superadmin/support", icon: LifeBuoy },
   { title: "Errors", url: "/superadmin/errors", icon: AlertTriangle },
   { title: "WhatsApp", url: "/superadmin/whatsapp", icon: MessageSquare },
+  { title: "AI Providers", url: "/superadmin/ai-providers", icon: Zap },
+  { title: "AI Usage", url: "/superadmin/analytics/ai-usage", icon: BarChart3 },
+  { title: "AI Costs", url: "/superadmin/analytics/ai-costs", icon: DollarSign },
   { title: "Settings", url: "/superadmin/settings", icon: Settings },
 ] as const;
 

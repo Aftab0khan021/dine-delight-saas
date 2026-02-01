@@ -43,6 +43,11 @@ import SuperAdminErrors from "./apps/super-admin/pages/Errors";
 import SuperAdminSettings from "./apps/super-admin/pages/Settings";
 import SuperAdminUsers from "./apps/super-admin/pages/Users";
 import SuperAdminWhatsApp from "./apps/super-admin/pages/WhatsAppManagement";
+import SuperAdminAIProviders from "./apps/super-admin/pages/AIProviders";
+import SuperAdminRestaurantAIConfig from "./apps/super-admin/pages/RestaurantAIConfig";
+import SuperAdminAIUsageAnalytics from "./apps/super-admin/pages/AIUsageAnalytics";
+import SuperAdminAICostTracking from "./apps/super-admin/pages/AICostTracking";
+
 
 const queryClient = new QueryClient();
 
@@ -97,6 +102,11 @@ const App = () => (
             <Route path="users" element={<SuperAdminUsers />} />
             <Route path="whatsapp" element={<SuperAdminWhatsApp />} />
             <Route path="settings" element={<SuperAdminSettings />} />
+            {/* AI Management Routes */}
+            <Route path="ai-providers" element={<SuperAdminAIProviders />} />
+            <Route path="restaurants/:id/ai-config" element={<SuperAdminRestaurantAIConfig />} />
+            <Route path="analytics/ai-usage" element={<SuperAdminAIUsageAnalytics />} />
+            <Route path="analytics/ai-costs" element={<SuperAdminAICostTracking />} />
           </Route>
 
           {/* Legacy redirects: /super-admin -> /superadmin */}

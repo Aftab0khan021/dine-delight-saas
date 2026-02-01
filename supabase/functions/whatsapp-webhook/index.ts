@@ -217,6 +217,9 @@ async function processMessage(
         case 'entering_table_number':
             return await handleTableNumberEntry(conversationId, content, context, supabase, restaurant);
 
+        case 'searching_menu':
+            return await handleMenuSearch(conversationId, content, supabase, restaurant);
+
         case 'browsing_menu':
             return await handleMenuBrowsing(conversationId, content, supabase, restaurant);
 
@@ -225,6 +228,27 @@ async function processMessage(
 
         case 'viewing_item':
             return await handleItemView(conversationId, content, context, supabase, restaurant);
+
+        case 'selecting_variant':
+            return await handleVariantSelection(conversationId, content, context, supabase, restaurant);
+
+        case 'selecting_addons':
+            return await handleAddonSelection(conversationId, content, context, supabase, restaurant);
+
+        case 'adding_instructions':
+            return await handleSpecialInstructions(conversationId, content, context, supabase, restaurant);
+
+        case 'selecting_quantity':
+            return await handleQuantitySelection(conversationId, content, context, supabase, restaurant);
+
+        case 'reviewing_cart':
+            return await handleCartReview(conversationId, content, supabase, restaurant);
+
+        case 'viewing_history':
+            return await handleOrderHistory(conversationId, content, supabase, restaurant);
+
+        case 'confirming_reorder':
+            return await handleReorderConfirmation(conversationId, content, context, supabase, restaurant);
 
         case 'selecting_quantity':
             return await handleQuantitySelection(conversationId, content, context, supabase, restaurant);
@@ -421,7 +445,61 @@ async function handleMenuBrowsing(conversationId: string, content: string, supab
         return { type: 'text', text: { body: 'Please share your order ID (e.g., #9161)' } };
     }
 
-    return { type: 'text', text: { body: 'Please select an option from the menu.' } };
+    // Search command
+    if (input.startsWith('search ')) {
+        const query = input.replace('search ', '').trim();
+        return await handleMenuSearch(conversationId, query, supabase, restaurant);
+    }
+
+    // History command
+    if (input === 'history' || input === 'orders') {
+        return await handleOrderHistory(conversationId, 'view', supabase, restaurant);
+    }
+
+    return { type: 'text', text: { body: 'Reply with a number to view a category, or type "search [item]" to find something specific.' } };
+}
+
+// Handle Menu Search
+async function handleMenuSearch(conversationId: string, content: string, supabase: any, restaurant: any) {
+    const query = content.trim();
+
+    if (query.length < 3) {
+        return { type: 'text', text: { body: 'Please enter at least 3 characters to search.' } };
+    }
+
+    const { data: items } = await supabase
+        .from('menu_items')
+        .select('id, name, description, price_cents')
+        .eq('restaurant_id', restaurant.id)
+        .eq('is_active', true)
+        .ilike('name', `%${query}%`)
+        .limit(10);
+
+    if (!items || items.length === 0) {
+        return { type: 'text', text: { body: `🔍 No items found for "${query}". Try browsing our menu categories instead.` } };
+    }
+
+    // Reset state to viewing item if only one found, or list them ??
+    // For now, let's list them as a pure text list with IDs isn't easy as we rely on category context usually.
+    // Instead, we can simulate a "Dynamic Category" called Search Results.
+
+    // Update context
+    await supabase
+        .from('whatsapp_conversations')
+        .update({
+            state: 'viewing_item',
+            context: { search_results: items, is_search: true }
+        })
+        .eq('id', conversationId);
+
+    let message = `🔍 Search Results for "${query}":\n\n`;
+    items.forEach((item: any, idx: number) => {
+        const price = (item.price_cents / 100).toFixed(2);
+        message += `${idx + 1}. ${item.name} - $${price}\n`;
+    });
+    message += '\nReply with item number to select.';
+
+    return { type: 'text', text: { body: message } };
 }
 
 // Handle category view
@@ -480,46 +558,306 @@ async function handleItemView(
 ) {
     // Parse item number
     const itemNumber = parseInt(content) - 1;
+    let selectedItem: any;
 
-    // Fetch items again
-    const { data: items } = await supabase
-        .from('menu_items')
-        .select('*')
-        .eq('category_id', context.category_id)
-        .eq('is_active', true)
-        .eq('show_in_whatsapp', true)
-        .order('name')
-        .limit(10);
+    if (context.is_search) {
+        const items = context.search_results;
+        if (!items || itemNumber < 0 || itemNumber >= items.length) {
+            return { type: 'text', text: { body: '❌ Invalid item number. Please try again.' } };
+        }
+        selectedItem = items[itemNumber];
 
-    if (!items || items.length === 0) {
-        return { type: 'text', text: { body: '❌ No items available.' } };
+        // Fetch full details for selected item including variants/addons/allergens
+        const { data: fullItem } = await supabase
+            .from('menu_items')
+            .select('*, menu_item_variants(id, name, price_adjustment_cents), menu_item_addons(id, name, price_cents)')
+            .eq('id', selectedItem.id)
+            .single();
+
+        if (fullItem) selectedItem = fullItem;
+
+    } else {
+        // Fetch items again to get the full list for index
+        const { data: items } = await supabase
+            .from('menu_items')
+            .select('*, menu_item_variants(id, name, price_adjustment_cents), menu_item_addons(id, name, price_cents)')
+            .eq('category_id', context.category_id)
+            .eq('is_active', true)
+            .eq('show_in_whatsapp', true)
+            .order('name')
+            .limit(10);
+
+        if (!items || items.length === 0) {
+            return { type: 'text', text: { body: '❌ No items available.' } };
+        }
+
+        if (itemNumber < 0 || itemNumber >= items.length) {
+            return { type: 'text', text: { body: '❌ Invalid item number. Please try again.' } };
+        }
+        selectedItem = items[itemNumber];
     }
 
-    if (itemNumber < 0 || itemNumber >= items.length) {
-        return { type: 'text', text: { body: '❌ Invalid item number. Please try again.' } };
+
+    // Check if item has variants
+    const variants = selectedItem.menu_item_variants || [];
+    if (variants.length > 0) {
+        // Go to selecting_variant
+        await supabase
+            .from('whatsapp_conversations')
+            .update({
+                state: 'selecting_variant',
+                context: {
+                    ...context,
+                    selected_item: selectedItem,
+                    variants: variants
+                }
+            })
+            .eq('id', conversationId);
+
+        let message = `🍽️ ${selectedItem.name}\nSelect Size/Variant:\n\n`;
+        variants.forEach((v: any, idx: number) => {
+            const adj = v.price_adjustment_cents > 0 ? ` (+ $${(v.price_adjustment_cents / 100).toFixed(2)})` : '';
+            message += `${idx + 1}. ${v.name}${adj}\n`;
+        });
+        return { type: 'text', text: { body: message } };
     }
 
-    const selectedItem = items[itemNumber];
-    const price = (selectedItem.price_cents / 100).toFixed(2);
+    // Check if item has addons (if no variants, or after variants)
+    // Actually if no variants, check addons immediately. 
+    // BUT consistent flow: Item -> (Variant?) -> (Addons?) -> (Instructions?) -> Quantity
+
+    const addons = selectedItem.menu_item_addons || [];
+    if (addons.length > 0) {
+        // Go to selecting_addons
+        await supabase
+            .from('whatsapp_conversations')
+            .update({
+                state: 'selecting_addons',
+                context: {
+                    ...context,
+                    selected_item: selectedItem,
+                    addons: addons,
+                    selected_addons: [] // Initialize empty
+                }
+            })
+            .eq('id', conversationId);
+
+        return await showAddonsMenu(selectedItem, addons, []);
+    }
+
+    // Default flow: Move to quantity
+    return await proceedToQuantity(conversationId, selectedItem, context, supabase);
+}
+
+// Helper to show addons menu
+function showAddonsMenu(item: any, addons: any[], selectedIds: string[]) {
+    let message = `🍽️ ${item.name}\nSelect Add-ons (Reply with number to toggle, or '0' when done):\n\n`;
+    addons.forEach((addon: any, idx: number) => {
+        const isSelected = selectedIds.includes(addon.id) ? '✅ ' : '';
+        message += `${isSelected}${idx + 1}. ${addon.name} (+$${(addon.price_cents / 100).toFixed(2)})\n`;
+    });
+    message += `\n0. Done / Continue`;
+    return { type: 'text', text: { body: message } };
+}
+
+// Helper to transition to Quantity state
+async function proceedToQuantity(conversationId: string, item: any, context: any, supabase: any) {
+    // Check for special instructions?
+    // Let's add that step before quantity
+
+    await supabase
+        .from('whatsapp_conversations')
+        .update({
+            state: 'adding_instructions',
+            context: {
+                ...context,
+                selected_item: item
+            }
+        })
+        .eq('id', conversationId);
+
+    const allergens = item.allergens && item.allergens.length > 0 ? `\n⚠️ Allergens: ${item.allergens.join(', ')}` : '';
+    const imageMsg = item.image_url ? ` 🖼️ ` : ''; // We can send image message separately if supported
+
+    let message = `🍽️ ${item.name}${imageMsg}\n`;
+    // Add variant/addons info to summary if exists
+    if (context.selected_variant) message += `Option: ${context.selected_variant.name}\n`;
+    if (context.selected_addons && context.selected_addons.length > 0) {
+        const addonNames = context.selected_addons.map((a: any) => a.name).join(', ');
+        message += `Add-ons: ${addonNames}\n`;
+    }
+
+    message += `${allergens}\n\nAny special instructions? (Type 'none' or 'skip')`;
+
+    // If item has image, we could theoretically return an image message here, but let's stick to text for stability first.
+    // If user wants image, we can try to send it.
+    if (item.image_url) {
+        return {
+            type: 'image',
+            image: { link: item.image_url },
+            caption: message
+        };
+    }
+
+    return { type: 'text', text: { body: message } };
+}
+
+// Handle variant selection
+async function handleVariantSelection(
+    conversationId: string,
+    content: string,
+    context: any,
+    supabase: any,
+    restaurant: any
+) {
+    const selection = parseInt(content);
+    const variants = context.variants || [];
+
+    if (isNaN(selection) || selection < 1 || selection > variants.length) {
+        return { type: 'text', text: { body: '❌ Invalid selection. Please choose a valid number.' } };
+    }
+
+    const selectedVariant = variants[selection - 1];
+
+    // Update context with selection
+    const updatedContext = {
+        ...context,
+        selected_variant: selectedVariant
+    };
+
+    // Check for addons next
+    const item = context.selected_item;
+    // We already have the item from context, but checking if we need to fetch addons?
+    // In handleItemView we fetched everything.
+    const addons = item.menu_item_addons || [];
+
+    if (addons.length > 0) {
+        // Go to selecting_addons
+        await supabase
+            .from('whatsapp_conversations')
+            .update({
+                state: 'selecting_addons',
+                context: {
+                    ...updatedContext,
+                    addons: addons,
+                    selected_addons: []
+                }
+            })
+            .eq('id', conversationId);
+
+        return await showAddonsMenu(item, addons, []);
+    }
+
+    // Otherwise go to quantity/instructions
+    return await proceedToQuantity(conversationId, item, updatedContext, supabase);
+}
+
+// Handle Add-on selection
+async function handleAddonSelection(
+    conversationId: string,
+    content: string,
+    context: any,
+    supabase: any,
+    restaurant: any
+) {
+    const input = content.trim();
+
+    // Check if done
+    if (input === '0' || input.toLowerCase() === 'done') {
+        return await proceedToQuantity(conversationId, context.selected_item, context, supabase);
+    }
+
+    const selection = parseInt(input);
+    const addons = context.addons || [];
+
+    if (isNaN(selection) || selection < 1 || selection > addons.length) {
+        return { type: 'text', text: { body: '❌ Invalid selection. Reply with number to toggle or 0 to finish.' } };
+    }
+
+    const selectedAddon = addons[selection - 1];
+
+    // Toggle addon
+    let currentSelected = context.selected_addons || [];
+    // Check if already selected by ID
+    const existingIdx = currentSelected.findIndex((a: any) => a.id === selectedAddon.id);
+
+    if (existingIdx >= 0) {
+        // Remove
+        currentSelected.splice(existingIdx, 1);
+    } else {
+        // Add
+        currentSelected.push(selectedAddon);
+    }
+
+    // Update context
+    await supabase
+        .from('whatsapp_conversations')
+        .update({
+            context: {
+                ...context,
+                selected_addons: currentSelected
+            }
+        })
+        .eq('id', conversationId);
+
+    // Show updated menu
+    const selectedIds = currentSelected.map((a: any) => a.id);
+    return await showAddonsMenu(context.selected_item, addons, selectedIds);
+}
+
+// Handle special instructions
+async function handleSpecialInstructions(
+    conversationId: string,
+    content: string,
+    context: any,
+    supabase: any,
+    restaurant: any
+) {
+    const input = content.trim();
+    let instructions = '';
+
+    if (input.toLowerCase() !== 'none' && input.toLowerCase() !== 'skip' && input.toLowerCase() !== 'no') {
+        instructions = input;
+    }
+
+    // Update context
+    const updatedContext = {
+        ...context,
+        special_instructions: instructions
+    };
+
+    // Move to quantity
+    const item = context.selected_item;
+    const price = (item.price_cents / 100).toFixed(2);
 
     // Update state to selecting_quantity
     await supabase
         .from('whatsapp_conversations')
         .update({
             state: 'selecting_quantity',
-            context: {
-                ...context,
-                selected_item: selectedItem
-            }
+            context: updatedContext
         })
         .eq('id', conversationId);
 
-    // Send item image if available
-    let message = `🍽️ ${selectedItem.name}\n💰 $${price}\n\n`;
-    if (selectedItem.description) {
-        message += `${selectedItem.description}\n\n`;
+    // Calculate total price with extras for display
+    let basePrice = item.price_cents;
+    if (updatedContext.selected_variant) basePrice += updatedContext.selected_variant.price_adjustment_cents;
+    if (updatedContext.selected_addons) {
+        updatedContext.selected_addons.forEach((a: any) => basePrice += a.price_cents);
     }
-    message += `How many would you like? (1-10)`;
+    const totalPrice = (basePrice / 100).toFixed(2);
+
+    let message = `🍽️ ${item.name}`;
+    if (updatedContext.selected_variant) message += ` (${updatedContext.selected_variant.name})`;
+    message += `\n💰 $${totalPrice} per item\n\n`;
+
+    if (updatedContext.selected_addons && updatedContext.selected_addons.length > 0) {
+        const addonNames = updatedContext.selected_addons.map((a: any) => a.name).join(', ');
+        message += `Add-ons: ${addonNames}\n`;
+    }
+    if (instructions) message += `Note: ${instructions}\n`;
+
+    message += `\nHow many would you like? (1-10)`;
 
     return {
         type: 'text',
@@ -562,20 +900,37 @@ async function handleQuantitySelection(
     // Check if item already in cart
     const existingIndex = cart.items.findIndex((i: any) => i.id === selectedItem.id);
 
-    if (existingIndex >= 0) {
+    // Note: We should probably only merge if variants/addons match. 
+    // But for now, simple ID check might be insufficient if we have variants.
+    // Let's just always add as new item if it has variants/addons to avoid complexity.
+    // Or check if same variant/addons.
+
+    // For MVP, if it has variants/addons, always add new.
+    const hasCustomization = context.selected_variant || (context.selected_addons && context.selected_addons.length > 0) || context.special_instructions;
+
+    if (existingIndex >= 0 && !hasCustomization) {
         // Update existing item quantity
         cart.items[existingIndex].quantity += quantity;
     } else {
         // Add new item
+        let price = selectedItem.price_cents;
+        if (context.selected_variant) price += context.selected_variant.price_adjustment_cents;
+        if (context.selected_addons) context.selected_addons.forEach((a: any) => price += a.price_cents);
+
         cart.items.push({
             id: selectedItem.id,
             name: selectedItem.name,
-            price: selectedItem.price_cents,
-            quantity: quantity
+            price: price,
+            quantity: quantity,
+            selected_variant: context.selected_variant || null,
+            selected_addons: context.selected_addons || [],
+            special_instructions: context.special_instructions || null
         });
     }
 
-    cart.total += selectedItem.price_cents * quantity;
+    cart.total += cart.items[cart.items.length - 1].price * quantity; // Re-calc total properly? 
+    // Re-calc cart total from scratch to be safe
+    cart.total = cart.items.reduce((sum: number, i: any) => sum + (i.price * i.quantity), 0);
 
     // Update cart and state
     await supabase
@@ -587,7 +942,7 @@ async function handleQuantitySelection(
         })
         .eq('id', conversationId);
 
-    const itemTotal = (selectedItem.price_cents * quantity / 100).toFixed(2);
+    const itemTotal = (cart.items[cart.items.length - 1].price * quantity / 100).toFixed(2);
     const cartTotal = (cart.total / 100).toFixed(2);
 
     return {
@@ -608,12 +963,12 @@ async function handleQuantitySelection(
     };
 }
 
-// Handle cart review
+// Handle Cart Review
 async function handleCartReview(conversationId: string, content: string, supabase: any, restaurant: any) {
     const input = content.toLowerCase().trim();
 
     // Handle "Add More" button
-    if (input.includes('add') || input === '➕ add more') {
+    if (input.includes('add') || input === '➕ add more' || input === 'menu') {
         await supabase
             .from('whatsapp_conversations')
             .update({ state: 'browsing_menu' })
@@ -792,83 +1147,6 @@ async function handleCartReview(conversationId: string, content: string, supabas
     return { type: 'text', text: { body: message } };
 }
 
-// Show order confirmation
-async function showOrderConfirmation(conversationId: string, supabase: any) {
-    const { data: conversation } = await supabase
-        .from('whatsapp_conversations')
-        .select('cart')
-        .eq('id', conversationId)
-        .single();
-
-    const cart = conversation.cart;
-
-    if (!cart || !cart.items || cart.items.length === 0) {
-        return { type: 'text', text: { body: '❌ Your cart is empty!' } };
-    }
-
-    let message = '📋 Order Summary:\n\n';
-    cart.items.forEach((item: any) => {
-        const itemTotal = (item.price * item.quantity / 100).toFixed(2);
-        message += `• ${item.name} x${item.quantity} - $${itemTotal}\n`;
-    });
-    message += `\n💰 Total: $${(cart.total / 100).toFixed(2)}\n\n`;
-    message += `Confirm your order?`;
-
-    return {
-        type: 'interactive',
-        interactive: {
-            type: 'button',
-            body: { text: message },
-            action: {
-                buttons: [
-                    { type: 'reply', reply: { id: 'confirm_yes', title: '✅ Confirm' } },
-                    { type: 'reply', reply: { id: 'confirm_no', title: '❌ Cancel' } }
-                ]
-            }
-        }
-    };
-}
-
-// Handle order confirmation
-async function handleOrderConfirmation(conversationId: string, content: string, supabase: any, restaurant: any) {
-    const input = content.toLowerCase();
-
-    if (input.includes('confirm') || input === '✅ confirm') {
-        // Proceed to delivery/pickup selection
-        await supabase
-            .from('whatsapp_conversations')
-            .update({ state: 'checkout_address' })
-            .eq('id', conversationId);
-
-        return {
-            type: 'interactive',
-            interactive: {
-                type: 'button',
-                body: { text: '📍 Delivery or Pickup?' },
-                action: {
-                    buttons: [
-                        { type: 'reply', reply: { id: 'delivery', title: '🚗 Delivery' } },
-                        { type: 'reply', reply: { id: 'pickup', title: '🏪 Pickup' } }
-                    ]
-                }
-            }
-        };
-    }
-
-    if (input.includes('cancel') || input === '❌ cancel') {
-        await supabase
-            .from('whatsapp_conversations')
-            .update({ state: 'reviewing_cart' })
-            .eq('id', conversationId);
-
-        return {
-            type: 'text',
-            text: { body: '❌ Order cancelled.\n\nType "cart" to review or "menu" to add more items.' }
-        };
-    }
-
-    return { type: 'text', text: { body: 'Please confirm or cancel your order.' } };
-}
 
 // Handle checkout address
 async function handleCheckoutAddress(conversationId: string, content: string, supabase: any, restaurant: any) {
@@ -951,6 +1229,314 @@ async function handleOrderTracking(conversationId: string, content: string, supa
     return { type: 'text', text: { body: message } };
 }
 
+// Handle quantity selection
+
+
+// Handle Cart Review
+async function handleCartReview(conversationId: string, content: string, supabase: any, restaurant: any) {
+    const input = content.toLowerCase().trim();
+
+    // Handle "Add More" button
+    if (input.includes('add') || input === '➕ add more' || input === 'menu') {
+        await supabase
+            .from('whatsapp_conversations')
+            .update({ state: 'browsing_menu' })
+            .eq('id', conversationId);
+
+        return await handleMenuBrowsing(conversationId, 'menu', supabase, restaurant);
+    }
+
+    // Handle "Checkout" button
+    if (input.includes('checkout') || input === '🛒 checkout') {
+        await supabase
+            .from('whatsapp_conversations')
+            .update({ state: 'confirming_order' })
+            .eq('id', conversationId);
+
+        return {
+            type: 'interactive',
+            interactive: {
+                type: 'button',
+                body: { text: 'Are you sure you want to place this order?' },
+                action: {
+                    buttons: [
+                        { type: 'reply', reply: { id: 'confirm', title: '✅ Confirm' } },
+                        { type: 'reply', reply: { id: 'cancel', title: '❌ Cancel' } }
+                    ]
+                }
+            }
+        };
+    }
+
+    // Clear cart
+    if (input.includes('clear')) {
+        await supabase
+            .from('whatsapp_conversations')
+            .update({ cart: { items: [], total: 0 } })
+            .eq('id', conversationId);
+
+        return {
+            type: 'text',
+            text: { body: '🗑️ Cart cleared!\n\nType "menu" to start ordering.' }
+        };
+    }
+
+    // Remove item: "remove 2"
+    if (input.startsWith('remove ')) {
+        const itemNum = parseInt(input.replace('remove ', '')) - 1;
+
+        const { data: conversation } = await supabase
+            .from('whatsapp_conversations')
+            .select('cart')
+            .eq('id', conversationId)
+            .single();
+
+        const cart = conversation.cart || { items: [], total: 0 };
+
+        if (itemNum >= 0 && itemNum < cart.items.length) {
+            const removedItem = cart.items.splice(itemNum, 1)[0];
+            cart.total = cart.items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
+
+            await supabase
+                .from('whatsapp_conversations')
+                .update({ cart: cart })
+                .eq('id', conversationId);
+
+            return { type: 'text', text: { body: `🗑️ Removed ${removedItem.name}.` } };
+        }
+    }
+
+    const { data: conversation } = await supabase
+        .from('whatsapp_conversations')
+        .select('cart, state')
+        .eq('id', conversationId)
+        .single();
+
+    const cart = conversation.cart || { items: [], total: 0 };
+
+    if (!cart.items || cart.items.length === 0) {
+        return { type: 'text', text: { body: 'Your cart is empty! checkout our menu by typing "menu".' } };
+    }
+
+    let message = '🛒 **Your Cart**\n\n';
+
+    cart.items.forEach((item: any, idx: number) => {
+        const itemTotal = (item.price * item.quantity / 100).toFixed(2);
+        message += `${idx + 1}. ${item.name} x${item.quantity} - $${itemTotal}\n`;
+
+        // Show details
+        if (item.selected_variant) message += `   + ${item.selected_variant.name}\n`;
+        if (item.selected_addons && item.selected_addons.length > 0) {
+            const addons = item.selected_addons.map((a: any) => a.name).join(', ');
+            message += `   + ${addons}\n`;
+        }
+        if (item.special_instructions) message += `   📝 "${item.special_instructions}"\n`;
+    });
+
+    const total = (cart.total / 100).toFixed(2);
+    message += `\n**Total: $${total}**\n\n`;
+    message += 'Reply "checkout" to place order, or "menu" to add more items.';
+
+    // Update state if not already
+    if (conversation.state !== 'reviewing_cart') {
+        await supabase
+            .from('whatsapp_conversations')
+            .update({ state: 'reviewing_cart' })
+            .eq('id', conversationId);
+    }
+
+    return {
+        type: 'interactive',
+        interactive: {
+            type: 'button',
+            body: { text: message },
+            action: {
+                buttons: [
+                    { type: 'reply', reply: { id: 'checkout', title: '✅ Checkout' } },
+                    { type: 'reply', reply: { id: 'menu', title: '➕ Add More' } },
+                    { type: 'reply', reply: { id: 'clear_cart', title: '🗑️ Clear Cart' } }
+                ]
+            }
+        }
+    };
+}
+
+// Handle Order Confirmation (Step before address)
+async function handleOrderConfirmation(conversationId: string, content: string, supabase: any, restaurant: any) {
+    const input = content.toLowerCase();
+
+    if (input === 'clear_cart' || input === 'clear') {
+        await supabase
+            .from('whatsapp_conversations')
+            .update({
+                cart: { items: [], total: 0 },
+                state: 'browsing_menu'
+            })
+            .eq('id', conversationId);
+        return { type: 'text', text: { body: '🗑️ Cart cleared. Type "menu" to start over.' } };
+    }
+
+    if (input === 'menu' || input === 'add more') {
+        // Return to menu
+        return await handleMenuBrowsing(conversationId, 'menu', supabase, restaurant);
+    }
+
+    if (input === 'checkout' || input === 'confirm') {
+        // Proceed to address/table check
+        return await handleCheckoutAddress(conversationId, '', supabase, restaurant);
+    }
+
+    return { type: 'text', text: { body: 'Please select an option: Checkout, Add More, or Clear Cart.' } };
+}
+
+// Handle User History
+async function handleOrderHistory(conversationId: string, content: string, supabase: any, restaurant: any) {
+    // 1. Get customer ID from conversation
+    const { data: conversation } = await supabase
+        .from('whatsapp_conversations')
+        .select('whatsapp_customer_id')
+        .eq('id', conversationId)
+        .single();
+
+    if (!conversation) return { type: 'text', text: { body: '❌ Error fetching profile.' } };
+
+    // 2. Find all conversations for this customer
+    const { data: conversations } = await supabase
+        .from('whatsapp_conversations')
+        .select('id')
+        .eq('whatsapp_customer_id', conversation.whatsapp_customer_id);
+
+    const conversationIds = conversations.map((c: any) => c.id);
+
+    // 3. Find orders linked to these conversations
+    const { data: whatsappOrders } = await supabase
+        .from('whatsapp_orders')
+        .select('order_id')
+        .in('conversation_id', conversationIds);
+
+    const orderIds = whatsappOrders.map((o: any) => o.order_id);
+
+    if (orderIds.length === 0) {
+        return { type: 'text', text: { body: '❌ No previous orders found.' } };
+    }
+
+    // 4. Fetch last 5 orders
+    const { data: orders } = await supabase
+        .from('orders')
+        .select('id, total_cents, created_at, status, order_items(quantity, menu_items(name))')
+        .in('id', orderIds)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+    // 5. Display history
+    await supabase
+        .from('whatsapp_conversations')
+        .update({
+            state: 'viewing_history',
+            context: { history_orders: orders }
+        })
+        .eq('id', conversationId);
+
+    let message = '📜 **Order History**\n\n';
+    orders.forEach((order: any, idx: number) => {
+        const date = new Date(order.created_at).toLocaleDateString();
+        const total = (order.total_cents / 100).toFixed(2);
+        const description = order.order_items.map((i: any) => `${i.quantity}x ${i.menu_items?.name}`).join(', ');
+
+        message += `${idx + 1}. ${date} - $${total} (${order.status})\n`;
+        message += `   ${description.substring(0, 50)}${description.length > 50 ? '...' : ''}\n\n`;
+    });
+
+    message += 'Reply with order number to reorder.';
+
+    return { type: 'text', text: { body: message } };
+}
+
+// Handle reorder confirmation
+async function handleReorderConfirmation(
+    conversationId: string,
+    content: string,
+    context: any,
+    supabase: any,
+    restaurant: any
+) {
+    const selection = parseInt(content);
+    const orders = context.history_orders || [];
+
+    // Check if we are selecting an order
+    if (context.reorder_selected_id) {
+        if (content.toLowerCase() === 'yes' || content.toLowerCase() === 'confirm' || content === '✅ yes') {
+            // Execute Reorder
+            const orderId = context.reorder_selected_id;
+
+            const { data: orderItems } = await supabase
+                .from('order_items')
+                .select('menu_item_id, quantity, unit_price_cents, menu_items(name), variant_name, addons, special_instructions')
+                .eq('order_id', orderId);
+
+            // Construct cart items
+            const newItems = orderItems.map((item: any) => ({
+                id: item.menu_item_id,
+                name: item.menu_items?.name,
+                price: item.unit_price_cents,
+                quantity: item.quantity,
+                selected_variant: item.variant_name ? { name: item.variant_name, price_adjustment_cents: 0 } : null,
+                selected_addons: item.addons || [],
+                special_instructions: item.special_instructions
+            }));
+
+            // Calculate total
+            const total = newItems.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
+
+            // Update Cart
+            await supabase
+                .from('whatsapp_conversations')
+                .update({
+                    state: 'reviewing_cart',
+                    cart: { items: newItems, total: total },
+                    context: {}
+                })
+                .eq('id', conversationId);
+
+            return await handleCartReview(conversationId, 'cart', supabase, restaurant);
+        } else {
+            await supabase
+                .from('whatsapp_conversations')
+                .update({ state: 'browsing_menu', context: {} })
+                .eq('id', conversationId);
+            return { type: 'text', text: { body: 'Reorder cancelled. Type "menu" to browse.' } };
+        }
+    }
+
+    if (isNaN(selection) || selection < 1 || selection > orders.length) {
+        return { type: 'text', text: { body: '❌ Invalid selection. Please choose an order number.' } };
+    }
+
+    const selectedOrder = orders[selection - 1];
+
+    await supabase
+        .from('whatsapp_conversations')
+        .update({
+            state: 'confirming_reorder',
+            context: { ...context, reorder_selected_id: selectedOrder.id }
+        })
+        .eq('id', conversationId);
+
+    return {
+        type: 'interactive',
+        interactive: {
+            type: 'button',
+            body: { text: `Reorder items from ${new Date(selectedOrder.created_at).toLocaleDateString()}?\nTotal: $${(selectedOrder.total_cents / 100).toFixed(2)}` },
+            action: {
+                buttons: [
+                    { type: 'reply', reply: { id: 'yes', title: '✅ Yes' } },
+                    { type: 'reply', reply: { id: 'no', title: '❌ No' } }
+                ]
+            }
+        }
+    };
+}
+
 // Create order from cart
 async function createOrder(
     conversationId: string,
@@ -993,7 +1579,8 @@ async function createOrder(
             total_cents: cart.total,
             table_label: tableLabel,
             table_number: orderTableNumber,
-            placed_at: new Date().toISOString()
+            placed_at: new Date().toISOString(),
+            // Add estimated time default? Or null.
         })
         .select()
         .single();
@@ -1011,7 +1598,11 @@ async function createOrder(
                 order_id: order.id,
                 menu_item_id: item.id,
                 quantity: item.quantity,
-                unit_price_cents: item.price
+                unit_price_cents: item.price,
+                // Add customization fields
+                variant_name: item.selected_variant?.name || null,
+                addons: item.selected_addons || [],
+                special_instructions: item.special_instructions || null
             });
     }
 
