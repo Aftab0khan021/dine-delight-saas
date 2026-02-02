@@ -48,6 +48,39 @@ serve(async (req) => {
     return json({ error: "Invalid token" }, { status: 400, headers: { "access-control-allow-origin": "*" } });
   }
 
+  // --- TURNSTILE VERIFICATION START ---
+  const turnstileToken = payload?.turnstileToken;
+  const TURNSTILE_SECRET_KEY = Deno.env.get("TURNSTILE_SECRET_KEY");
+
+  // Enforce Turnstile
+  if (!turnstileToken) {
+    return json({ error: "Security check failed. Please refresh." }, { status: 400, headers: { "access-control-allow-origin": "*" } });
+  }
+
+  if (TURNSTILE_SECRET_KEY) {
+    const formData = new FormData();
+    formData.append('secret', TURNSTILE_SECRET_KEY);
+    formData.append('response', turnstileToken);
+    formData.append('remoteip', req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '');
+
+    try {
+      const result = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+        method: 'POST',
+        body: formData,
+      });
+      const outcome = await result.json();
+      if (!outcome.success) {
+        console.error('Turnstile verification failed', outcome);
+        return json({ error: "Security verification failed" }, { status: 403, headers: { "access-control-allow-origin": "*" } });
+      }
+    } catch (err) {
+      console.error('Turnstile error', err);
+      // Fail open or closed? Closed for security.
+      return json({ error: "Security check error" }, { status: 500, headers: { "access-control-allow-origin": "*" } });
+    }
+  }
+  // --- TURNSTILE VERIFICATION END ---
+
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });

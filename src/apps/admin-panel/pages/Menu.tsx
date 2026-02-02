@@ -544,14 +544,6 @@ function CategorySheet({ open, onOpenChange, data, onSave, onDelete }: any) {
             <Button type="submit">Save Changes</Button>
           </SheetFooter>
         </form>
-
-        {/* Variants & Add-ons */}
-        {data && restaurantId && (
-          <div className="space-y-4 mt-6 pt-6 border-t">
-            <VariantEditor menuItemId={data.id} restaurantId={restaurantId} />
-            <AddonEditor menuItemId={data.id} restaurantId={restaurantId} />
-          </div>
-        )}
       </SheetContent>
     </Sheet>
   );

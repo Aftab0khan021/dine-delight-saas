@@ -33,22 +33,26 @@ function formatMoney(cents: number, currency: string) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
 }
 
+import { Turnstile } from "@/components/security/Turnstile";
+
 export default function TrackOrder() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
   const { toast } = useToast();
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Changed default to false, we control it manually or via Turnstile
+  const [turnstileToken, setTurnstileToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [order, setOrder] = useState<OrderDetails | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
 
-  // 1. Initial Fetch (Secure)
-  const fetchOrder = async () => {
-    if (!token) return;
+  // 1. Fetch Order (Secure)
+  const fetchOrder = async (tToken: string) => {
+    if (!token || !tToken) return;
+    setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("order-lookup", {
-        body: { token }
+        body: { token, turnstileToken: tToken }
       });
 
       if (error) throw error;
@@ -68,17 +72,22 @@ export default function TrackOrder() {
   useEffect(() => {
     if (!token) {
       setError("No order token provided.");
-      setLoading(false);
       return;
     }
+    // We wait for Turnstile token before fetching
+  }, [token]);
 
-    // Load initial data
-    fetchOrder();
+  // Handle Turnstile Success
+  useEffect(() => {
+    if (turnstileToken && token && !order) {
+      fetchOrder(turnstileToken);
+    }
+  }, [turnstileToken, token, order]);
 
-    // 2. Realtime Subscription (The Fix)
-    // We listen for any UPDATE to the 'orders' table.
-    // Note: We filter by the specific Order ID once we have it, 
-    // or we just re-fetch whenever ANY order changes (simplest for now).
+  // Realtime Subscription
+  useEffect(() => {
+    if (!token || !order?.id) return;
+
     const channel = supabase
       .channel('public-order-tracking')
       .on(
@@ -87,14 +96,14 @@ export default function TrackOrder() {
           event: 'UPDATE',
           schema: 'public',
           table: 'orders',
-          // Performance Optimization: Only listen for THIS order if we have the ID
-          filter: order?.id ? `id=eq.${order.id}` : undefined
+          filter: `id=eq.${order.id}`
         },
         (payload) => {
-          // When an update comes in, re-fetch the fresh data securely
-          fetchOrder();
+          // When update comes, re-fetch. 
+          // Note: We reuse the existing turnstile token. 
+          // If it expired, we might need a new one, but for now reuse.
+          if (turnstileToken) fetchOrder(turnstileToken);
 
-          // Optional: Show a toast notification
           if (payload.new && (payload.new as any).status !== (payload.old as any).status) {
             const newStatus = (payload.new as any).status;
             if (newStatus === 'in_progress') toast({ title: "Order Update", description: "Your food is being prepared!" });
@@ -104,13 +113,29 @@ export default function TrackOrder() {
       )
       .subscribe();
 
-    // Cleanup subscription on unmount
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [token, order?.id]); // Re-subscribe if order ID loads (to tighten the filter)
+  }, [token, order?.id, turnstileToken]);
 
   if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>;
+  if (error) return <div className="h-screen flex flex-col items-center justify-center gap-4 text-red-500"><p>{error}</p><Button asChild variant="outline"><Link to="/">Return Home</Link></Button></div>;
+
+  // Show Turnstile if not loaded yet
+  if (!order) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center gap-4">
+        <div className="text-center space-y-2">
+          <h2 className="text-lg font-semibold">Verifying secure connection...</h2>
+          <p className="text-sm text-gray-500">Please complete the challenge to view your order.</p>
+        </div>
+        <Turnstile
+          onSuccess={setTurnstileToken}
+          className="scale-90 sm:scale-100" // prevent overflow on small screens?
+        />
+      </div>
+    );
+  }
   if (error) return <div className="h-screen flex flex-col items-center justify-center gap-4 text-red-500"><p>{error}</p><Button asChild variant="outline"><Link to="/">Return Home</Link></Button></div>;
   if (!order) return null;
 
