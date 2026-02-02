@@ -6,11 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { Turnstile } from "@/components/security/Turnstile";
 
 export default function SuperAdminAuth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -90,7 +92,14 @@ export default function SuperAdminAuth() {
                 required
               />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
+
+            <Turnstile
+              onSuccess={setTurnstileToken}
+              action="superadmin_login"
+              className="flex justify-center py-2"
+            />
+
+            <Button type="submit" className="w-full" disabled={loading || !turnstileToken}>
               {loading ? "Signing in..." : "Sign In"}
             </Button>
           </form>

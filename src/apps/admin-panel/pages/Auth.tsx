@@ -7,12 +7,14 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { Turnstile } from "@/components/security/Turnstile";
 
 export default function AdminAuth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -107,7 +109,7 @@ export default function AdminAuth() {
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
             </TabsList>
-            
+
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
@@ -130,12 +132,19 @@ export default function AdminAuth() {
                     required
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
+
+                <Turnstile
+                  onSuccess={setTurnstileToken}
+                  action="login"
+                  className="flex justify-center py-2"
+                />
+
+                <Button type="submit" className="w-full" disabled={loading || !turnstileToken}>
                   {loading ? "Signing in..." : "Sign In"}
                 </Button>
               </form>
             </TabsContent>
-            
+
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-2">
@@ -169,7 +178,14 @@ export default function AdminAuth() {
                     minLength={6}
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
+
+                <Turnstile
+                  onSuccess={setTurnstileToken}
+                  action="signup"
+                  className="flex justify-center py-2"
+                />
+
+                <Button type="submit" className="w-full" disabled={loading || !turnstileToken}>
                   {loading ? "Creating account..." : "Create Account"}
                 </Button>
               </form>
