@@ -13,16 +13,28 @@ serve(async (req) => {
     }
 
     try {
-        const { token } = await req.json() // Remove client-provided IP
-        const secretKey = Deno.env.get('TURNSTILE_SECRET_KEY')
+        const { token } = await req.json()
+
+        // Detect environment based on Origin or Referer header
+        const origin = req.headers.get('origin') || req.headers.get('referer') || ''
+        const isProduction = origin.includes('yourdomain.com') // Replace with your actual production domain
+
+        // Use environment-specific secret key
+        // For preview/development: use testing key
+        // For production: use real secret key
+        const secretKey = isProduction
+            ? Deno.env.get('TURNSTILE_SECRET_KEY_PROD')
+            : Deno.env.get('TURNSTILE_SECRET_KEY_DEV') || '1x0000000000000000000000000000000AA'
 
         if (!secretKey) {
-            console.error('Missing TURNSTILE_SECRET_KEY')
+            console.error('Missing Turnstile secret key for environment:', { isProduction, origin })
             return new Response(
                 JSON.stringify({ error: 'Server configuration error' }),
                 { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }
+
+        console.log('Turnstile verification:', { isProduction, origin: origin.substring(0, 50) })
 
         if (!token) {
             return new Response(
