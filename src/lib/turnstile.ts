@@ -65,8 +65,8 @@ declare global {
                     appearance?: 'always' | 'execute' | 'interaction-only';
                 }
             ) => string;
-            reset: (widgetId: string) => void;
-            remove: (widgetId: string) => void;
+            reset: (widgetId?: string) => void;
+            remove: (widgetId?: string) => void;
             getResponse: (widgetId: string) => string | undefined;
         };
         onloadTurnstileCallback?: () => void;
