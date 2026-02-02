@@ -20,6 +20,7 @@ import AdminOrders from "./apps/admin-panel/pages/Orders";
 import AdminMenu from "./apps/admin-panel/pages/Menu";
 import AdminQrMenu from "./apps/admin-panel/pages/QrMenu";
 import AdminStaff from "./apps/admin-panel/pages/Staff";
+import AdminStaffCategories from "./apps/admin-panel/pages/StaffCategories";
 import AdminBranding from "./apps/admin-panel/pages/Branding";
 import AdminBilling from "./apps/admin-panel/pages/Billing";
 import AdminCoupons from "./apps/admin-panel/pages/Coupons";
@@ -69,6 +70,7 @@ const App = () => (
             {/* Backwards compatible */}
             <Route path="qr-menu" element={<Navigate to="/admin/qr" replace />} />
             <Route path="staff" element={<AdminStaff />} />
+            <Route path="staff-categories" element={<AdminStaffCategories />} />
             <Route path="branding" element={<AdminBranding />} />
             <Route path="billing" element={<AdminBilling />} />
             <Route path="coupons" element={<AdminCoupons />} />
