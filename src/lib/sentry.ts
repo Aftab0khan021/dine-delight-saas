@@ -19,6 +19,12 @@ export function initSentry() {
         return;
     }
 
+    // IMPORTANT: Only run Sentry in production to avoid exhausting free-tier quota
+    if (environment !== 'production') {
+        console.info(`Sentry disabled in ${environment} mode. Set NODE_ENV=production to enable.`);
+        return;
+    }
+
     Sentry.init({
         dsn,
         environment,
@@ -27,7 +33,7 @@ export function initSentry() {
         sampleRate: 1.0,
 
         // Performance Monitoring
-        tracesSampleRate: environment === "production" ? 0.1 : 1.0, // 10% in prod, 100% in dev
+        tracesSampleRate: 0.1, // 10% in production
 
         // Session Replay (optional - captures user sessions for debugging)
         replaysSessionSampleRate: 0.1, // 10% of sessions

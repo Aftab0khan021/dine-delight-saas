@@ -25,7 +25,29 @@ serve(async (req) => {
       auth: { persistSession: false },
     });
 
-    // 1. Get authenticated user from JWT (already verified by Supabase if verify_jwt = true)
+    // 0. IP-based Rate Limiting (Prevent Anonymous Spam)
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
+
+    if (clientIp !== 'unknown') {
+      const { count: ipInvites } = await supabase
+        .from("staff_invites")
+        .select("*", { count: "exact", head: true })
+        .eq("ip_address", clientIp)
+        .gte("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString()); // Last hour
+
+      if (ipInvites !== null && ipInvites >= 5) {
+        console.warn(`IP rate limit exceeded: ${clientIp}`);
+        return new Response(
+          JSON.stringify({ error: "Too many requests from this IP. Please try again later." }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 429,
+          }
+        );
+      }
+    }
+
+    // 1. Get authenticated user from JWT (Manual verification for security)
     // When verify_jwt is enabled, Supabase injects the user info into the request
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("Missing Authorization header");

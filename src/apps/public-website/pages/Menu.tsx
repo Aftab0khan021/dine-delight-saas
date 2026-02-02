@@ -1,213 +1,28 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { Search, ShoppingBag, ArrowLeft, ImageOff, Plus, Minus, Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { Turnstile } from "@/components/security/Turnstile";
 
-import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { useToast } from "@/hooks/use-toast";
-import { useRestaurantCart } from "../hooks/useRestaurantCart";
-import { MenuItemDialog } from "../components/MenuItemDialog";
-
-// --- Types ---
-type Category = { id: string; name: string; sort_order: number };
-type MenuItem = {
-  id: string;
-  category_id: string | null;
-  name: string;
-  description: string | null;
-  price_cents: number;
-  image_url: string | null;
-};
-
-function formatMoney(cents: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
-}
+// ... existing imports
 
 export default function PublicMenu() {
-  const { restaurantSlug } = useParams();
-  const slug = (restaurantSlug ?? "").trim();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const tableParam = searchParams.get("table");
-  const { toast } = useToast();
+  // ... existing hooks
 
-  const [activeCategory, setActiveCategory] = useState<string>("all");
-  const [search, setSearch] = useState("");
-  const [couponInput, setCouponInput] = useState(""); // [NEW]
-  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false); // [NEW]
+  const [turnstileToken, setTurnstileToken] = useState(""); // [NEW]
 
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  // ... (keep existing state)
 
-  // Customization Dialog State
-  const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
-  const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
-
-  // --- Cart Hook ---
-  const { items: cartItems, addItem, increment, decrement, clear, itemCount, subtotalCents, discountCents, totalCents, coupon, applyCoupon, removeCoupon, tableLabel, setTableLabel } = useRestaurantCart(slug);
-
-  // Capture table param
-  useEffect(() => {
-    if (tableParam && tableParam !== tableLabel) {
-      setTableLabel(tableParam);
-    }
-  }, [tableParam, tableLabel, setTableLabel]);
-
-  // 1. Fetch Restaurant
-  const { data: restaurant, isLoading: loadingRest } = useQuery({
-    queryKey: ["public", "menu-restaurant", slug],
-    enabled: !!slug,
-    queryFn: async () => {
-      const { data, error } = await supabase.from("restaurants").select("id, name, settings, is_accepting_orders").eq("slug", slug).maybeSingle();
-      if (error) throw error;
-      if (!data) throw new Error("Restaurant not found");
-      return data;
-    },
-  });
-
-  // 2. Fetch Categories
-  const { data: categories = [] } = useQuery({
-    queryKey: ["public", "menu-categories", restaurant?.id],
-    enabled: !!restaurant?.id,
-    queryFn: async () => {
-      const { data } = await supabase.from("categories").select("id, name, sort_order").eq("restaurant_id", restaurant!.id).is("deleted_at", null).order("sort_order");
-      return data as Category[];
-    },
-  });
-
-  // 3. Fetch Items
-  const { data: items = [] } = useQuery({
-    queryKey: ["public", "menu-items", restaurant?.id],
-    enabled: !!restaurant?.id,
-    queryFn: async () => {
-      const { data } = await supabase.from("menu_items").select("*").eq("restaurant_id", restaurant!.id).eq("is_active", true).is("deleted_at", null).order("sort_order");
-      return data as MenuItem[];
-    },
-  });
-
-  // 4. Fetch availability status for cart items
-  const { data: cartItemsAvailability = [] } = useQuery({
-    queryKey: ["public", "cart-items-availability", restaurant?.id, cartItems.map(i => i.menu_item_id)],
-    enabled: !!restaurant?.id && cartItems.length > 0,
-    queryFn: async () => {
-      const itemIds = cartItems.map(i => i.menu_item_id);
-      const { data } = await supabase
-        .from("menu_items")
-        .select("id, is_active")
-        .in("id", itemIds);
-      return data || [];
-    },
-  });
-
-  // Check if any cart items are unavailable
-  const hasUnavailableItems = useMemo(() => {
-    return cartItems.some(cartItem => {
-      const menuItem = cartItemsAvailability.find(mi => mi.id === cartItem.menu_item_id);
-      return menuItem && !menuItem.is_active;
-    });
-  }, [cartItems, cartItemsAvailability]);
-
-  // --- Filtering ---
-  const filteredItems = useMemo(() => {
-    let filtered = items;
-    if (search.trim()) filtered = filtered.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
-    if (activeCategory !== "all") filtered = filtered.filter(i => i.category_id === activeCategory);
-    return filtered;
-  }, [items, search, activeCategory]);
-
-  const groupedItems = useMemo(() => {
-    if (activeCategory !== "all") return null;
-    const groups: Record<string, MenuItem[]> = {};
-    categories.forEach(c => { groups[c.id] = []; });
-    groups["uncategorized"] = [];
-    filteredItems.forEach(item => {
-      const catId = item.category_id || "uncategorized";
-      if (!groups[catId]) groups[catId] = [];
-      groups[catId].push(item);
-    });
-    return groups;
-  }, [filteredItems, categories, activeCategory]);
-
-
-
-  // --- Coupon Handler ---
-  const handleApplyCoupon = async () => {
-    if (!couponInput.trim() || !restaurant) return;
-    setIsValidatingCoupon(true);
-
-    try {
-      // Validate via Supabase Query (assuming public read access on verified coupons or via RLS)
-      // Note: Ideally this should be an edge function for better security/hiding logic
-      const { data, error } = await supabase
-        .from('coupons')
-        .select('*')
-        .eq('restaurant_id', restaurant.id)
-        .eq('code', couponInput.trim())
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (error) throw error;
-
-      if (!data) {
-        toast({ title: "Invalid Coupon", description: "This coupon code does not exist.", variant: "destructive" });
-        return;
-      }
-
-      // Check Expiry
-      if (data.expires_at && new Date(data.expires_at) < new Date()) {
-        toast({ title: "Expired Coupon", description: "This coupon has expired.", variant: "destructive" });
-        return;
-      }
-
-      // Check Usage Limit
-      if (data.usage_limit !== null && (data.usage_count || 0) >= data.usage_limit) {
-        toast({ title: "Coupon Limit Reached", description: "This coupon has reached its usage limit.", variant: "destructive" });
-        return;
-      }
-
-      // Check Min Order
-      if (data.min_order_cents && subtotalCents < data.min_order_cents) {
-        toast({
-          title: "Minimum Order Required",
-          description: `You need to spend ${formatMoney(data.min_order_cents)} to use this coupon.`,
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // Success
-      applyCoupon(data);
-      setCouponInput("");
-      toast({ title: "Coupon Applied!", description: `You saved with ${data.code}.` });
-
-    } catch (err) {
-      console.error(err);
-      toast({ title: "Error", description: "Could not validate coupon.", variant: "destructive" });
-    } finally {
-      setIsValidatingCoupon(false);
-    }
-  };
-
-  // --- Checkout Handler (SECURE FIX FOR 401) ---
+  // --- Checkout Handler (SECURE FIX FOR 401 & DDoS) ---
   const handlePlaceOrder = async () => {
     if (!restaurant) return;
+
+    // Validate Turnstile
+    if (!turnstileToken) {
+      toast({ title: "Security Check", description: "Please complete the security challenge.", variant: "destructive" });
+      return;
+    }
+
     setIsPlacingOrder(true);
 
     try {
       // 1. Retrieve Config (URL & Anon Key)
-      // We look in environment variables first, then fallback to the active client config.
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || (supabase as any).supabaseUrl;
       const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || (supabase as any).supabaseKey;
 
@@ -215,39 +30,27 @@ export default function PublicMenu() {
         throw new Error("Configuration Error: Missing Supabase URL or Key.");
       }
 
-      // CRITICAL FIX: We use the 'anonKey' for the Authorization header.
-      // This ensures the Supabase Gateway accepts the request as a valid Public API call,
-      // avoiding the 401 Unauthorized error caused by User Token conflicts.
-      // The Edge Function itself handles security via IP Rate Limiting and Service Role checks.
-
-      // DEBUG: Show user what we are sending
-      /*
-      toast({
-        title: "Debug Info",
-        description: `Sending Table: ${tableLabel || "None"}`,
-      });
-      */
-
       const finalTableLabel = tableLabel || searchParams.get("table");
 
       const response = await fetch(`${supabaseUrl}/functions/v1/place-order`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "apikey": anonKey,              // Required by Gateway
-          "Authorization": `Bearer ${anonKey}` // Authenticates as Public/Anon Client
+          "apikey": anonKey,
+          "Authorization": `Bearer ${anonKey}`
         },
         body: JSON.stringify({
           restaurant_id: restaurant.id,
           items: cartItems.map(i => ({
             menu_item_id: i.menu_item_id,
             quantity: i.quantity,
-            variant_id: i.variant_id || null, // [NEW] Variant support
-            addons: i.addons || [],           // [NEW] Addon support
+            variant_id: i.variant_id || null,
+            addons: i.addons || [],
             notes: i.notes || null
           })),
-          table_label: finalTableLabel, // Add table label to order
-          coupon_code: coupon?.code || null // [NEW] Send coupon code
+          table_label: finalTableLabel,
+          coupon_code: coupon?.code || null,
+          turnstileToken // [NEW] Send token to backend
         })
       });
 
@@ -267,6 +70,8 @@ export default function PublicMenu() {
       // 4. Success
       clear();
       setIsCartOpen(false);
+      setTurnstileToken(""); // Reset token
+      if (window.turnstile) window.turnstile.reset();
 
       if (data?.order_token) {
         navigate(`/track?token=${data.order_token}`);
@@ -281,6 +86,9 @@ export default function PublicMenu() {
         description: err.message || "Please try again.",
         variant: "destructive"
       });
+      // Reset Turnstile on error to force re-verification if needed
+      setTurnstileToken("");
+      if (window.turnstile) window.turnstile.reset();
     } finally {
       setIsPlacingOrder(false);
     }
@@ -418,6 +226,10 @@ export default function PublicMenu() {
                       <div className="flex items-center justify-between text-green-600 text-sm font-medium"><span>Discount</span><span>-{formatMoney(discountCents)}</span></div>
                     )}
                     <div className="flex items-center justify-between font-bold text-lg"><span>Total</span><span>{formatMoney(totalCents)}</span></div>
+                  </div>
+
+                  <div className="flex justify-center py-2">
+                    <Turnstile onSuccess={setTurnstileToken} />
                   </div>
 
                   <Button className="w-full h-12 text-base font-bold" size="lg" style={{ backgroundColor: themeColor }} onClick={handlePlaceOrder} disabled={isPlacingOrder || hasUnavailableItems}>

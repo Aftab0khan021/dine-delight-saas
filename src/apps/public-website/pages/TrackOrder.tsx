@@ -47,23 +47,38 @@ export default function TrackOrder() {
   const [items, setItems] = useState<OrderItem[]>([]);
 
   // 1. Fetch Order (Secure)
-  const fetchOrder = async (tToken: string) => {
-    if (!token || !tToken) return;
-    setLoading(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const fetchOrder = async (tToken?: string) => {
+    if (!token) return;
+    // Don't set loading on updates, only initial
+    if (!order) setLoading(true);
+
     try {
-      const { data, error } = await supabase.functions.invoke("order-lookup", {
-        body: { token, turnstileToken: tToken }
+      const { data, error: fetchError } = await supabase.functions.invoke("order-lookup", {
+        body: {
+          token,
+          turnstileToken: tToken || undefined // Optional now
+        }
       });
 
-      if (error) throw error;
+      if (fetchError) throw fetchError;
       if (data.error) throw new Error(data.error);
+
+      // Check for status update to show toast
+      if (order && data.order.status !== order.status) {
+        if (data.order.status === 'in_progress') toast({ title: "Order Update", description: "Your food is being prepared!" });
+        if (data.order.status === 'ready') toast({ title: "Order Ready!", description: "Please pick up your order." });
+      }
 
       setOrder(data.order);
       setItems(data.items);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Fetch error:", err);
-      // Only set error on first load to avoid flickering during realtime updates
-      if (!order) setError(err.message || "Failed to load order.");
+      // Only set error on first load
+      if (!order) {
+        const errorMessage = err instanceof Error ? err.message : "Failed to load order.";
+        setError(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -74,49 +89,26 @@ export default function TrackOrder() {
       setError("No order token provided.");
       return;
     }
-    // We wait for Turnstile token before fetching
+    // Initial fetch if we have a turnstile token OR if we decide to skip turnstile for polling.
+    // For initial load, we might still want Turnstile if we want to prevent scraping?
+    // But since we removed mandatory check in backend, we can just fetch.
+    // Let's TRY to fetch immediately. If backend allows it, great.
+    fetchOrder();
+
+    // Setup Polling (every 15 seconds)
+    const interval = setInterval(() => {
+      fetchOrder();
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, [token]);
 
-  // Handle Turnstile Success
+  // Handle Turnstile Success (Optional Enhancement: If we want to enforce it later)
   useEffect(() => {
     if (turnstileToken && token && !order) {
       fetchOrder(turnstileToken);
     }
   }, [turnstileToken, token, order]);
-
-  // Realtime Subscription
-  useEffect(() => {
-    if (!token || !order?.id) return;
-
-    const channel = supabase
-      .channel('public-order-tracking')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'orders',
-          filter: `id=eq.${order.id}`
-        },
-        (payload) => {
-          // When update comes, re-fetch. 
-          // Note: We reuse the existing turnstile token. 
-          // If it expired, we might need a new one, but for now reuse.
-          if (turnstileToken) fetchOrder(turnstileToken);
-
-          if (payload.new && (payload.new as any).status !== (payload.old as any).status) {
-            const newStatus = (payload.new as any).status;
-            if (newStatus === 'in_progress') toast({ title: "Order Update", description: "Your food is being prepared!" });
-            if (newStatus === 'ready') toast({ title: "Order Ready!", description: "Please pick up your order." });
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [token, order?.id, turnstileToken]);
 
   if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>;
   if (error) return <div className="h-screen flex flex-col items-center justify-center gap-4 text-red-500"><p>{error}</p><Button asChild variant="outline"><Link to="/">Return Home</Link></Button></div>;

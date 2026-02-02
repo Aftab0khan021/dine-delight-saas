@@ -57,7 +57,35 @@ serve(async (req) => {
       return json({ error: "Invalid JSON" }, 400);
     }
 
-    const { restaurant_id, items, table_label } = payload;
+    const { restaurant_id, items, table_label, turnstileToken } = payload;
+
+    // Validate Turnstile Token (DDoS Protection)
+    const turnstileSecret = Deno.env.get('TURNSTILE_SECRET_KEY');
+    if (!turnstileSecret) {
+      console.error("Missing TURNSTILE_SECRET_KEY");
+      return json({ error: "Server configuration error" }, 500);
+    }
+
+    if (!turnstileToken) {
+      return json({ error: "Security check failed: Missing Turnstile token" }, 400);
+    }
+
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim();
+    const formData = new FormData();
+    formData.append('secret', turnstileSecret);
+    formData.append('response', turnstileToken);
+    if (ip) formData.append('remoteip', ip);
+
+    const turnstileResult = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const turnstileOutcome = await turnstileResult.json();
+    if (!turnstileOutcome.success) {
+      console.error("Turnstile verification failed:", turnstileOutcome);
+      return json({ error: "Security check failed. Please try again." }, 400);
+    }
 
     // Validate required fields
     if (!restaurant_id || !items) {
@@ -186,7 +214,7 @@ serve(async (req) => {
       }
 
       // Handle Addons
-      let addonsList = [];
+      const addonsList = [];
       if (item.addons && Array.isArray(item.addons)) {
         for (const addonReq of item.addons) {
           const addonDb = allAddons?.find(a => a.id === addonReq.id && a.menu_item_id === realItem.id);
@@ -228,7 +256,7 @@ serve(async (req) => {
       return json({ error: `Order value cannot exceed $${MAX_ORDER_VALUE_CENTS / 100}` }, 400);
     }
 
-    // Coupon Logic
+    // Coupon Logic (RPC Atomic Check-and-Increment)
     let couponId = null;
     let couponCode = null;
     let discountCents = 0;
@@ -236,47 +264,24 @@ serve(async (req) => {
 
     if (payload.coupon_code) {
       const code = String(payload.coupon_code).trim().toUpperCase();
-      const { data: coupon, error: couponError } = await supabase
-        .from('coupons')
-        .select('*')
-        .eq('restaurant_id', restaurant_id)
-        .eq('code', code)
-        .eq('is_active', true)
-        .maybeSingle();
 
-      if (couponError) {
-        console.error("Coupon fetch error:", couponError);
-      } else if (coupon) {
-        // Validate Coupon Constraints
-        const now = new Date();
-        const expiresAt = coupon.expires_at ? new Date(coupon.expires_at) : null;
-        let isValid = true;
+      // Use RPC to atomically validate and increment usage
+      const { data: result, error: rpcError } = await supabase.rpc('redeem_coupon', {
+        p_coupon_code: code,
+        p_restaurant_id: restaurant_id,
+        p_order_total_cents: totalCents
+      });
 
-        if (expiresAt && expiresAt < now) isValid = false;
-        if (coupon.usage_limit !== null && (coupon.usage_count || 0) >= coupon.usage_limit) isValid = false;
-        if (coupon.min_order_cents && totalCents < coupon.min_order_cents) isValid = false;
-
-        if (isValid) {
-          couponId = coupon.id;
-          couponCode = coupon.code;
-          discountType = 'coupon';
-
-          if (coupon.discount_type === 'fixed') {
-            discountCents = Math.min(coupon.discount_value, totalCents);
-          } else if (coupon.discount_type === 'percentage') {
-            let d = Math.round((totalCents * coupon.discount_value) / 100);
-            if (coupon.max_discount_cents) d = Math.min(d, coupon.max_discount_cents);
-            discountCents = d;
-          }
-
-          // Apply Discount
-          // Note: total_cents in database is the FINAL amount to pay.
-          // subtotal_cents should be the amount BEFORE discount.
-          // But our current logic set totalCents as the sum of items.
-          // Let's adjust variable names for clarity or just update totalCents.
-
-          // Current totalCents IS the subtotal.
-        }
+      if (rpcError) {
+        console.error("Coupon RPC error:", rpcError);
+      } else if (result && result.valid) {
+        couponId = result.coupon_id;
+        couponCode = result.coupon_code;
+        discountCents = result.discount_cents;
+        discountType = result.discount_type;
+        // Note: Usage count is already incremented in the DB by the RPC
+      } else {
+        console.warn("Invalid coupon:", result?.error);
       }
     }
 
@@ -308,17 +313,7 @@ serve(async (req) => {
       .select()
       .single();
 
-    // Increment Coupon Usage (Optimistic)
-    if (couponId) {
-      await supabase.rpc('increment_coupon_usage', { coupon_id: couponId });
-      // Note: If RPC fails or doesn't exist, we might miss a count. 
-      // Ideally we create an RPC or just update directly.
-      // Since I didn't create an RPC in my plan, I'll do a direct update.
-      await supabase
-        .from('coupons')
-        .update({ usage_count: (await supabase.from('coupons').select('usage_count').eq('id', couponId).single()).data?.usage_count + 1 })
-        .eq('id', couponId);
-    }
+    // Coupon usage already incremented by RPC above.
 
     if (insertError) {
       console.error("Order insert error:", insertError);
