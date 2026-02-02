@@ -56,7 +56,9 @@ export function Turnstile({
 
         // Clean up previous widget if any
         if (widgetIdRef.current) {
-            window.turnstile.remove(widgetIdRef.current);
+            if (window.turnstile) {
+                window.turnstile.remove(widgetIdRef.current);
+            }
             widgetIdRef.current = null;
         }
 
