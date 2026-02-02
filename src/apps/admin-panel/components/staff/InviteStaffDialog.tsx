@@ -34,25 +34,12 @@ export function InviteStaffDialog({ open, onOpenChange }: Props) {
   const categoriesQuery = useQuery({
     queryKey: ["staff-categories", restaurant?.id],
     queryFn: async () => {
-      console.log("🔍 Fetching categories for restaurant:", restaurant?.id);
-
-      if (!restaurant?.id) {
-        console.log("❌ No restaurant ID - returning empty array");
-        return [];
-      }
-
+      if (!restaurant?.id) return [];
       const { data, error } = await supabase
         .from("staff_categories")
         .select("*")
         .eq("restaurant_id", restaurant.id)
         .order("name", { ascending: true });
-
-      console.log("📊 Categories query result:", {
-        restaurantId: restaurant.id,
-        count: data?.length || 0,
-        categories: data,
-        error: error
-      });
 
       if (error) throw error;
       return data as StaffCategory[];
