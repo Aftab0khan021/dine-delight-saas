@@ -59,10 +59,17 @@ serve(async (req) => {
 
     const { restaurant_id, items, table_label, turnstileToken } = payload;
 
-    // Validate Turnstile Token (DDoS Protection)
-    const turnstileSecret = Deno.env.get('TURNSTILE_SECRET_KEY');
+    // Detect environment based on Origin or Referer header
+    const origin = req.headers.get('origin') || req.headers.get('referer') || '';
+    const isProduction = origin.includes('yourdomain.com'); // Replace with your actual production domain
+
+    // Use environment-specific secret key
+    const turnstileSecret = isProduction
+      ? Deno.env.get('TURNSTILE_SECRET_KEY_PROD')
+      : Deno.env.get('TURNSTILE_SECRET_KEY_DEV') || '1x0000000000000000000000000000000AA';
+
     if (!turnstileSecret) {
-      console.error("Missing TURNSTILE_SECRET_KEY");
+      console.error("Missing Turnstile secret key for environment:", { isProduction, origin });
       return json({ error: "Server configuration error" }, 500);
     }
 
