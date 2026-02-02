@@ -38,12 +38,17 @@ export default function AdminAuth() {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!turnstileToken) {
+      toast({ title: "Security Check Required", description: "Please complete the security challenge.", variant: "destructive" });
+      return;
+    }
     setLoading(true);
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
+        options: { captchaToken: turnstileToken }
       });
 
       if (error) throw error;
@@ -58,6 +63,9 @@ export default function AdminAuth() {
         description: error.message,
         variant: "destructive",
       });
+      // Reset token on error so user verify again?
+      setTurnstileToken("");
+      if (window.turnstile) window.turnstile.reset();
     } finally {
       setLoading(false);
     }
@@ -65,6 +73,10 @@ export default function AdminAuth() {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!turnstileToken) {
+      toast({ title: "Security Check Required", description: "Please complete the security challenge.", variant: "destructive" });
+      return;
+    }
     setLoading(true);
 
     try {
@@ -76,6 +88,7 @@ export default function AdminAuth() {
           data: {
             full_name: fullName,
           },
+          captchaToken: turnstileToken
         },
       });
 
@@ -91,6 +104,9 @@ export default function AdminAuth() {
         description: error.message,
         variant: "destructive",
       });
+      // Reset token on error
+      setTurnstileToken("");
+      if (window.turnstile) window.turnstile.reset();
     } finally {
       setLoading(false);
     }

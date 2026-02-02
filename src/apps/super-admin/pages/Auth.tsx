@@ -36,12 +36,17 @@ export default function SuperAdminAuth() {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!turnstileToken) {
+      toast({ title: "Security Check Required", description: "Please complete the security challenge.", variant: "destructive" });
+      return;
+    }
     setLoading(true);
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
+        options: { captchaToken: turnstileToken }
       });
 
       if (error) throw error;
@@ -58,6 +63,9 @@ export default function SuperAdminAuth() {
         description: error.message,
         variant: "destructive",
       });
+      // Reset token on error
+      setTurnstileToken("");
+      if (window.turnstile) window.turnstile.reset();
     } finally {
       setLoading(false);
     }
