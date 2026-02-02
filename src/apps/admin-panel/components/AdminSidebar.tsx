@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
@@ -12,24 +12,51 @@ import {
   Salad,
   ChevronLeft,
   ChevronRight,
-  Ticket
+  Ticket,
+  Settings
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { usePermissionContext } from "../state/permission-context";
+import { PERMISSIONS } from "./staff/staff-utils";
 
-const navItems = [
-  { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/admin/orders", label: "Orders", icon: ReceiptText },
-  { to: "/admin/menu", label: "Menu", icon: Salad },
-  { to: "/admin/qr", label: "QR Menu", icon: QrCode },
-  { to: "/admin/staff", label: "Staff", icon: Users },
-  { to: "/admin/branding", label: "Branding", icon: Palette },
-  { to: "/admin/billing", label: "Billing", icon: CreditCard },
-  { to: "/admin/coupons", label: "Coupons", icon: Ticket },
+type NavItem = {
+  to: string;
+  label: string;
+  icon: any;
+  permission?: string; // Optional permission code required to view
+  adminOnly?: boolean; // Only visible to admins
+};
+
+const allNavItems: NavItem[] = [
+  { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard }, // Always visible
+  { to: "/admin/orders", label: "Orders", icon: ReceiptText, permission: PERMISSIONS.VIEW_ORDERS },
+  { to: "/admin/menu", label: "Menu", icon: Salad, permission: PERMISSIONS.VIEW_MENU },
+  { to: "/admin/qr", label: "QR Menu", icon: QrCode, permission: PERMISSIONS.VIEW_QR },
+  { to: "/admin/staff", label: "Staff", icon: Users, permission: PERMISSIONS.VIEW_STAFF },
+  { to: "/admin/staff-categories", label: "Staff Categories", icon: Settings, permission: PERMISSIONS.MANAGE_CATEGORIES_STAFF, adminOnly: true },
+  { to: "/admin/branding", label: "Branding", icon: Palette, permission: PERMISSIONS.MANAGE_SETTINGS },
+  { to: "/admin/billing", label: "Billing", icon: CreditCard, adminOnly: true },
+  { to: "/admin/coupons", label: "Coupons", icon: Ticket, permission: PERMISSIONS.VIEW_COUPONS },
 ];
 
 export function AdminSidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const { hasPermission, isAdmin } = usePermissionContext();
+
+  // Filter nav items based on permissions
+  const navItems = useMemo(() => {
+    return allNavItems.filter(item => {
+      // Admin-only items
+      if (item.adminOnly && !isAdmin) return false;
+
+      // Permission-based items
+      if (item.permission && !hasPermission(item.permission as any)) return false;
+
+      // No restrictions, show it
+      return true;
+    });
+  }, [hasPermission, isAdmin]);
 
   return (
     <aside

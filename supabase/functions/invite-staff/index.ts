@@ -26,24 +26,30 @@ serve(async (req) => {
     });
 
     // 0. IP-based Rate Limiting (Prevent Anonymous Spam)
+    // Note: This is optional and will be skipped if ip_address column doesn't exist
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
 
     if (clientIp !== 'unknown') {
-      const { count: ipInvites } = await supabase
-        .from("staff_invites")
-        .select("*", { count: "exact", head: true })
-        .eq("ip_address", clientIp)
-        .gte("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString()); // Last hour
+      try {
+        const { count: ipInvites } = await supabase
+          .from("staff_invites")
+          .select("*", { count: "exact", head: true })
+          .eq("ip_address", clientIp)
+          .gte("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString()); // Last hour
 
-      if (ipInvites !== null && ipInvites >= 5) {
-        console.warn(`IP rate limit exceeded: ${clientIp}`);
-        return new Response(
-          JSON.stringify({ error: "Too many requests from this IP. Please try again later." }),
-          {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 429,
-          }
-        );
+        if (ipInvites !== null && ipInvites >= 5) {
+          console.warn(`IP rate limit exceeded: ${clientIp}`);
+          return new Response(
+            JSON.stringify({ error: "Too many requests from this IP. Please try again later." }),
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 429,
+            }
+          );
+        }
+      } catch (ipError) {
+        // IP rate limiting is optional - continue if column doesn't exist
+        console.log("IP rate limiting skipped:", ipError);
       }
     }
 
