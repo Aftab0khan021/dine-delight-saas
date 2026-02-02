@@ -1,0 +1,9 @@
+{
+    "redirects": [
+        {
+            "source": "/super-admin/:path*",
+            "destination": "/superadmin/:path*",
+            "permanent": true
+        }
+    ]
+}

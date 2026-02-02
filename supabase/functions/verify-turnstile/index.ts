@@ -13,7 +13,7 @@ serve(async (req) => {
     }
 
     try {
-        const { token, ip } = await req.json()
+        const { token } = await req.json() // Remove client-provided IP
         const secretKey = Deno.env.get('TURNSTILE_SECRET_KEY')
 
         if (!secretKey) {
@@ -31,13 +31,16 @@ serve(async (req) => {
             )
         }
 
+        // Extract real IP from edge runtime headers (prevent spoofing)
+        const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0].trim()
+            || req.headers.get('cf-connecting-ip')
+            || 'unknown';
+
         // Verify with Cloudflare
         const formData = new FormData()
         formData.append('secret', secretKey)
         formData.append('response', token)
-        if (ip) {
-            formData.append('remoteip', ip)
-        }
+        formData.append('remoteip', clientIp) // Use server-extracted IP
 
         const result = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
             method: 'POST',

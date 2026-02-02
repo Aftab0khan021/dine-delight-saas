@@ -52,12 +52,8 @@ serve(async (req) => {
   const turnstileToken = payload?.turnstileToken;
   const TURNSTILE_SECRET_KEY = Deno.env.get("TURNSTILE_SECRET_KEY");
 
-  // Enforce Turnstile
-  if (!turnstileToken) {
-    return json({ error: "Security check failed. Please refresh." }, { status: 400, headers: { "access-control-allow-origin": "*" } });
-  }
-
-  if (TURNSTILE_SECRET_KEY) {
+  // Optional: Only verify Turnstile if provided (Allows Polling)
+  if (turnstileToken && TURNSTILE_SECRET_KEY) {
     const formData = new FormData();
     formData.append('secret', TURNSTILE_SECRET_KEY);
     formData.append('response', turnstileToken);

@@ -9,6 +9,7 @@ export function Turnstile({
     onSuccess,
     onError,
     onExpire,
+    onWidgetId,
     theme = 'auto',
     size = 'normal',
     action,
@@ -74,6 +75,9 @@ export function Turnstile({
                 action,
             });
             widgetIdRef.current = id;
+
+            // Expose widget ID to parent component for manual reset
+            onWidgetId?.(id);
         } catch (error) {
             console.error('Failed to render Turnstile widget:', error);
             onError?.(error);

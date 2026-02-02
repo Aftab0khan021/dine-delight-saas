@@ -15,6 +15,7 @@ export default function AdminAuth() {
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileWidgetId, setTurnstileWidgetId] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -63,9 +64,11 @@ export default function AdminAuth() {
         description: error.message,
         variant: "destructive",
       });
-      // Reset token on error so user verify again?
+      // Reset token on error so user verify again
       setTurnstileToken("");
-      if (window.turnstile) window.turnstile.reset();
+      if (window.turnstile && turnstileWidgetId) {
+        window.turnstile.reset(turnstileWidgetId);
+      }
     } finally {
       setLoading(false);
     }
@@ -106,7 +109,9 @@ export default function AdminAuth() {
       });
       // Reset token on error
       setTurnstileToken("");
-      if (window.turnstile) window.turnstile.reset();
+      if (window.turnstile && turnstileWidgetId) {
+        window.turnstile.reset(turnstileWidgetId);
+      }
     } finally {
       setLoading(false);
     }
@@ -151,6 +156,7 @@ export default function AdminAuth() {
 
                 <Turnstile
                   onSuccess={setTurnstileToken}
+                  onWidgetId={setTurnstileWidgetId}
                   action="login"
                   className="flex justify-center py-2"
                 />
@@ -197,6 +203,7 @@ export default function AdminAuth() {
 
                 <Turnstile
                   onSuccess={setTurnstileToken}
+                  onWidgetId={setTurnstileWidgetId}
                   action="signup"
                   className="flex justify-center py-2"
                 />

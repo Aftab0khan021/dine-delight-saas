@@ -26,6 +26,12 @@ export interface TurnstileProps {
     onExpire?: () => void;
 
     /**
+     * Callback invoked when the widget is rendered
+     * Provides the widget ID for manual reset operations
+     */
+    onWidgetId?: (widgetId: string) => void;
+
+    /**
      * Theme for the widget
      * @default 'auto'
      */
