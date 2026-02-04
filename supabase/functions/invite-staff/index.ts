@@ -125,7 +125,7 @@ serve(async (req) => {
       .eq("restaurant_id", restaurant_id)
       .maybeSingle();
 
-    if (roleError || !userRole || !["owner", "restaurant_admin"].includes(userRole.role)) {
+    if (roleError || !userRole || !["restaurant_admin", "super_admin"].includes(userRole.role)) {
       throw new Error("Forbidden: You do not have permission to manage staff for this restaurant.");
     }
 
