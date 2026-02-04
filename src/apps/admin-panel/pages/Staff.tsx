@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
 import { type StaffRole } from "../components/staff/staff-utils";
+import { InviteStaffDialog } from "../components/staff/InviteStaffDialog";
 
 // UI Components
 import { Badge } from "@/components/ui/badge";
@@ -49,12 +50,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-// --- Validation ---
-const inviteSchema = z.object({
-  email: z.string().email("Enter a valid email"),
-  role: z.enum(["restaurant_admin", "user"]),
-});
-type InviteForm = z.infer<typeof inviteSchema>;
+// --- Validation --- (Removed - now handled by InviteStaffDialog)
 
 // --- Helper Functions ---
 function formatTime(iso: string) {
@@ -87,11 +83,6 @@ export default function AdminStaff() {
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [roleTarget, setRoleTarget] = useState<{ id: string; name: string; role: string } | null>(null);
   const [newRole, setNewRole] = useState<StaffRole>("user");
-
-  const inviteForm = useForm<InviteForm>({
-    resolver: zodResolver(inviteSchema),
-    defaultValues: { email: "", role: "user" },
-  });
 
   // --- 1. Data Queries (From Repo B) ---
   const staffQuery = useQuery({
@@ -157,37 +148,7 @@ export default function AdminStaff() {
   const isAtLimit = staffLimit !== undefined && staffLimit !== -1 && currentStaffCount >= staffLimit;
   const isUnlimited = staffLimit === -1;
 
-  // --- 2. Mutations (From Repo B) ---
-  const createInviteMutation = useMutation({
-    mutationFn: async (values: InviteForm) => {
-      if (!restaurant?.id) throw new Error("Missing restaurant");
-
-      const { data, error } = await supabase.functions.invoke("invite-staff", {
-        body: {
-          email: values.email,
-          role: values.role,
-          restaurant_id: restaurant.id,
-        },
-      });
-
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      return data;
-    },
-    onSuccess: () => {
-      setInviteOpen(false);
-      inviteForm.reset();
-      toast({ title: "Invitation sent", description: "Staff member invited successfully." });
-      qc.invalidateQueries({ queryKey: ["admin", "staff"] });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to invite staff.",
-        variant: "destructive"
-      });
-    }
-  });
+  // --- 2. Mutations (From Repo B) --- (Invite mutation removed - handled by InviteStaffDialog)
 
   const changeRoleMutation = useMutation({
     mutationFn: async () => {
@@ -320,38 +281,14 @@ export default function AdminStaff() {
           )}
         </div>
 
-        <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-          <DialogTrigger asChild>
-            <Button disabled={isAtLimit}>
-              <UserPlus className="mr-2 h-4 w-4" /> Invite staff
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader><DialogTitle>Invite staff</DialogTitle></DialogHeader>
-            <form className="mt-2 space-y-4" onSubmit={inviteForm.handleSubmit((v) => createInviteMutation.mutate(v))}>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email address</Label>
-                <Input id="email" placeholder="colleague@example.com" {...inviteForm.register("email")} />
-              </div>
-              <div className="space-y-2">
-                <Label>Role</Label>
-                <Select value={inviteForm.watch("role")} onValueChange={(v) => inviteForm.setValue("role", v as any)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="user">User (Staff)</SelectItem>
-                    <SelectItem value="restaurant_admin">Admin (Manager)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="secondary" onClick={() => setInviteOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={createInviteMutation.isPending}>
-                  {createInviteMutation.isPending ? "Sending..." : "Invite"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Button disabled={isAtLimit} onClick={() => setInviteOpen(true)}>
+          <UserPlus className="mr-2 h-4 w-4" /> Invite staff
+        </Button>
+
+        <InviteStaffDialog
+          open={inviteOpen}
+          onOpenChange={setInviteOpen}
+        />
       </header>
 
       {/* Staff Limit Warning */}
