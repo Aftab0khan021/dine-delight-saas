@@ -92,6 +92,31 @@ serve(async (req) => {
 
     if (!restaurant_id) throw new Error("Missing restaurant_id");
 
+    // Helper function to check if a string is a valid UUID
+    const isUUID = (str: string) => {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      return uuidRegex.test(str);
+    };
+
+    // Determine if 'role' is a staff category ID or a legacy role
+    let actualRole = "user"; // Default role
+    let staffCategoryId = null;
+
+    if (role) {
+      if (isUUID(role)) {
+        // It's a staff category ID
+        staffCategoryId = role;
+        // For category-based staff, default to 'user' role
+        // The permissions will be determined by the category
+        actualRole = "user";
+      } else if (["user", "restaurant_admin"].includes(role)) {
+        // It's a legacy role
+        actualRole = role;
+      } else {
+        throw new Error(`Invalid role: ${role}`);
+      }
+    }
+
     // 4. Authorize User (Check Permissions)
     const { data: userRole, error: roleError } = await supabase
       .from("user_roles")
@@ -107,8 +132,14 @@ serve(async (req) => {
     // 5. Perform Action
     if (action === "resend") {
       if (!email) throw new Error("Missing email for resend");
+
+      const inviteData: any = { restaurant_id, role: actualRole };
+      if (staffCategoryId) {
+        inviteData.staff_category_id = staffCategoryId;
+      }
+
       const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-        data: { restaurant_id, role: role || "user" },
+        data: inviteData,
       });
       if (error) throw error;
       return new Response(JSON.stringify({ success: true, message: "Invite resent" }), {
@@ -120,11 +151,13 @@ serve(async (req) => {
     // New Invite
     if (!email) throw new Error("Missing email");
 
+    const inviteData: any = { restaurant_id, role: actualRole };
+    if (staffCategoryId) {
+      inviteData.staff_category_id = staffCategoryId;
+    }
+
     const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-      data: {
-        restaurant_id,
-        role: role || "user",
-      },
+      data: inviteData,
     });
 
     if (error) throw error;
