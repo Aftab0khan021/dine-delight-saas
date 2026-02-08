@@ -340,7 +340,7 @@ export default function PublicMenu() {
                               ) : null}
                             </div>
                             <p className="font-medium tabular-nums whitespace-nowrap">
-                              {formatMoney(item.price_cents, item.currency_code)}
+                              {formatMoney(item.price_cents, restaurantQuery.data?.currency_code)}
                             </p>
                           </div>
 
