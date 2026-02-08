@@ -98,13 +98,6 @@ export function InviteStaffDialog({ open, onOpenChange }: Props) {
             {hasCategories
               ? "Send an invite and assign a staff category with specific permissions."
               : "Send an invite for this restaurant. Create staff categories to assign specific permissions."}
-            <div className="mt-2 p-2 bg-muted/50 rounded text-xs font-mono border">
-              <p>Debug Info:</p>
-              <p>Rest ID: {restaurant?.id || 'Missing'}</p>
-              <p>Categories: {categories.length}</p>
-              <p>Loading: {categoriesQuery.isLoading ? 'Yes' : 'No'}</p>
-              <p>Error: {categoriesQuery.error ? categoriesQuery.error.message : 'None'}</p>
-            </div>
           </DialogDescription>
         </DialogHeader>
 
