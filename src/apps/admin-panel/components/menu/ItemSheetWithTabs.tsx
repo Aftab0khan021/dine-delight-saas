@@ -1,7 +1,41 @@
+// Helper function for currency examples
+function getCurrencyExample(currencyCode: string = 'INR') {
+    const examples: Record<string, { amount: number; symbol: string }> = {
+        'INR': { amount: 96900, symbol: '₹' },
+        'USD': { amount: 1000, symbol: '$' },
+        'EUR': { amount: 1000, symbol: '€' },
+        'GBP': { amount: 1000, symbol: '£' },
+        'AUD': { amount: 1000, symbol: 'A$' },
+        'CAD': { amount: 1000, symbol: 'C$' },
+        'SGD': { amount: 1000, symbol: 'S$' },
+        'AED': { amount: 1000, symbol: 'د.إ' },
+        'JPY': { amount: 1000, symbol: '¥' },
+        'CNY': { amount: 1000, symbol: '¥' },
+    };
+    const ex = examples[currencyCode] || examples['INR'];
+    return `${ex.amount} = ${ex.symbol}${(ex.amount / 100).toFixed(2)}`;
+}
+
 // --- Subcomponent: Item Sheet with Tabs ---
 function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave, onDelete }: any) {
     const form = useForm();
     const [uploading, setUploading] = useState(false);
+
+    // Fetch restaurant currency
+    const { data: restaurantData } = useQuery({
+        queryKey: ['restaurant', restaurantId],
+        enabled: !!restaurantId,
+        queryFn: async () => {
+            const { data } = await supabase
+                .from('restaurants')
+                .select('currency_code')
+                .eq('id', restaurantId)
+                .single();
+            return data;
+        }
+    });
+
+    const currencyCode = restaurantData?.currency_code || 'INR';
 
     const handleReplaceImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files?.length) return;
@@ -77,7 +111,7 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
                                 <div className="space-y-2">
                                     <Label>Price (Cents)</Label>
                                     <Input type="number" {...form.register("price_cents", { required: true })} />
-                                    <div className="text-xs text-muted-foreground">1000 = $10.00</div>
+                                    <div className="text-xs text-muted-foreground">{getCurrencyExample(currencyCode)} (enter amount in paise/cents)</div>
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Category</Label>
