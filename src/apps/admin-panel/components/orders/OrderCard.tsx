@@ -21,7 +21,7 @@ function shortId(id: string) {
   return id?.slice(0, 8) ?? "—";
 }
 
-function formatMoney(cents: number, currency = "USD") {
+function formatMoney(cents: number, currency = "INR") {
   const amount = (cents ?? 0) / 100;
   try {
     return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
@@ -94,7 +94,7 @@ export function OrderCard({ order, onAdvance, advancing }: Props) {
         </div>
 
         <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold">{formatMoney(order.total_cents ?? 0, order.currency_code ?? "USD")}</p>
+          <p className="text-sm font-semibold">{formatMoney(order.total_cents ?? 0, order.currency_code ?? "INR")}</p>
           {next ? (
             <Button size="sm" onClick={() => onAdvance?.(order.id, order.status)} disabled={advancing}>
               {advancing ? "Updating…" : `Move to ${statusLabel[next]}`}
