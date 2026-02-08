@@ -44,7 +44,8 @@ export function InviteStaffDialog({ open, onOpenChange }: Props) {
       if (error) throw error;
       return data as StaffCategory[];
     },
-    enabled: !!restaurant?.id && open,
+    enabled: !!restaurant?.id,
+    refetchOnMount: true,
   });
 
   useEffect(() => {
@@ -88,6 +89,12 @@ export function InviteStaffDialog({ open, onOpenChange }: Props) {
 
   const categories = categoriesQuery.data || [];
   const hasCategories = categories.length > 0;
+
+  // Debug logging
+  console.log('InviteStaffDialog - Categories:', categories);
+  console.log('InviteStaffDialog - hasCategories:', hasCategories);
+  console.log('InviteStaffDialog - Loading:', categoriesQuery.isLoading);
+  console.log('InviteStaffDialog - Error:', categoriesQuery.error);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
