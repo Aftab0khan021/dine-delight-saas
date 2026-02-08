@@ -545,6 +545,7 @@ export default function PublicMenu() {
         }}
         restaurantId={restaurantQuery.data?.id ?? ""}
         themeColor={restaurantQuery.data?.theme_color}
+        currencyCode={restaurantQuery.data?.currency_code}
       />
     </main>
   );
