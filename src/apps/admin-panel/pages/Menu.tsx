@@ -69,8 +69,13 @@ type MenuItemRow = {
 };
 
 // --- Helpers ---
-function formatMoney(cents: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+// --- Helpers ---
+function formatMoney(cents: number, currency: string = "INR") {
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
+  } catch (e) {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: "INR" }).format(cents / 100);
+  }
 }
 
 function getCurrencyExample(currencyCode: string = 'INR') {
@@ -94,6 +99,22 @@ export default function AdminMenu() {
   const { restaurant } = useRestaurantContext();
   const qc = useQueryClient();
   const { toast } = useToast();
+
+  // Fetch currency for list view
+  const { data: restaurantSettings } = useQuery({
+    queryKey: ["restaurant_currency", restaurant?.id],
+    enabled: !!restaurant?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("restaurants")
+        .select("currency_code")
+        .eq("id", restaurant!.id)
+        .single();
+      return data;
+    }
+  });
+
+  const currencyCode = restaurantSettings?.currency_code || "INR";
 
   // --- State ---
   const [search, setSearch] = useState("");
@@ -479,7 +500,7 @@ export default function AdminMenu() {
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium">{item.name}</div>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs font-mono text-muted-foreground">{formatMoney(item.price_cents)}</span>
+                        <span className="text-xs font-mono text-muted-foreground">{formatMoney(item.price_cents, currencyCode)}</span>
                         {!item.is_active && <Badge variant="destructive" className="h-4 px-1 text-[10px]">Sold Out</Badge>}
                       </div>
                     </div>
