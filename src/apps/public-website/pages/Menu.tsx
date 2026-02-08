@@ -357,6 +357,7 @@ export default function PublicMenu() {
                                   menu_item_id: item.id,
                                   name: item.name,
                                   price_cents: item.price_cents,
+                                  addons: [],
                                 });
                                 setCartOpen(true);
                               }}
