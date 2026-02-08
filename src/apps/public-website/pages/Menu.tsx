@@ -22,14 +22,14 @@ import { Minus, Plus, ShoppingBag } from "lucide-react";
 import { useRestaurantCart } from "../hooks/useRestaurantCart";
 import { MenuItemDialog } from "../components/MenuItemDialog";
 
-function formatMoney(cents: number, currency = "USD") {
+function formatMoney(cents: number, currency = "INR") {
   try {
     return new Intl.NumberFormat(undefined, {
       style: "currency",
       currency,
     }).format((cents ?? 0) / 100);
   } catch {
-    return `$${((cents ?? 0) / 100).toFixed(2)}`;
+    return `₹${((cents ?? 0) / 100).toFixed(2)}`;
   }
 }
 
@@ -178,7 +178,7 @@ export default function PublicMenu() {
         .insert({
           restaurant_id: restaurantId,
           status: "pending",
-          currency_code: "USD",
+          currency_code: restaurantQuery.data?.currency_code || "INR",
           tax_cents: 0,
           tip_cents: 0,
           discount_cents: cart.discountCents,
