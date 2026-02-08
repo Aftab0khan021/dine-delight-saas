@@ -80,7 +80,7 @@ function formatMoney(cents: number, currency: string = "INR") {
 
 function getCurrencyExample(currencyCode: string = 'INR') {
   const examples: Record<string, { amount: number; symbol: string }> = {
-    'INR': { amount: 96900, symbol: '₹' },
+    'INR': { amount: 10000, symbol: '₹' },
     'USD': { amount: 1000, symbol: '$' },
     'EUR': { amount: 1000, symbol: '€' },
     'GBP': { amount: 1000, symbol: '£' },
