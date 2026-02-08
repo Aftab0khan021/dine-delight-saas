@@ -162,6 +162,29 @@ serve(async (req) => {
 
     if (error) throw error;
 
+    // Track invite in staff_invites table
+    try {
+      const { error: inviteInsertError } = await supabase
+        .from("staff_invites")
+        .insert({
+          restaurant_id: restaurant_id,
+          email: email.toLowerCase(),
+          role: actualRole,
+          staff_category_id: staffCategoryId,
+          invited_by: user.id,
+          ip_address: clientIp !== 'unknown' ? clientIp : null,
+          status: 'pending',
+        });
+
+      if (inviteInsertError) {
+        console.error("Failed to track invite in database:", inviteInsertError);
+        // Don't throw - email was sent successfully, tracking is secondary
+      }
+    } catch (trackError) {
+      console.error("Error tracking invite:", trackError);
+      // Continue - email sent successfully
+    }
+
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
