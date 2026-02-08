@@ -609,7 +609,7 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
         description: data?.description || "",
         price_cents: data?.price_cents || 0,
         // FIX: Default to first category if available, else empty string (which mutation converts to null)
-        category_id: data?.category_id || (categories.length > 0 ? categories[0].id : ""),
+        category_id: data?.category_id || (categories && categories.length > 0 ? categories[0].id : ""),
         image_url: data?.image_url || "",
         is_active: data?.is_active ?? true
       });
@@ -647,10 +647,10 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
                   <SelectValue placeholder="Select..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((c: any) => (
+                  {(categories || []).map((c: any) => (
                     <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                   ))}
-                  {categories.length === 0 && <div className="p-2 text-xs text-muted-foreground">No categories yet</div>}
+                  {(!categories || categories.length === 0) && <div className="p-2 text-xs text-muted-foreground">No categories yet</div>}
                 </SelectContent>
               </Select>
             </div>
