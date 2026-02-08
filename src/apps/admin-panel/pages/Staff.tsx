@@ -91,7 +91,13 @@ export default function AdminStaff() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("user_roles")
-        .select("user_id, role, profiles(full_name, email)")
+        .select(`
+          user_id, 
+          role, 
+          staff_category_id,
+          profiles(full_name, email),
+          staff_categories(id, name, color)
+        `)
         .eq("restaurant_id", restaurant!.id)
         .in("role", ["restaurant_admin", "user"]);
       if (error) throw error;
@@ -249,6 +255,8 @@ export default function AdminStaff() {
       name: s.profiles?.full_name || "Unknown",
       contact: s.profiles?.email || "—",
       role: s.role,
+      category: s.staff_categories?.name || null,
+      categoryColor: s.staff_categories?.color || null,
       status: "Active",
       type: "active" as const
     }));
@@ -258,6 +266,8 @@ export default function AdminStaff() {
       name: "Pending Accept",
       contact: i.email,
       role: i.role,
+      category: null,
+      categoryColor: null,
       status: "Invited",
       type: "invited" as const
     }));
@@ -324,6 +334,7 @@ export default function AdminStaff() {
                     <TableRow>
                       <TableHead>Staff</TableHead>
                       <TableHead>Role</TableHead>
+                      <TableHead>Category</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -337,6 +348,21 @@ export default function AdminStaff() {
                         </TableCell>
                         <TableCell>
                           <Badge variant={roleBadgeVariant(s.role)}>{s.role === 'restaurant_admin' ? 'Admin' : 'Staff'}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          {s.category ? (
+                            <Badge
+                              variant="outline"
+                              style={{
+                                borderColor: s.categoryColor,
+                                color: s.categoryColor
+                              }}
+                            >
+                              {s.category}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">—</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant={statusBadgeVariant(s.status)}>{s.status}</Badge>
