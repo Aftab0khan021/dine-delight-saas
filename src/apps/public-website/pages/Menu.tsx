@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -40,8 +40,9 @@ type CategoryWithItems = CategoryRow & { items: MenuItemRow[] };
 
 export default function PublicMenu() {
   const { toast } = useToast();
-  const [params] = useSearchParams();
-  const slug = (params.get("restaurant") ?? "").trim();
+  const { restaurantSlug } = useParams();
+  const [searchParams] = useSearchParams();
+  const slug = (restaurantSlug ?? "").trim();
 
   const cart = useRestaurantCart(slug);
   const [cartOpen, setCartOpen] = useState(false);
@@ -231,7 +232,7 @@ export default function PublicMenu() {
           <h1 className="text-2xl font-semibold tracking-tight">Menu</h1>
           <p className="mt-2 text-muted-foreground">
             Add a restaurant slug in the URL like:{" "}
-            <span className="font-mono">/menu?restaurant=your-slug</span>
+            <span className="font-mono">/r/your-restaurant-slug/menu</span>
           </p>
           <Card className="mt-6 p-6">
             <p className="text-sm text-muted-foreground">
