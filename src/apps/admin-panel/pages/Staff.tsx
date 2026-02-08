@@ -120,6 +120,23 @@ export default function AdminStaff() {
     },
   });
 
+  // Fetch staff categories for Change Role dialog
+  const categoriesQuery = useQuery({
+    queryKey: ["staff-categories", restaurant?.id],
+    queryFn: async () => {
+      if (!restaurant?.id) return [];
+      const { data, error } = await supabase
+        .from("staff_categories")
+        .select("*")
+        .eq("restaurant_id", restaurant.id)
+        .order("name", { ascending: true });
+
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!restaurant?.id,
+  });
+
   const activityQuery = useQuery({
     queryKey: ["admin", "staff", restaurant?.id, "activity"],
     enabled: !!restaurant?.id,
@@ -437,12 +454,30 @@ export default function AdminStaff() {
               <div className="text-sm text-muted-foreground">{roleTarget?.name}</div>
             </div>
             <div className="space-y-2">
-              <Label>Role</Label>
+              <Label>{categoriesQuery.data && categoriesQuery.data.length > 0 ? "Staff Category" : "Role"}</Label>
               <Select value={newRole} onValueChange={(v) => setNewRole(v as StaffRole)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="user">User (Staff)</SelectItem>
-                  <SelectItem value="restaurant_admin">Admin (Manager)</SelectItem>
+                  {categoriesQuery.data && categoriesQuery.data.length > 0 ? (
+                    <>
+                      {categoriesQuery.data.map((category: any) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: category.color }}
+                            />
+                            <span>{category.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </>
+                  ) : (
+                    <>
+                      <SelectItem value="user">User (Staff)</SelectItem>
+                      <SelectItem value="restaurant_admin">Admin (Manager)</SelectItem>
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>
