@@ -178,9 +178,9 @@ export default function PublicMenu() {
           currency_code: "USD",
           tax_cents: 0,
           tip_cents: 0,
-          discount_cents: 0,
+          discount_cents: cart.discountCents,
           subtotal_cents: cart.subtotalCents,
-          total_cents: cart.subtotalCents,
+          total_cents: cart.totalCents,
         })
         .select("id, order_token")
         .single();
