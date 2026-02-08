@@ -455,7 +455,7 @@ export default function PublicMenu() {
                         <Button
                           size="icon"
                           variant="outline"
-                          onClick={() => cart.decrement(line.menu_item_id)}
+                          onClick={() => cart.decrement(line.cart_id)}
                           aria-label={`Decrease ${line.name}`}
                         >
                           <Minus className="h-4 w-4" />
@@ -464,7 +464,7 @@ export default function PublicMenu() {
                         <Button
                           size="icon"
                           variant="outline"
-                          onClick={() => cart.increment(line.menu_item_id)}
+                          onClick={() => cart.increment(line.cart_id)}
                           aria-label={`Increase ${line.name}`}
                         >
                           <Plus className="h-4 w-4" />
@@ -473,7 +473,7 @@ export default function PublicMenu() {
 
                       <Button
                         variant="ghost"
-                        onClick={() => cart.removeItem(line.menu_item_id)}
+                        onClick={() => cart.removeItem(line.cart_id)}
                         className="text-muted-foreground"
                       >
                         Remove
