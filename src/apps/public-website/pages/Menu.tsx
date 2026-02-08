@@ -95,6 +95,7 @@ export default function PublicMenu() {
         .select("*")
         .eq("restaurant_id", restaurantId)
         .eq("is_active", true)
+        .is("deleted_at", null)
         .order("sort_order", { ascending: true });
 
       if (error) throw error;
