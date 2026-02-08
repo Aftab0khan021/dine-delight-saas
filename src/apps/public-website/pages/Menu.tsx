@@ -20,6 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CopyButton } from "@/apps/admin-panel/components/qr/CopyButton";
 import { Minus, Plus, ShoppingBag } from "lucide-react";
 import { useRestaurantCart } from "../hooks/useRestaurantCart";
+import { MenuItemDialog } from "../components/MenuItemDialog";
 
 function formatMoney(cents: number, currency = "USD") {
   try {
@@ -46,6 +47,8 @@ export default function PublicMenu() {
 
   const cart = useRestaurantCart(slug);
   const [cartOpen, setCartOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<MenuItemRow | null>(null);
+  const [itemDialogOpen, setItemDialogOpen] = useState(false);
 
   const [placingOrder, setPlacingOrder] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
@@ -354,13 +357,8 @@ export default function PublicMenu() {
                               size="sm"
                               variant="secondary"
                               onClick={() => {
-                                cart.addItem({
-                                  menu_item_id: item.id,
-                                  name: item.name,
-                                  price_cents: item.price_cents,
-                                  addons: [],
-                                });
-                                setCartOpen(true);
+                                setSelectedItem(item);
+                                setItemDialogOpen(true);
                               }}
                             >
                               Add
@@ -535,6 +533,19 @@ export default function PublicMenu() {
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
+
+      {/* Menu Item Dialog for Variants/Addons */}
+      <MenuItemDialog
+        item={selectedItem}
+        open={itemDialogOpen}
+        onOpenChange={setItemDialogOpen}
+        onAddToCart={(cartItem) => {
+          cart.addItem(cartItem);
+          setCartOpen(true);
+        }}
+        restaurantId={restaurantQuery.data?.id ?? ""}
+        themeColor={restaurantQuery.data?.theme_color}
+      />
     </main>
   );
 }
