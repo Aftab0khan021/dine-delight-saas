@@ -145,7 +145,7 @@ export default function AdminDashboard() {
     const todayOrders = todayOrdersQuery.data ?? [];
     const count = todayOrders.length;
     const revenue = todayOrders.reduce((sum, o) => sum + (o.total_cents ?? 0), 0);
-    const currency = todayOrders[0]?.currency_code ?? setupQuery.data?.currencyCode ?? "INR";
+    const currency = setupQuery.data?.currencyCode ?? todayOrders[0]?.currency_code ?? "INR";
 
     // Calculate Avg Prep Time
     const completed = todayOrders.filter((o) => o.completed_at).map((o) =>

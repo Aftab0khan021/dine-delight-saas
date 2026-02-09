@@ -132,7 +132,7 @@ export default function AdminDashboard() {
   // --- 2. Calculations ---
   const kpis = useMemo(() => {
     const todayOrders = todayOrdersQuery.data ?? [];
-    const currency = todayOrders[0]?.currency_code ?? setupQuery.data?.currencyCode ?? "INR";
+    const currency = setupQuery.data?.currencyCode ?? todayOrders[0]?.currency_code ?? "INR";
 
     // Revenue
     const revenue = todayOrders.reduce((sum, o) => sum + (o.total_cents ?? 0), 0);
