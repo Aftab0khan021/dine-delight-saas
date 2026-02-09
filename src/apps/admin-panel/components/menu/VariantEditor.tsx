@@ -35,6 +35,23 @@ export function VariantEditor({ menuItemId, restaurantId, maxVariants = 5 }: Var
         is_active: true,
     });
 
+    // Fetch restaurant currency
+    const { data: restaurantData } = useQuery({
+        queryKey: ['restaurant', restaurantId],
+        enabled: !!restaurantId,
+        queryFn: async () => {
+            const { data } = await supabase
+                .from('restaurants')
+                .select('currency_code')
+                .eq('id', restaurantId)
+                .single();
+            return data;
+        }
+    });
+
+    const currencyCode = restaurantData?.currency_code || 'INR';
+    const currencySymbol = currencyCode === 'INR' ? '₹' : '$';
+
     // Fetch existing variants
     const { data: variants = [], isLoading } = useQuery({
         queryKey: ["menu-item-variants", menuItemId],
@@ -224,7 +241,7 @@ export function VariantEditor({ menuItemId, restaurantId, maxVariants = 5 }: Var
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label>Price ($)</Label>
+                                <Label>Price ({currencySymbol})</Label>
                                 <Input
                                     type="number"
                                     step="0.01"
