@@ -180,7 +180,7 @@ export default function AdminDashboard() {
         trend: [2, 4, 3, 5],
       }
     ];
-  }, [todayOrdersQuery.data]);
+  }, [todayOrdersQuery.data, setupQuery.data]);
 
   const setupChecklist = [
     { label: "Branding", detail: "Logo + cover", status: setupQuery.data?.logoUrl ? "Done" : "Pending" },

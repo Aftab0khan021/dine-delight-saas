@@ -183,7 +183,7 @@ export default function AdminDashboard() {
         tone: "neutral",
       },
     ];
-  }, [todayOrdersQuery.data, topSellingQuery.data]);
+  }, [todayOrdersQuery.data, topSellingQuery.data, setupQuery.data]);
 
   const setupChecklist = [
     {
