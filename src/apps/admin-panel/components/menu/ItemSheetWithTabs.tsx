@@ -37,6 +37,23 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
 
     const currencyCode = restaurantData?.currency_code || 'INR';
 
+    // Currency symbol mapping
+    const getCurrencySymbol = (code: string) => {
+        const symbols: Record<string, string> = {
+            'INR': '₹',
+            'USD': '$',
+            'EUR': '€',
+            'GBP': '£',
+            'AUD': 'A$',
+            'CAD': 'C$',
+            'SGD': 'S$',
+            'AED': 'د.إ',
+            'JPY': '¥',
+            'CNY': '¥',
+        };
+        return symbols[code] || code;
+    };
+
     const handleReplaceImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files?.length) return;
         const file = e.target.files[0];
@@ -112,7 +129,7 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label>Price ({currencyCode === 'INR' ? '₹' : '$'})</Label>
+                                    <Label>Price ({getCurrencySymbol(currencyCode)})</Label>
                                     <Input
                                         type="number"
                                         step="0.01"
