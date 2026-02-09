@@ -107,9 +107,8 @@ export default function PublicMenu() {
   });
 
   const currencyCode = useMemo(() => {
-    const first = itemsQuery.data?.find(Boolean);
-    return first?.currency_code ?? "USD";
-  }, [itemsQuery.data]);
+    return restaurantQuery.data?.currency_code ?? "INR";
+  }, [restaurantQuery.data]);
 
   const categoriesWithItems = useMemo((): CategoryWithItems[] => {
     const categories = categoriesQuery.data ?? [];
