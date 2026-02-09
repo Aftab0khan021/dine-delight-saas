@@ -74,7 +74,7 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
             form.reset({
                 name: data?.name || "",
                 description: data?.description || "",
-                price_cents: data?.price_cents || 0,
+                price_dollars: (data?.price_cents || 0) / 100,
                 category_id: data?.category_id || (categories.length > 0 ? categories[0].id : ""),
                 image_url: data?.image_url || "",
                 is_active: data?.is_active ?? true
@@ -82,7 +82,10 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
         }
     }, [open, data, categories]);
 
-    const onSubmit = (values: any) => onSave({ ...values, price_cents: Number(values.price_cents) });
+    const onSubmit = (values: any) => {
+        const price_cents = Math.round(parseFloat(values.price_dollars || "0") * 100);
+        onSave({ ...values, price_cents });
+    };
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
@@ -109,9 +112,15 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label>Price (Cents)</Label>
-                                    <Input type="number" {...form.register("price_cents", { required: true })} />
-                                    <div className="text-xs text-muted-foreground">{getCurrencyExample(currencyCode)} (enter amount in paise/cents)</div>
+                                    <Label>Price ({currencyCode === 'INR' ? '₹' : '$'})</Label>
+                                    <Input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        placeholder="0.00"
+                                        {...form.register("price_dollars", { required: true })}
+                                    />
+                                    <div className="text-xs text-muted-foreground">Enter price in {currencyCode} (e.g., 100.00)</div>
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Category</Label>
