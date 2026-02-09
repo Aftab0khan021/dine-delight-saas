@@ -52,7 +52,23 @@ export function AddonEditor({ menuItemId, restaurantId }: AddonEditorProps) {
     });
 
     const currencyCode = restaurantData?.currency_code || 'INR';
-    const currencySymbol = currencyCode === 'INR' ? '₹' : '$';
+
+    // Currency symbol mapping
+    const getCurrencySymbol = (code: string) => {
+        const symbols: Record<string, string> = {
+            'INR': '₹',
+            'USD': '$',
+            'EUR': '€',
+            'GBP': '£',
+            'AUD': 'A$',
+            'CAD': 'C$',
+            'SGD': 'S$',
+            'AED': 'د.إ',
+            'JPY': '¥',
+            'CNY': '¥',
+        };
+        return symbols[code] || code;
+    };
 
     // Fetch existing add-ons
     const { data: addons = [], isLoading } = useQuery({
@@ -237,7 +253,7 @@ export function AddonEditor({ menuItemId, restaurantId }: AddonEditorProps) {
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label>Price ({currencySymbol})</Label>
+                            <Label>Price ({getCurrencySymbol(currencyCode)})</Label>
                             <Input
                                 type="number"
                                 step="0.01"
