@@ -56,16 +56,35 @@ export function InviteStaffDialog({ open, onOpenChange }: Props) {
     mutationFn: async (values: InviteValues) => {
       if (!restaurant?.id) throw new Error("Restaurant ID missing");
 
+      const payload = {
+        email: values.email,
+        role: values.role,
+        restaurant_id: restaurant.id,
+      };
+
+      console.log("🚀 InviteStaffDialog - Sending payload:", payload);
+      console.log("🔑 Restaurant ID:", restaurant.id);
+      console.log("📧 Email:", values.email);
+      console.log("👤 Role/Category ID:", values.role);
+
       const { data, error } = await supabase.functions.invoke("invite-staff", {
-        body: {
-          email: values.email,
-          role: values.role,
-          restaurant_id: restaurant.id,
-        },
+        body: payload,
       });
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      console.log("📥 Response data:", data);
+      console.log("❌ Response error:", error);
+
+      if (error) {
+        console.error("🔴 Supabase Functions Error:", error);
+        throw new Error(error.message || "Failed to invoke function");
+      }
+
+      if (data?.error) {
+        console.error("🔴 Edge Function returned error:", data.error);
+        throw new Error(data.error);
+      }
+
+      console.log("✅ Invitation successful:", data);
       return data;
     },
     onSuccess: () => {
@@ -74,7 +93,7 @@ export function InviteStaffDialog({ open, onOpenChange }: Props) {
       onOpenChange(false);
     },
     onError: (error) => {
-      console.error(error);
+      console.error("🔴 Mutation Error:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to invite staff.",

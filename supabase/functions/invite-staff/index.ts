@@ -118,16 +118,44 @@ serve(async (req) => {
     }
 
     // 4. Authorize User (Check Permissions)
+    // Check if user has permission to invite staff for this restaurant
+    // Two scenarios:
+    // 1. User has a user_roles entry for this specific restaurant (restaurant_id matches)
+    // 2. User is a restaurant_admin who owns this restaurant (restaurant_id in user_roles matches OR user created the restaurant)
+
     const { data: userRole, error: roleError } = await supabase
       .from("user_roles")
-      .select("role")
+      .select("role, restaurant_id")
       .eq("user_id", user.id)
-      .eq("restaurant_id", restaurant_id)
+      .or(`restaurant_id.eq.${restaurant_id},and(role.eq.restaurant_admin,restaurant_id.is.null)`)
       .maybeSingle();
 
-    if (roleError || !userRole || !["restaurant_admin", "super_admin"].includes(userRole.role)) {
+    console.log("🔐 Authorization check:", {
+      userId: user.id,
+      requestedRestaurantId: restaurant_id,
+      userRole: userRole,
+      roleError: roleError
+    });
+
+    // If no role found, check if user is the owner of this restaurant
+    if (!userRole) {
+      const { data: restaurant, error: restError } = await supabase
+        .from("restaurants")
+        .select("id")
+        .eq("id", restaurant_id)
+        .eq("created_by", user.id)
+        .maybeSingle();
+
+      if (restError || !restaurant) {
+        throw new Error("Forbidden: You do not have permission to manage staff for this restaurant.");
+      }
+
+      // User owns the restaurant, allow the invite
+      console.log("✅ User owns restaurant, allowing invite");
+    } else if (roleError || !["restaurant_admin", "super_admin"].includes(userRole.role)) {
       throw new Error("Forbidden: You do not have permission to manage staff for this restaurant.");
     }
+
 
     // 5. Perform Action
     if (action === "resend") {
