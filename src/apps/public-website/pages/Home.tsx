@@ -6,14 +6,18 @@ import { supabase } from "@/integrations/supabase/client";
 export default function Home() {
   const navigate = useNavigate();
 
-  // Detect if user just accepted invitation (has session but no password)
+  // Detect if user just accepted invitation (needs to set password)
   useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
 
-      if (session?.user) {
-        // User is authenticated, redirect to password setup
-        // (they just clicked the invitation link)
+      // Only redirect if user has a session AND there's an access_token in the URL
+      // (meaning they just clicked the invitation link)
+      const urlParams = new URLSearchParams(window.location.search);
+      const hasAccessToken = urlParams.has('access_token') || urlParams.has('token_hash');
+
+      if (session?.user && hasAccessToken) {
+        // User just clicked invitation link, redirect to password setup
         navigate('/auth/set-password');
       }
     };
