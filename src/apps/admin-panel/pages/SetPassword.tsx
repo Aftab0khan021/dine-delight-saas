@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,33 +9,30 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, CheckCircle2, XCircle } from "lucide-react";
 
 export default function SetPassword() {
-    const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState(false);
-    const [verifying, setVerifying] = useState(true);
+    const [checking, setChecking] = useState(true);
 
     useEffect(() => {
-        // Verify the token from URL
-        const verifyToken = async () => {
-            const token = searchParams.get("token");
-            const type = searchParams.get("type");
+        // Check if user is authenticated (they clicked the invite link)
+        const checkAuth = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
 
-            if (!token || type !== "invite") {
-                setError("Invalid or expired invitation link");
-                setVerifying(false);
+            if (!session) {
+                setError("Invalid or expired invitation link. Please request a new invitation.");
+                setChecking(false);
                 return;
             }
 
-            // Token is valid, user can set password
-            setVerifying(false);
+            setChecking(false);
         };
 
-        verifyToken();
-    }, [searchParams]);
+        checkAuth();
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -64,9 +61,9 @@ export default function SetPassword() {
 
             setSuccess(true);
 
-            // Redirect to login after 2 seconds
+            // Redirect to admin dashboard after 2 seconds
             setTimeout(() => {
-                navigate("/auth/login");
+                navigate("/admin/dashboard");
             }, 2000);
         } catch (err: any) {
             console.error("Password setup error:", err);
@@ -76,7 +73,7 @@ export default function SetPassword() {
         }
     };
 
-    if (verifying) {
+    if (checking) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
                 <Card className="w-full max-w-md">

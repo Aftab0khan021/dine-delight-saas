@@ -1,21 +1,25 @@
 import { Button } from "@/components/ui/button";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Home() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // Detect invitation links and redirect to password setup
+  // Detect if user just accepted invitation (has session but no password)
   useEffect(() => {
-    const type = searchParams.get("type");
-    const token = searchParams.get("token");
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
 
-    if (type === "invite" && token) {
-      // User clicked invitation link, redirect to password setup
-      navigate(`/auth/set-password?${searchParams.toString()}`);
-    }
-  }, [searchParams, navigate]);
+      if (session?.user) {
+        // User is authenticated, redirect to password setup
+        // (they just clicked the invitation link)
+        navigate('/auth/set-password');
+      }
+    };
+
+    checkSession();
+  }, [navigate]);
 
   return (
     <div className="min-h-screen flex flex-col">
