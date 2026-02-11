@@ -184,11 +184,45 @@ serve(async (req) => {
       inviteData.staff_category_id = staffCategoryId;
     }
 
+    console.log("📧 Attempting to invite:", email);
+    console.log("🏢 Restaurant ID:", restaurant_id);
+    console.log("👤 Role:", actualRole);
+    console.log("📋 Staff Category ID:", staffCategoryId);
+
     const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
       data: inviteData,
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error("❌ Invite error:", error);
+
+      // Handle specific error codes
+      if (error.message?.includes("already been registered") || error.status === 422) {
+        // Check if user is already in THIS restaurant
+        const { data: existingUsers } = await supabase.auth.admin.listUsers();
+        const existingUser = existingUsers?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
+
+        if (existingUser) {
+          const { data: existingRole } = await supabase
+            .from("user_roles")
+            .select("role, staff_category_id, staff_categories(name)")
+            .eq("user_id", existingUser.id)
+            .eq("restaurant_id", restaurant_id)
+            .maybeSingle();
+
+          if (existingRole) {
+            throw new Error(`This user is already a member of your restaurant with role: ${existingRole.staff_categories?.name || existingRole.role}`);
+          }
+        }
+
+        // User exists in auth but not in this restaurant
+        throw new Error("This email is already registered in the system. They may belong to another restaurant. Please use a different email.");
+      }
+
+      throw error;
+    }
+
+    console.log("✅ Invitation sent successfully");
 
     // Track invite in staff_invites table
     try {
