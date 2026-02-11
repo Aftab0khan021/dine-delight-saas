@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 
 // --- Helpers ---
-function formatMoney(cents: number, currency = "USD") {
+function formatMoney(cents: number, currency = "INR") {
   const amount = (cents ?? 0) / 100;
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -116,12 +116,13 @@ export default function AdminDashboard() {
     enabled: !!restaurant?.id,
     queryFn: async () => {
       const [{ data: restaurantRow }, menuCount, qrCount] = await Promise.all([
-        supabase.from("restaurants").select("logo_url").eq("id", restaurant!.id).maybeSingle(),
+        supabase.from("restaurants").select("logo_url, currency_code").eq("id", restaurant!.id).maybeSingle(),
         supabase.from("menu_items").select("id", { count: "exact", head: true }).eq("restaurant_id", restaurant!.id),
         supabase.from("qr_codes").select("id", { count: "exact", head: true }).eq("restaurant_id", restaurant!.id),
       ]);
       return {
         logoUrl: restaurantRow?.logo_url ?? null,
+        currencyCode: restaurantRow?.currency_code ?? "INR",
         menuItemsCount: menuCount.count ?? 0,
         qrCodesCount: qrCount.count ?? 0,
       };
@@ -131,7 +132,7 @@ export default function AdminDashboard() {
   // --- 2. Calculations ---
   const kpis = useMemo(() => {
     const todayOrders = todayOrdersQuery.data ?? [];
-    const currency = todayOrders[0]?.currency_code ?? "USD";
+    const currency = setupQuery.data?.currencyCode ?? todayOrders[0]?.currency_code ?? "INR";
 
     // Revenue
     const revenue = todayOrders.reduce((sum, o) => sum + (o.total_cents ?? 0), 0);
@@ -182,7 +183,7 @@ export default function AdminDashboard() {
         tone: "neutral",
       },
     ];
-  }, [todayOrdersQuery.data, topSellingQuery.data]);
+  }, [todayOrdersQuery.data, topSellingQuery.data, setupQuery.data]);
 
   const setupChecklist = [
     {

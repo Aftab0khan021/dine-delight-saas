@@ -69,14 +69,52 @@ type MenuItemRow = {
 };
 
 // --- Helpers ---
-function formatMoney(cents: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+// --- Helpers ---
+function formatMoney(cents: number, currency: string = "INR") {
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
+  } catch (e) {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: "INR" }).format(cents / 100);
+  }
+}
+
+function getCurrencyExample(currencyCode: string = 'INR') {
+  const examples: Record<string, { amount: number; symbol: string }> = {
+    'INR': { amount: 10000, symbol: '₹' },
+    'USD': { amount: 1000, symbol: '$' },
+    'EUR': { amount: 1000, symbol: '€' },
+    'GBP': { amount: 1000, symbol: '£' },
+    'AUD': { amount: 1000, symbol: 'A$' },
+    'CAD': { amount: 1000, symbol: 'C$' },
+    'SGD': { amount: 1000, symbol: 'S$' },
+    'AED': { amount: 1000, symbol: 'د.إ' },
+    'JPY': { amount: 1000, symbol: '¥' },
+    'CNY': { amount: 1000, symbol: '¥' },
+  };
+  const ex = examples[currencyCode] || examples['INR'];
+  return `${ex.amount} = ${ex.symbol}${(ex.amount / 100).toFixed(2)}`;
 }
 
 export default function AdminMenu() {
   const { restaurant } = useRestaurantContext();
   const qc = useQueryClient();
   const { toast } = useToast();
+
+  // Fetch currency for list view
+  const { data: restaurantSettings } = useQuery({
+    queryKey: ["restaurant_currency", restaurant?.id],
+    enabled: !!restaurant?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("restaurants")
+        .select("currency_code")
+        .eq("id", restaurant!.id)
+        .single();
+      return data;
+    }
+  });
+
+  const currencyCode = restaurantSettings?.currency_code || "INR";
 
   // --- State ---
   const [search, setSearch] = useState("");
@@ -462,7 +500,7 @@ export default function AdminMenu() {
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium">{item.name}</div>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs font-mono text-muted-foreground">{formatMoney(item.price_cents)}</span>
+                        <span className="text-xs font-mono text-muted-foreground">{formatMoney(item.price_cents, currencyCode)}</span>
                         {!item.is_active && <Badge variant="destructive" className="h-4 px-1 text-[10px]">Sold Out</Badge>}
                       </div>
                     </div>
@@ -553,6 +591,23 @@ function CategorySheet({ open, onOpenChange, data, onSave, onDelete }: any) {
 function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave, onDelete }: any) {
   const form = useForm();
   const [uploading, setUploading] = useState(false);
+
+  // Fetch restaurant currency
+  const { data: restaurantData } = useQuery({
+    queryKey: ['restaurant', restaurantId],
+    enabled: !!restaurantId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('restaurants')
+        .select('currency_code')
+        .eq('id', restaurantId)
+        .single();
+      return data;
+    }
+  });
+
+  const currencyCode = restaurantData?.currency_code || 'INR';
+
   const handleReplaceImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
 
@@ -609,7 +664,7 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
         description: data?.description || "",
         price_cents: data?.price_cents || 0,
         // FIX: Default to first category if available, else empty string (which mutation converts to null)
-        category_id: data?.category_id || (categories.length > 0 ? categories[0].id : ""),
+        category_id: data?.category_id || (categories && categories.length > 0 ? categories[0].id : ""),
         image_url: data?.image_url || "",
         is_active: data?.is_active ?? true
       });
@@ -635,7 +690,7 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
             <div className="space-y-2">
               <Label>Price (Cents)</Label>
               <Input type="number" {...form.register("price_cents", { required: true })} />
-              <div className="text-xs text-muted-foreground">1000 = $10.00</div>
+              <div className="text-xs text-muted-foreground">{getCurrencyExample(currencyCode)} (enter amount in paise/cents)</div>
             </div>
             <div className="space-y-2">
               <Label>Category</Label>
@@ -647,10 +702,10 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
                   <SelectValue placeholder="Select..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((c: any) => (
+                  {(categories || []).map((c: any) => (
                     <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                   ))}
-                  {categories.length === 0 && <div className="p-2 text-xs text-muted-foreground">No categories yet</div>}
+                  {(!categories || categories.length === 0) && <div className="p-2 text-xs text-muted-foreground">No categories yet</div>}
                 </SelectContent>
               </Select>
             </div>

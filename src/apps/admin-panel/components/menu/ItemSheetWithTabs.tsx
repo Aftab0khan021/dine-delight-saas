@@ -1,7 +1,58 @@
+// Helper function for currency examples
+function getCurrencyExample(currencyCode: string = 'INR') {
+    const examples: Record<string, { amount: number; symbol: string }> = {
+        'INR': { amount: 10000, symbol: '₹' },
+        'USD': { amount: 1000, symbol: '$' },
+        'EUR': { amount: 1000, symbol: '€' },
+        'GBP': { amount: 1000, symbol: '£' },
+        'AUD': { amount: 1000, symbol: 'A$' },
+        'CAD': { amount: 1000, symbol: 'C$' },
+        'SGD': { amount: 1000, symbol: 'S$' },
+        'AED': { amount: 1000, symbol: 'د.إ' },
+        'JPY': { amount: 1000, symbol: '¥' },
+        'CNY': { amount: 1000, symbol: '¥' },
+    };
+    const ex = examples[currencyCode] || examples['INR'];
+    return `${ex.amount} = ${ex.symbol}${(ex.amount / 100).toFixed(2)}`;
+}
+
 // --- Subcomponent: Item Sheet with Tabs ---
 function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave, onDelete }: any) {
     const form = useForm();
     const [uploading, setUploading] = useState(false);
+
+    // Fetch restaurant currency
+    const { data: restaurantData } = useQuery({
+        queryKey: ['restaurant', restaurantId],
+        enabled: !!restaurantId,
+        queryFn: async () => {
+            const { data } = await supabase
+                .from('restaurants')
+                .select('currency_code')
+                .eq('id', restaurantId)
+                .single();
+            return data;
+        }
+    });
+
+    const currencyCode = restaurantData?.currency_code || 'INR';
+
+    // Currency symbol mapping
+    const getCurrencySymbol = (code: string) => {
+        const symbols: Record<string, string> = {
+            'INR': '₹',
+            'USD': '$',
+            'EUR': '€',
+            'GBP': '£',
+            'AUD': 'A$',
+            'CAD': 'C$',
+            'SGD': 'S$',
+            'AED': 'د.إ',
+            'JPY': '¥',
+            'CNY': '¥',
+        };
+        return symbols[code] || code;
+    };
 
     const handleReplaceImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files?.length) return;
@@ -40,7 +91,7 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
             form.reset({
                 name: data?.name || "",
                 description: data?.description || "",
-                price_cents: data?.price_cents || 0,
+                price_dollars: (data?.price_cents || 0) / 100,
                 category_id: data?.category_id || (categories.length > 0 ? categories[0].id : ""),
                 image_url: data?.image_url || "",
                 is_active: data?.is_active ?? true
@@ -48,7 +99,10 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
         }
     }, [open, data, categories]);
 
-    const onSubmit = (values: any) => onSave({ ...values, price_cents: Number(values.price_cents) });
+    const onSubmit = (values: any) => {
+        const price_cents = Math.round(parseFloat(values.price_dollars || "0") * 100);
+        onSave({ ...values, price_cents });
+    };
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
@@ -75,9 +129,15 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label>Price (Cents)</Label>
-                                    <Input type="number" {...form.register("price_cents", { required: true })} />
-                                    <div className="text-xs text-muted-foreground">1000 = $10.00</div>
+                                    <Label>Price ({getCurrencySymbol(currencyCode)})</Label>
+                                    <Input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        placeholder="0.00"
+                                        {...form.register("price_dollars", { required: true })}
+                                    />
+                                    <div className="text-xs text-muted-foreground">Enter price in {currencyCode} (e.g., 100.00)</div>
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Category</Label>

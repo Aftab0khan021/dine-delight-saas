@@ -18,14 +18,19 @@ type MenuItemDialogProps = {
     onAddToCart: (cartItem: any) => void;
     restaurantId: string;
     themeColor?: string;
+    currencyCode?: string;
 };
 
 // Helpers
-function formatMoney(cents: number) {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+function formatMoney(cents: number, currency: string = "INR") {
+    try {
+        return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
+    } catch (e) {
+        return new Intl.NumberFormat("en-US", { style: "currency", currency: "INR" }).format(cents / 100);
+    }
 }
 
-export function MenuItemDialog({ item, open, onOpenChange, onAddToCart, restaurantId, themeColor = "#000" }: MenuItemDialogProps) {
+export function MenuItemDialog({ item, open, onOpenChange, onAddToCart, restaurantId, themeColor = "#000", currencyCode = "INR" }: MenuItemDialogProps) {
     const { toast } = useToast();
     const [quantity, setQuantity] = useState(1);
     const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
@@ -176,7 +181,7 @@ export function MenuItemDialog({ item, open, onOpenChange, onAddToCart, restaura
                                                 <RadioGroupItem value={v.id} id={v.id} />
                                                 <Label htmlFor={v.id} className="font-medium cursor-pointer">{v.name}</Label>
                                             </div>
-                                            <span className="text-sm">{formatMoney(v.price_cents)}</span>
+                                            <span className="text-sm">{formatMoney(v.price_cents, currencyCode)}</span>
                                         </div>
                                     ))}
                                 </RadioGroup>
@@ -194,7 +199,7 @@ export function MenuItemDialog({ item, open, onOpenChange, onAddToCart, restaura
                                                 <Checkbox checked={selectedAddons.has(addon.id)} id={addon.id} />
                                                 <Label htmlFor={addon.id} className="font-medium cursor-pointer">{addon.name}</Label>
                                             </div>
-                                            <span className="text-sm">+{formatMoney(addon.price_cents)}</span>
+                                            <span className="text-sm">+{formatMoney(addon.price_cents, currencyCode)}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -232,7 +237,7 @@ export function MenuItemDialog({ item, open, onOpenChange, onAddToCart, restaura
 
                 <DialogFooter className="gap-2 sm:gap-0">
                     <Button className="w-full text-lg h-12 font-bold" onClick={handleAddToCart} style={{ backgroundColor: themeColor }}>
-                        Add for {formatMoney(totalPriceCents)}
+                        Add for {formatMoney(totalPriceCents, currencyCode)}
                     </Button>
                 </DialogFooter>
             </DialogContent>
