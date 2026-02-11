@@ -168,7 +168,7 @@ serve(async (req) => {
 
       const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
         data: inviteData,
-        redirectTo: `${supabaseUrl.replace('.supabase.co', '.vercel.app')}/auth/set-password`,
+        redirectTo: `${supabaseUrl.replace('.supabase.co', '.vercel.app')}/auth/callback`,
       });
       if (error) throw error;
       return new Response(JSON.stringify({ success: true, message: "Invite resent" }), {
@@ -192,7 +192,7 @@ serve(async (req) => {
 
     const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
       data: inviteData,
-      redirectTo: `${supabaseUrl.replace('.supabase.co', '.vercel.app')}/auth/set-password`,
+      redirectTo: `${supabaseUrl.replace('.supabase.co', '.vercel.app')}/auth/callback`,
     });
 
     if (error) {
