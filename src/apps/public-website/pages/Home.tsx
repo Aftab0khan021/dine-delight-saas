@@ -1,7 +1,22 @@
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect } from "react";
 
 export default function Home() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  // Detect invitation links and redirect to password setup
+  useEffect(() => {
+    const type = searchParams.get("type");
+    const token = searchParams.get("token");
+
+    if (type === "invite" && token) {
+      // User clicked invitation link, redirect to password setup
+      navigate(`/auth/set-password?${searchParams.toString()}`);
+    }
+  }, [searchParams, navigate]);
+
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b">
