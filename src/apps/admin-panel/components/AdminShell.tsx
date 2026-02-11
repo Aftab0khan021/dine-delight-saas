@@ -37,6 +37,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 import { AdminSidebar } from "./AdminSidebar";
 import { AdminBottomNav } from "./AdminBottomNav";
+import { PendingApprovalScreen } from "./PendingApprovalScreen";
 import { useRestaurantContext } from "../state/restaurant-context";
 
 // --- Helper: Time Ago ---
@@ -63,16 +64,33 @@ export function AdminShell({ children }: PropsWithChildren) {
   const { loading, restaurant, role, staffCategory, accessDenied, refresh } = useRestaurantContext();
 
   const [userEmail, setUserEmail] = useState<string>("Admin");
+  const [accountStatus, setAccountStatus] = useState<string | null>(null);
+  const [checkingStatus, setCheckingStatus] = useState(true);
 
   // Local state for the "Create Restaurant" form
   const [newRestName, setNewRestName] = useState("");
   const [newRestSlug, setNewRestSlug] = useState("");
   const [creating, setCreating] = useState(false);
 
+  // Check account status on mount
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user?.email) setUserEmail(data.user.email);
-    });
+    const checkAccountStatus = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserEmail(user.email || "Admin");
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('account_status')
+          .eq('id', user.id)
+          .single();
+
+        setAccountStatus(profile?.account_status || null);
+      }
+      setCheckingStatus(false);
+    };
+
+    checkAccountStatus();
   }, []);
 
   // --- Real Data: Notifications (Activity Logs) ---
@@ -134,12 +152,17 @@ export function AdminShell({ children }: PropsWithChildren) {
     }
   };
 
-  if (loading) {
+  if (loading || checkingStatus) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-sm text-muted-foreground">Loading…</p>
       </div>
     );
+  }
+
+  // CASE 0: Pending or Denied Account
+  if (accountStatus === 'pending' || accountStatus === 'denied') {
+    return <PendingApprovalScreen userEmail={userEmail} />;
   }
 
   // CASE 1: Access Denied
