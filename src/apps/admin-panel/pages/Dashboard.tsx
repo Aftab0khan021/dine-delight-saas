@@ -54,7 +54,7 @@ function Sparkline({ values, className }: { values: number[]; className?: string
 }
 
 // --- Helpers ---
-function formatMoney(cents: number, currency = "USD") {
+function formatMoney(cents: number, currency = "INR") {
   const amount = (cents ?? 0) / 100;
   return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
 }
@@ -127,12 +127,13 @@ export default function AdminDashboard() {
     enabled: !!restaurant?.id,
     queryFn: async () => {
       const [{ data: restaurantRow }, menuCount, qrCount] = await Promise.all([
-        supabase.from("restaurants").select("logo_url").eq("id", restaurant!.id).maybeSingle(),
+        supabase.from("restaurants").select("logo_url, currency_code").eq("id", restaurant!.id).maybeSingle(),
         supabase.from("menu_items").select("id", { count: "exact", head: true }).eq("restaurant_id", restaurant!.id),
         supabase.from("qr_codes").select("id", { count: "exact", head: true }).eq("restaurant_id", restaurant!.id),
       ]);
       return {
         logoUrl: restaurantRow?.logo_url ?? null,
+        currencyCode: restaurantRow?.currency_code ?? "INR",
         menuItemsCount: menuCount.count ?? 0,
         qrCodesCount: qrCount.count ?? 0,
       };
@@ -144,7 +145,7 @@ export default function AdminDashboard() {
     const todayOrders = todayOrdersQuery.data ?? [];
     const count = todayOrders.length;
     const revenue = todayOrders.reduce((sum, o) => sum + (o.total_cents ?? 0), 0);
-    const currency = todayOrders[0]?.currency_code ?? "USD";
+    const currency = setupQuery.data?.currencyCode ?? todayOrders[0]?.currency_code ?? "INR";
 
     // Calculate Avg Prep Time
     const completed = todayOrders.filter((o) => o.completed_at).map((o) =>
@@ -179,7 +180,7 @@ export default function AdminDashboard() {
         trend: [2, 4, 3, 5],
       }
     ];
-  }, [todayOrdersQuery.data]);
+  }, [todayOrdersQuery.data, setupQuery.data]);
 
   const setupChecklist = [
     { label: "Branding", detail: "Logo + cover", status: setupQuery.data?.logoUrl ? "Done" : "Pending" },

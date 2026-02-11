@@ -1,327 +1,551 @@
-import { Turnstile } from "@/components/security/Turnstile";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
+import { Card } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
+import { useToast } from "@/hooks/use-toast";
+import { CopyButton } from "@/apps/admin-panel/components/qr/CopyButton";
+import { Minus, Plus, ShoppingBag } from "lucide-react";
+import { useRestaurantCart } from "../hooks/useRestaurantCart";
+import { MenuItemDialog } from "../components/MenuItemDialog";
 
-// ... existing imports
+function formatMoney(cents: number, currency = "INR") {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+    }).format((cents ?? 0) / 100);
+  } catch {
+    return `₹${((cents ?? 0) / 100).toFixed(2)}`;
+  }
+}
+
+type RestaurantRow = Tables<"restaurants">;
+type CategoryRow = Tables<"categories">;
+type MenuItemRow = Tables<"menu_items">;
+
+type CategoryWithItems = CategoryRow & { items: MenuItemRow[] };
 
 export default function PublicMenu() {
-  // ... existing hooks
+  const { toast } = useToast();
+  const { restaurantSlug } = useParams();
+  const [searchParams] = useSearchParams();
+  const slug = (restaurantSlug ?? "").trim();
 
-  const [turnstileToken, setTurnstileToken] = useState(""); // [NEW]
+  const cart = useRestaurantCart(slug);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<MenuItemRow | null>(null);
+  const [itemDialogOpen, setItemDialogOpen] = useState(false);
 
-  // ... (keep existing state)
+  const [placingOrder, setPlacingOrder] = useState(false);
+  const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
+  const [placedOrderToken, setPlacedOrderToken] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
-  // --- Checkout Handler (SECURE FIX FOR 401 & DDoS) ---
-  const handlePlaceOrder = async () => {
-    if (!restaurant) return;
+  const restaurantQuery = useQuery({
+    queryKey: ["public-menu", "restaurant", slug],
+    enabled: !!slug,
+    queryFn: async (): Promise<RestaurantRow> => {
+      const { data, error } = await supabase
+        .from("restaurants")
+        .select("*")
+        .eq("slug", slug)
+        .maybeSingle();
 
-    // Validate Turnstile
-    if (!turnstileToken) {
-      toast({ title: "Security Check", description: "Please complete the security challenge.", variant: "destructive" });
-      return;
+      if (error) throw error;
+      if (!data) throw new Error("Restaurant not found");
+      return data;
+    },
+  });
+
+  const categoriesQuery = useQuery({
+    queryKey: ["public-menu", "categories", slug, restaurantQuery.data?.id],
+    enabled: !!restaurantQuery.data?.id,
+    queryFn: async (): Promise<CategoryRow[]> => {
+      const restaurantId = restaurantQuery.data!.id;
+      const { data, error } = await supabase
+        .from("categories")
+        .select("*")
+        .eq("restaurant_id", restaurantId)
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true });
+
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const itemsQuery = useQuery({
+    queryKey: ["public-menu", "items", slug, restaurantQuery.data?.id],
+    enabled: !!restaurantQuery.data?.id,
+    queryFn: async (): Promise<MenuItemRow[]> => {
+      const restaurantId = restaurantQuery.data!.id;
+      const { data, error } = await supabase
+        .from("menu_items")
+        .select("*")
+        .eq("restaurant_id", restaurantId)
+        .eq("is_active", true)
+        .is("deleted_at", null)
+        .order("sort_order", { ascending: true });
+
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const currencyCode = useMemo(() => {
+    return restaurantQuery.data?.currency_code ?? "INR";
+  }, [restaurantQuery.data]);
+
+  const categoriesWithItems = useMemo((): CategoryWithItems[] => {
+    const categories = categoriesQuery.data ?? [];
+    const items = itemsQuery.data ?? [];
+
+    const byCategory = new Map<string, MenuItemRow[]>();
+    for (const item of items) {
+      const key = item.category_id ?? "__uncategorized__";
+      const list = byCategory.get(key) ?? [];
+      list.push(item);
+      byCategory.set(key, list);
     }
 
-    setIsPlacingOrder(true);
+    const result: CategoryWithItems[] = categories
+      .map((c) => ({ ...c, items: byCategory.get(c.id) ?? [] }))
+      .filter((c) => c.items.length > 0);
+
+    const uncategorized = byCategory.get("__uncategorized__") ?? [];
+    if (uncategorized.length > 0) {
+      result.push({
+        id: "__uncategorized__" as unknown as string,
+        restaurant_id: restaurantQuery.data?.id ?? ("" as unknown as string),
+        name: "Other",
+        description: null,
+        is_active: true,
+        sort_order: Number.MAX_SAFE_INTEGER,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        items: uncategorized,
+      });
+    }
+
+    return result;
+  }, [categoriesQuery.data, itemsQuery.data, restaurantQuery.data?.id]);
+
+  const loading =
+    (!!slug && restaurantQuery.isLoading) ||
+    categoriesQuery.isLoading ||
+    itemsQuery.isLoading;
+
+  const errorMessage =
+    (restaurantQuery.error as Error | null)?.message ??
+    (categoriesQuery.error as Error | null)?.message ??
+    (itemsQuery.error as Error | null)?.message ??
+    null;
+
+  const trackUrl = useMemo(() => {
+    if (!placedOrderToken) return null;
+    const url = new URL(window.location.origin + "/track");
+    url.searchParams.set("token", placedOrderToken);
+    return url.toString();
+  }, [placedOrderToken]);
+
+  const placeOrder = async () => {
+    if (placingOrder) return;
+    const restaurantId = restaurantQuery.data?.id;
+    if (!restaurantId) return;
+    if (cart.items.length === 0) return;
+
+    setPlacingOrder(true);
+    setCheckoutError(null);
 
     try {
-      // 1. Retrieve Config (URL & Anon Key)
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || (supabase as any).supabaseUrl;
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || (supabase as any).supabaseKey;
-
-      if (!supabaseUrl || !anonKey) {
-        throw new Error("Configuration Error: Missing Supabase URL or Key.");
-      }
-
-      const finalTableLabel = tableLabel || searchParams.get("table");
-
-      const response = await fetch(`${supabaseUrl}/functions/v1/place-order`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": anonKey,
-          "Authorization": `Bearer ${anonKey}`
-        },
-        body: JSON.stringify({
-          restaurant_id: restaurant.id,
-          items: cartItems.map(i => ({
-            menu_item_id: i.menu_item_id,
-            quantity: i.quantity,
-            variant_id: i.variant_id || null,
-            addons: i.addons || [],
-            notes: i.notes || null
-          })),
-          table_label: finalTableLabel,
-          coupon_code: coupon?.code || null,
-          turnstileToken // [NEW] Send token to backend
+      const { data: insertedOrder, error: orderError } = await supabase
+        .from("orders")
+        .insert({
+          restaurant_id: restaurantId,
+          status: "pending",
+          currency_code: restaurantQuery.data?.currency_code || "INR",
+          tax_cents: 0,
+          tip_cents: 0,
+          discount_cents: cart.discountCents,
+          subtotal_cents: cart.subtotalCents,
+          total_cents: cart.totalCents,
         })
-      });
+        .select("id, order_token")
+        .single();
 
-      // 3. Handle Response
-      let data;
-      const text = await response.text();
-      try {
-        data = JSON.parse(text);
-      } catch {
-        throw new Error(`Server Error (${response.status}): ${text}`);
+      if (orderError) throw orderError;
+      if (!insertedOrder?.id || !insertedOrder?.order_token) {
+        throw new Error("Order created without a token.");
       }
 
-      if (!response.ok) {
-        throw new Error(data.error || `Request failed with status ${response.status}`);
-      }
+      const orderItemsPayload = cart.items.map((i) => ({
+        restaurant_id: restaurantId,
+        order_id: insertedOrder.id,
+        menu_item_id: i.menu_item_id,
+        name_snapshot: i.name,
+        quantity: i.quantity,
+        unit_price_cents: i.price_cents,
+        line_total_cents: i.price_cents * i.quantity,
+      }));
 
-      // 4. Success
-      clear();
-      setIsCartOpen(false);
-      setTurnstileToken(""); // Reset token
-      if (window.turnstile) window.turnstile.reset();
+      const { error: itemsError } = await supabase.from("order_items").insert(orderItemsPayload);
+      if (itemsError) throw itemsError;
 
-      if (data?.order_token) {
-        navigate(`/track?token=${data.order_token}`);
-      } else {
-        toast({ title: "Order Placed", description: "Your order has been received!" });
-      }
-
-    } catch (err: any) {
-      console.error("Order Error:", err);
+      setPlacedOrderId(insertedOrder.id);
+      setPlacedOrderToken(insertedOrder.order_token);
+      cart.clear();
+      setCartOpen(true);
       toast({
-        title: "Order Failed",
-        description: err.message || "Please try again.",
-        variant: "destructive"
+        title: "Order placed",
+        description: "Save your order token to track status.",
       });
-      // Reset Turnstile on error to force re-verification if needed
-      setTurnstileToken("");
-      if (window.turnstile) window.turnstile.reset();
+    } catch (e: any) {
+      setCheckoutError(e?.message ?? "Could not place order.");
     } finally {
-      setIsPlacingOrder(false);
+      setPlacingOrder(false);
     }
   };
 
-  if (loadingRest) return <div className="h-screen flex items-center justify-center">Loading menu...</div>;
-  if (!restaurant) return <div className="h-screen flex items-center justify-center">Restaurant not found.</div>;
+  useEffect(() => {
+    const name = restaurantQuery.data?.name;
+    document.title = name ? `${name} Menu` : "Menu";
+  }, [restaurantQuery.data?.name]);
 
-  const themeColor = (restaurant.settings as any)?.theme?.primary_color || "#0f172a";
+  useEffect(() => {
+    if (cart.itemCount === 0 && !placedOrderToken) setCartOpen(false);
+  }, [cart.itemCount, placedOrderToken]);
+
+  if (!slug) {
+    return (
+      <main className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-10 max-w-3xl">
+          <h1 className="text-2xl font-semibold tracking-tight">Menu</h1>
+          <p className="mt-2 text-muted-foreground">
+            Add a restaurant slug in the URL like:{" "}
+            <span className="font-mono">/r/your-restaurant-slug/menu</span>
+          </p>
+          <Card className="mt-6 p-6">
+            <p className="text-sm text-muted-foreground">
+              This page is read-only and intended for guests.
+            </p>
+          </Card>
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-
-      {/* Header */}
-      <header className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b">
-        <div className="container max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link to={`/r/${slug}`} className="p-2 -ml-2 hover:bg-muted rounded-full text-muted-foreground transition-colors"><ArrowLeft className="h-5 w-5" /></Link>
-            <h1 className="font-semibold text-lg truncate">{restaurant.name}</h1>
-          </div>
-          <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
-            <SheetTrigger asChild>
-              <div className="relative p-2 cursor-pointer">
-                <ShoppingBag className="h-6 w-6 text-foreground" />
-                {itemCount > 0 && <span className="absolute top-0 right-0 h-5 w-5 text-[10px] font-bold flex items-center justify-center rounded-full text-white ring-2 ring-background" style={{ backgroundColor: themeColor }}>{itemCount}</span>}
-              </div>
-            </SheetTrigger>
-            <SheetContent className="flex flex-col w-full sm:max-w-md">
-              <SheetHeader><SheetTitle>Your Order</SheetTitle>
-                {tableLabel && <div className="text-sm text-muted-foreground">Table: <span className="font-semibold text-foreground">{tableLabel}</span></div>}
-              </SheetHeader>
-              <div className="flex-1 overflow-hidden mt-4">
-                {cartItems.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-2"><ShoppingBag className="h-12 w-12 opacity-20" /><p>Your cart is empty.</p></div>
-                ) : (
-                  <ScrollArea className="h-full pr-4">
-                    <div className="space-y-4">
-                      {cartItems.map((item) => {
-                        const menuItem = cartItemsAvailability.find(mi => mi.id === item.menu_item_id);
-                        const isUnavailable = menuItem && !menuItem.is_active;
-
-                        return (
-                          <div key={item.menu_item_id} className={`flex items-start justify-between gap-3 ${isUnavailable ? 'opacity-60' : ''}`}>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium truncate">{item.name}</div>
-                              {item.variant_name && <div className="text-xs text-muted-foreground">Size: {item.variant_name}</div>}
-                              {item.addons && item.addons.length > 0 && (
-                                <div className="text-xs text-muted-foreground mt-0.5">
-                                  {item.addons.map(a => a.name).join(", ")}
-                                </div>
-                              )}
-                              {isUnavailable && (
-                                <div className="text-xs text-destructive font-medium mt-0.5">Unavailable</div>
-                              )}
-                              <div className="text-sm text-muted-foreground">{formatMoney(item.price_cents)}</div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <div className="flex items-center gap-2 border rounded-md p-0.5">
-                                <button onClick={() => decrement(item.cart_id)} className="h-6 w-6 flex items-center justify-center hover:bg-muted rounded text-muted-foreground"><Minus className="h-3 w-3" /></button>
-                                <span className="text-sm w-4 text-center font-medium">{item.quantity}</span>
-                                <button onClick={() => increment(item.cart_id)} className="h-6 w-6 flex items-center justify-center hover:bg-muted rounded text-muted-foreground"><Plus className="h-3 w-3" /></button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </ScrollArea>
-                )}
-              </div>
-              {cartItems.length > 0 && (
-                <div className="pt-4 space-y-4">
-                  {/* Coupon Section */}
-                  <div className="bg-muted/30 p-3 rounded-lg space-y-2">
-                    {coupon ? (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-green-600 font-medium flex items-center gap-1">
-                          🎉 Coupon Applied: {coupon.code}
-                        </span>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={removeCoupon}>
-                          <Minus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="Coupon Code"
-                          className="h-8 text-sm"
-                          value={search} // Re-using search state for temp coupon input is bad, let's create a local state
-                          onChange={(e) => setSearch(e.target.value)} // Wait, search is for items. I need a new state.
-                        />
-                        {/* STOP: I need to add state for coupon input inside the component first */}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Coupon Section */}
-                  <div className="bg-muted/30 p-3 rounded-lg space-y-2">
-                    {coupon ? (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-green-600 font-medium flex items-center gap-1">
-                          🎉 Coupon Applied: {coupon.code}
-                        </span>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={removeCoupon}>
-                          <Minus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="Coupon Code"
-                          className="h-9 text-sm"
-                          value={couponInput}
-                          onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleApplyCoupon();
-                          }}
-                        />
-                        <Button size="sm" variant="secondary" className="h-9 px-3" onClick={handleApplyCoupon} disabled={!couponInput || isValidatingCoupon}>
-                          {isValidatingCoupon ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-
-                  <Separator />
-                  {hasUnavailableItems && (
-                    <div className="bg-destructive/10 border border-destructive/20 rounded-md p-3 text-sm text-destructive">
-                      ⚠️ Some items are no longer available. Please remove them to continue.
-                    </div>
-                  )}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-muted-foreground text-sm"><span>Subtotal</span><span>{formatMoney(subtotalCents)}</span></div>
-                    {discountCents > 0 && (
-                      <div className="flex items-center justify-between text-green-600 text-sm font-medium"><span>Discount</span><span>-{formatMoney(discountCents)}</span></div>
-                    )}
-                    <div className="flex items-center justify-between font-bold text-lg"><span>Total</span><span>{formatMoney(totalCents)}</span></div>
-                  </div>
-
-                  <div className="flex justify-center py-2">
-                    <Turnstile onSuccess={setTurnstileToken} />
-                  </div>
-
-                  <Button className="w-full h-12 text-base font-bold" size="lg" style={{ backgroundColor: themeColor }} onClick={handlePlaceOrder} disabled={isPlacingOrder || hasUnavailableItems}>
-                    {isPlacingOrder ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Placing Order...</> : "Place Order"}
-                  </Button>
-                </div>
-              )}
-            </SheetContent>
-          </Sheet>
-        </div>
-        <div className="w-full overflow-x-auto whitespace-nowrap scrollbar-hide border-t bg-muted/30">
-          <div className="container max-w-3xl mx-auto px-4 py-2 flex gap-2">
-            <button onClick={() => setActiveCategory("all")} className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${activeCategory === "all" ? "text-white shadow-sm" : "bg-background text-muted-foreground border hover:bg-muted"}`} style={activeCategory === "all" ? { backgroundColor: themeColor, borderColor: themeColor } : {}}>All</button>
-            {categories.map(cat => (
-              <button key={cat.id} onClick={() => setActiveCategory(cat.id)} className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${activeCategory === cat.id ? "text-white shadow-sm" : "bg-background text-muted-foreground border hover:bg-muted"}`} style={activeCategory === cat.id ? { backgroundColor: themeColor, borderColor: themeColor } : {}}>{cat.name}</button>
-            ))}
+    <main className="min-h-screen bg-background">
+      <header className="border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
+        <div className="container mx-auto px-4 py-4 max-w-3xl">
+          <div className="flex items-center gap-4">
+            {restaurantQuery.data?.logo_url ? (
+              <img
+                src={restaurantQuery.data.logo_url}
+                alt={`${restaurantQuery.data.name} logo`}
+                className="h-12 w-12 rounded-md object-cover border"
+                loading="lazy"
+              />
+            ) : (
+              <div
+                className="h-12 w-12 rounded-md border bg-muted"
+                aria-hidden="true"
+              />
+            )}
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold tracking-tight truncate">
+                {restaurantQuery.data?.name ?? "Menu"}
+              </h1>
+              {restaurantQuery.data?.description ? (
+                <p className="text-sm text-muted-foreground line-clamp-2">
+                  {restaurantQuery.data.description}
+                </p>
+              ) : null}
+            </div>
           </div>
         </div>
       </header>
 
-      {/* Content */}
-      <main className="container max-w-3xl mx-auto px-4 py-6 space-y-8">
-        <div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search items..." className="pl-10 bg-card" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-        {activeCategory === "all" && groupedItems ? (
-          categories.map(cat => {
-            const catItems = groupedItems[cat.id];
-            if (!catItems?.length) return null;
-            return (
-              <div key={cat.id} className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <h2 className="font-bold text-lg">{cat.name}</h2>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {catItems.map(item => (
-                    <MenuItemCard
-                      key={item.id}
-                      item={item}
-                      onAdd={() => { setCustomizingItem(item); setIsCustomizeOpen(true); }}
-                    />
+      <div className="container mx-auto px-4 py-8 max-w-3xl pb-28">
+        {loading ? (
+          <Card className="p-6">
+            <p className="text-sm text-muted-foreground">Loading menu…</p>
+          </Card>
+        ) : errorMessage ? (
+          <Card className="p-6">
+            <p className="text-sm text-destructive">{errorMessage}</p>
+          </Card>
+        ) : categoriesWithItems.length === 0 ? (
+          <Card className="p-6">
+            <p className="text-sm text-muted-foreground">
+              No active menu items yet.
+            </p>
+          </Card>
+        ) : (
+          <div className="space-y-10">
+            {categoriesWithItems.map((category) => (
+              <section key={category.id} aria-labelledby={`cat-${category.id}`}>
+                <div className="flex items-baseline justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2
+                      id={`cat-${category.id}`}
+                      className="text-lg font-semibold tracking-tight"
+                    >
+                      {category.name}
+                    </h2>
+                    {category.description ? (
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {category.description}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3">
+                  {category.items.map((item) => (
+                    <Card key={item.id} className="p-4">
+                      <div className="flex gap-4">
+                        {item.image_url ? (
+                          <img
+                            src={item.image_url}
+                            alt={item.name}
+                            className="h-20 w-20 rounded-md object-cover border"
+                            loading="lazy"
+                          />
+                        ) : null}
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="font-medium truncate">{item.name}</p>
+                              {item.description ? (
+                                <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
+                                  {item.description}
+                                </p>
+                              ) : null}
+                            </div>
+                            <p className="font-medium tabular-nums whitespace-nowrap">
+                              {formatMoney(item.price_cents, restaurantQuery.data?.currency_code)}
+                            </p>
+                          </div>
+
+                          <div className="mt-3 flex items-center justify-between gap-3">
+                            {item.sku ? (
+                              <p className="text-xs text-muted-foreground font-mono truncate">
+                                {item.sku}
+                              </p>
+                            ) : (
+                              <span />
+                            )}
+
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => {
+                                setSelectedItem(item);
+                                setItemDialogOpen(true);
+                              }}
+                            >
+                              Add
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
                   ))}
                 </div>
-              </div>
-            );
-          })
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
-            {filteredItems.map(item => (
-              <MenuItemCard
-                key={item.id}
-                item={item}
-                onAdd={() => { setCustomizingItem(item); setIsCustomizeOpen(true); }}
-              />
+              </section>
             ))}
-            {!filteredItems.length && <p className="col-span-full text-center text-muted-foreground py-10">No items found.</p>}
           </div>
         )}
-        {activeCategory === "all" && groupedItems?.["uncategorized"]?.length ? (
-          <div className="space-y-3">
-            <h2 className="font-bold text-lg">Other</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {groupedItems["uncategorized"].map(item => (
-                <MenuItemCard
-                  key={item.id}
-                  item={item}
-                  onAdd={() => { setCustomizingItem(item); setIsCustomizeOpen(true); }}
-                />
-              ))}
-            </div>
-          </div>
-        ) : null}
-      </main>
-      <MenuItemDialog
-        open={isCustomizeOpen}
-        onOpenChange={setIsCustomizeOpen}
-        item={customizingItem}
-        restaurantId={restaurant?.id || ""}
-        themeColor={themeColor}
-        onAddToCart={(item) => {
-          addItem(item);
-          toast({ title: "Added", description: `${item.name} added to cart.` });
-        }}
-      />
-    </div>
-  );
-}
-
-function MenuItemCard({ item, onAdd }: { item: MenuItem, onAdd: () => void }) {
-  return (
-    <Card className="flex overflow-hidden border shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex-1 p-4 flex flex-col justify-between">
-        <div><div className="font-semibold line-clamp-1">{item.name}</div><div className="text-xs text-muted-foreground line-clamp-2 mt-1">{item.description || "No description available."}</div></div>
-        <div className="font-bold text-sm mt-3 flex items-center justify-between"><span>{formatMoney(item.price_cents)}</span><Button size="sm" variant="outline" className="h-7 px-3 text-xs rounded-full" onClick={onAdd}>Add</Button></div>
       </div>
-      {item.image_url ? <div className="w-28 bg-muted shrink-0 relative"><img src={item.image_url} alt={item.name} className="h-full w-full object-cover" /></div> : <div className="w-24 bg-muted/50 shrink-0 flex items-center justify-center text-muted-foreground/30"><ImageOff className="h-6 w-6" /></div>}
-    </Card>
+
+      {/* Floating Cart */}
+      <Drawer open={cartOpen} onOpenChange={setCartOpen}>
+        <DrawerTrigger asChild>
+          <button
+            type="button"
+            className="fixed bottom-4 right-4 z-40"
+            aria-label="Open cart"
+            onClick={() => setCartOpen(true)}
+          >
+            <div className="relative">
+              <Button size="lg" className="shadow-lg">
+                <ShoppingBag className="h-4 w-4" />
+                Cart
+              </Button>
+              {cart.itemCount > 0 ? (
+                <span className="absolute -top-2 -right-2">
+                  <Badge variant="secondary" className="min-w-6 justify-center">
+                    {cart.itemCount}
+                  </Badge>
+                </span>
+              ) : null}
+            </div>
+          </button>
+        </DrawerTrigger>
+
+        <DrawerContent className="max-h-[85vh]">
+          <DrawerHeader className="text-left">
+            <DrawerTitle>Cart</DrawerTitle>
+          </DrawerHeader>
+
+          <div className="px-4 pb-4 overflow-auto">
+            {cart.items.length === 0 ? (
+              placedOrderToken ? (
+                <Card className="p-6">
+                  <p className="text-sm text-muted-foreground">Order placed</p>
+                  <p className="mt-2 font-mono text-sm break-all">{placedOrderToken}</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <CopyButton value={placedOrderToken} label="Copy token" />
+                    {trackUrl ? <CopyButton value={trackUrl} label="Copy tracking link" /> : null}
+                    {placedOrderToken ? (
+                      <Link to={`/track?token=${encodeURIComponent(placedOrderToken)}`}>
+                        <Button variant="secondary" size="sm">Track</Button>
+                      </Link>
+                    ) : null}
+                  </div>
+                  {checkoutError ? (
+                    <p className="mt-3 text-sm text-destructive">{checkoutError}</p>
+                  ) : null}
+                </Card>
+              ) : (
+                <Card className="p-6">
+                  <p className="text-sm text-muted-foreground">Your cart is empty.</p>
+                </Card>
+              )
+            ) : (
+              <div className="space-y-3">
+                {cart.items.map((line) => (
+                  <Card key={line.menu_item_id} className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{line.name}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {formatMoney(line.price_cents, currencyCode)} each
+                        </p>
+                      </div>
+
+                      <p className="font-medium tabular-nums whitespace-nowrap">
+                        {formatMoney(line.price_cents * line.quantity, currencyCode)}
+                      </p>
+                    </div>
+
+                    <Separator className="my-3" />
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => cart.decrement(line.cart_id)}
+                          aria-label={`Decrease ${line.name}`}
+                        >
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                        <span className="min-w-8 text-center tabular-nums">{line.quantity}</span>
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => cart.increment(line.cart_id)}
+                          aria-label={`Increase ${line.name}`}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      <Button
+                        variant="ghost"
+                        onClick={() => cart.removeItem(line.cart_id)}
+                        className="text-muted-foreground"
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <DrawerFooter>
+            {cart.items.length > 0 ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">Subtotal</p>
+                  <p className="font-medium tabular-nums">{formatMoney(cart.subtotalCents, currencyCode)}</p>
+                </div>
+                <Button
+                  disabled={cart.items.length === 0 || placingOrder || !restaurantQuery.data?.id}
+                  onClick={placeOrder}
+                >
+                  {placingOrder ? "Placing…" : "Place order"}
+                </Button>
+                {checkoutError ? (
+                  <p className="text-sm text-destructive">{checkoutError}</p>
+                ) : null}
+              </>
+            ) : null}
+
+            <div className="flex items-center justify-between gap-3">
+              <DrawerClose asChild>
+                <Button variant="outline">Close</Button>
+              </DrawerClose>
+              {cart.items.length > 0 ? (
+                <Button
+                  variant="ghost"
+                  onClick={cart.clear}
+                  disabled={cart.items.length === 0}
+                  className="text-muted-foreground"
+                >
+                  Clear
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setPlacedOrderId(null);
+                    setPlacedOrderToken(null);
+                    setCheckoutError(null);
+                  }}
+                  disabled={!placedOrderToken}
+                  className="text-muted-foreground"
+                >
+                  Done
+                </Button>
+              )}
+            </div>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
+      {/* Menu Item Dialog for Variants/Addons */}
+      <MenuItemDialog
+        item={selectedItem}
+        open={itemDialogOpen}
+        onOpenChange={setItemDialogOpen}
+        onAddToCart={(cartItem) => {
+          cart.addItem(cartItem);
+          setCartOpen(true);
+        }}
+        restaurantId={restaurantQuery.data?.id ?? ""}
+        themeColor={restaurantQuery.data?.theme_color}
+        currencyCode={restaurantQuery.data?.currency_code}
+      />
+    </main>
   );
 }

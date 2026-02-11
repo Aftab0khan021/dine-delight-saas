@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, ExternalLink, Globe, Image as ImageIcon, Palette, Save, Store, X, Phone, Mail, Clock } from "lucide-react";
+import { Copy, ExternalLink, Globe, Image as ImageIcon, Palette, Save, Store, X, Phone, Mail, Clock, DollarSign } from "lucide-react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -38,6 +38,7 @@ const formSchema = z.object({
   cover_image_url: z.string().trim().url("Enter a valid URL").max(2000).optional().or(z.literal("")),
   primary_color: hexSchema,
   accent_color: hexSchema,
+  currency_code: z.string().min(3).max(3),
 });
 
 type BrandingFormValues = z.infer<typeof formSchema>;
@@ -82,7 +83,7 @@ export default function AdminBranding() {
     queryFn: async () => {
       const { data } = await supabase
         .from("restaurants")
-        .select("id, name, description, logo_url, slug, settings, operating_hours, is_holiday_mode, holiday_mode_message, max_variants_per_item")
+        .select("id, name, description, logo_url, slug, settings, operating_hours, is_holiday_mode, holiday_mode_message, max_variants_per_item, currency_code")
         .eq("id", restaurant!.id)
         .single();
       return data;
@@ -100,6 +101,7 @@ export default function AdminBranding() {
       cover_image_url: "",
       primary_color: "#000000",
       accent_color: "#ffffff",
+      currency_code: "INR",
     },
     mode: "onChange"
   });
@@ -116,7 +118,8 @@ export default function AdminBranding() {
         contact_phone: s.contact_phone || "",
         cover_image_url: s.cover_image_url || "",
         primary_color: s.theme?.primary_color || "#000000",
-        accent_color: s.theme?.accent_color || "#ffffff"
+        accent_color: s.theme?.accent_color || "#ffffff",
+        currency_code: restaurantData.currency_code || "INR"
       });
 
       // Sync operating hours
@@ -151,6 +154,7 @@ export default function AdminBranding() {
         name: values.name,
         description: values.description || null,
         logo_url: values.logo_url || null,
+        currency_code: values.currency_code,
         settings: nextSettings,
         operating_hours: operatingHours,
         is_holiday_mode: isHolidayMode,
@@ -234,6 +238,31 @@ export default function AdminBranding() {
                   <Label>Contact Phone</Label>
                   <Input {...form.register("contact_phone")} placeholder="+1 (555) 000-0000" />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="currency_code" className="flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  Currency
+                </Label>
+                <select
+                  id="currency_code"
+                  {...form.register("currency_code")}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="INR">🇮🇳 INR - Indian Rupee (₹)</option>
+                  <option value="USD">🇺🇸 USD - US Dollar ($)</option>
+                  <option value="EUR">🇪🇺 EUR - Euro (€)</option>
+                  <option value="GBP">🇬🇧 GBP - British Pound (£)</option>
+                  <option value="AUD">🇦🇺 AUD - Australian Dollar (A$)</option>
+                  <option value="CAD">🇨🇦 CAD - Canadian Dollar (C$)</option>
+                  <option value="SGD">🇸🇬 SGD - Singapore Dollar (S$)</option>
+                  <option value="AED">🇦🇪 AED - UAE Dirham (د.إ)</option>
+                  <option value="JPY">🇯🇵 JPY - Japanese Yen (¥)</option>
+                  <option value="CNY">🇨🇳 CNY - Chinese Yuan (¥)</option>
+                </select>
+                {form.formState.errors.currency_code && <p className="text-xs text-destructive">{form.formState.errors.currency_code.message}</p>}
+                <p className="text-xs text-muted-foreground">All menu prices will be displayed in this currency</p>
               </div>
             </CardContent>
           </Card>

@@ -2,6 +2,7 @@ import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import * as Sentry from '@sentry/react';
 
 interface ErrorBoundaryProps {
     children: React.ReactNode;
@@ -43,10 +44,14 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
             errorInfo,
         });
 
-        // TODO: Send error to monitoring service (e.g., Sentry)
-        // if (window.Sentry) {
-        //   window.Sentry.captureException(error, { extra: errorInfo });
-        // }
+        // Send error to Sentry for monitoring
+        Sentry.captureException(error, {
+            contexts: {
+                react: {
+                    componentStack: errorInfo.componentStack,
+                },
+            },
+        });
     }
 
     handleReset = () => {
