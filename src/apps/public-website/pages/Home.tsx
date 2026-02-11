@@ -1,30 +1,7 @@
 import { Button } from "@/components/ui/button";
-import { Link, useNavigate } from "react-router-dom";
-import { useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { Link } from "react-router-dom";
 
 export default function Home() {
-  const navigate = useNavigate();
-
-  // Detect if user just accepted invitation (needs to set password)
-  useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-
-      // Only redirect if user has a session AND there's an access_token in the URL
-      // (meaning they just clicked the invitation link)
-      const urlParams = new URLSearchParams(window.location.search);
-      const hasAccessToken = urlParams.has('access_token') || urlParams.has('token_hash');
-
-      if (session?.user && hasAccessToken) {
-        // User just clicked invitation link, redirect to password setup
-        navigate('/auth/set-password');
-      }
-    };
-
-    checkSession();
-  }, [navigate]);
-
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b">
