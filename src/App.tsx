@@ -16,6 +16,7 @@ import QrResolver from "./apps/public-website/pages/QrResolver";
 import AdminAuth from "./apps/admin-panel/pages/Auth";
 import SetPassword from "./apps/admin-panel/pages/SetPassword";
 import AuthCallback from "./apps/admin-panel/pages/AuthCallback";
+import AcceptInvitation from "./apps/admin-panel/pages/AcceptInvitation";
 import { AdminLayout } from "./apps/admin-panel/components/AdminLayout";
 import AdminDashboard from "./apps/admin-panel/pages/Dashboard";
 import AdminOrders from "./apps/admin-panel/pages/Orders";
@@ -65,6 +66,7 @@ const App = () => (
           <Route path="/admin/auth" element={<AdminAuth />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/auth/set-password" element={<SetPassword />} />
+          <Route path="/auth/accept-invitation" element={<AcceptInvitation />} />
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="dashboard" element={<AdminDashboard />} />

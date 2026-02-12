@@ -7,6 +7,9 @@ const corsHeaders = {
   "access-control-allow-headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Resend API configuration
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -25,240 +28,298 @@ serve(async (req) => {
       auth: { persistSession: false },
     });
 
-    // 0. IP-based Rate Limiting (Prevent Anonymous Spam)
-    // Note: This is optional and will be skipped if ip_address column doesn't exist
-    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
-
-    if (clientIp !== 'unknown') {
-      try {
-        const { count: ipInvites } = await supabase
-          .from("staff_invites")
-          .select("*", { count: "exact", head: true })
-          .eq("ip_address", clientIp)
-          .gte("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString()); // Last hour
-
-        if (ipInvites !== null && ipInvites >= 5) {
-          console.warn(`IP rate limit exceeded: ${clientIp}`);
-          return new Response(
-            JSON.stringify({ error: "Too many requests from this IP. Please try again later." }),
-            {
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-              status: 429,
-            }
-          );
+    // Get authorization header
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Missing authorization header" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 401,
         }
-      } catch (ipError) {
-        // IP rate limiting is optional - continue if column doesn't exist
-        console.log("IP rate limiting skipped:", ipError);
-      }
+      );
     }
 
-    // 1. Get authenticated user from JWT (Manual verification for security)
-    // When verify_jwt is enabled, Supabase injects the user info into the request
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("Missing Authorization header");
-
-    // Extract and verify the JWT
+    // Verify the user
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
       console.error("Auth error:", authError);
-      throw new Error("Unauthorized");
-    }
-
-    // 2. Rate Limiting - Prevent abuse
-    // Check how many invites this user has sent in the last 15 minutes
-    const { count: recentInvites } = await supabase
-      .from("staff_invites")
-      .select("*", { count: "exact", head: true })
-      .eq("invited_by", user.id)
-      .gte("created_at", new Date(Date.now() - 15 * 60 * 1000).toISOString());
-
-    if (recentInvites !== null && recentInvites >= 10) {
-      console.warn(`Rate limit exceeded for user: ${user.id}`);
       return new Response(
-        JSON.stringify({ error: "Too many invite requests. Please wait 15 minutes." }),
+        JSON.stringify({ error: "Unauthorized" }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 429,
+          status: 401,
         }
       );
     }
 
-    // 3. Parse Payload
-    const payload = await req.json();
-    const { email, restaurant_id, role, action } = payload;
+    console.log("✅ User authenticated:", user.id);
 
-    if (!restaurant_id) throw new Error("Missing restaurant_id");
-
-    // Helper function to check if a string is a valid UUID
-    const isUUID = (str: string) => {
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      return uuidRegex.test(str);
-    };
-
-    // Determine if 'role' is a staff category ID or a legacy role
-    let actualRole = "user"; // Default role
-    let staffCategoryId = null;
-
-    if (role) {
-      if (isUUID(role)) {
-        // It's a staff category ID
-        staffCategoryId = role;
-        // For category-based staff, default to 'user' role
-        // The permissions will be determined by the category
-        actualRole = "user";
-      } else if (["user", "restaurant_admin"].includes(role)) {
-        // It's a legacy role
-        actualRole = role;
-      } else {
-        throw new Error(`Invalid role: ${role}`);
-      }
-    }
-
-    // 4. Authorize User (Check Permissions)
-    // Check if user has permission to invite staff for this restaurant
-    // Two scenarios:
-    // 1. User has a user_roles entry for this specific restaurant (restaurant_id matches)
-    // 2. User is a restaurant_admin who owns this restaurant (restaurant_id in user_roles matches OR user created the restaurant)
-
-    const { data: userRole, error: roleError } = await supabase
+    // Check if user is restaurant_admin
+    const { data: userRoles, error: rolesError } = await supabase
       .from("user_roles")
       .select("role, restaurant_id")
       .eq("user_id", user.id)
-      .or(`restaurant_id.eq.${restaurant_id},and(role.eq.restaurant_admin,restaurant_id.is.null)`)
-      .maybeSingle();
+      .or("role.eq.restaurant_admin,role.eq.owner");
 
-    console.log("🔐 Authorization check:", {
-      userId: user.id,
-      requestedRestaurantId: restaurant_id,
-      userRole: userRole,
-      roleError: roleError
-    });
-
-    // If no role found, check if user is the owner of this restaurant
-    if (!userRole) {
-      const { data: restaurant, error: restError } = await supabase
-        .from("restaurants")
-        .select("id")
-        .eq("id", restaurant_id)
-        .eq("created_by", user.id)
-        .maybeSingle();
-
-      if (restError || !restaurant) {
-        throw new Error("Forbidden: You do not have permission to manage staff for this restaurant.");
-      }
-
-      // User owns the restaurant, allow the invite
-      console.log("✅ User owns restaurant, allowing invite");
-    } else if (roleError || !["restaurant_admin", "super_admin"].includes(userRole.role)) {
-      throw new Error("Forbidden: You do not have permission to manage staff for this restaurant.");
+    if (rolesError) {
+      console.error("Roles query error:", rolesError);
+      return new Response(
+        JSON.stringify({ error: "Failed to verify permissions" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 500,
+        }
+      );
     }
 
-
-    // 5. Perform Action
-    if (action === "resend") {
-      if (!email) throw new Error("Missing email for resend");
-
-      const inviteData: any = { restaurant_id, role: actualRole };
-      if (staffCategoryId) {
-        inviteData.staff_category_id = staffCategoryId;
-      }
-
-      const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-        data: inviteData,
-        redirectTo: `${supabaseUrl.replace('.supabase.co', '.vercel.app')}/auth/callback`,
-      });
-      if (error) throw error;
-      return new Response(JSON.stringify({ success: true, message: "Invite resent" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
+    if (!userRoles || userRoles.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Insufficient permissions" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 403,
+        }
+      );
     }
 
-    // New Invite
-    if (!email) throw new Error("Missing email");
-
-    const inviteData: any = { restaurant_id, role: actualRole };
-    if (staffCategoryId) {
-      inviteData.staff_category_id = staffCategoryId;
-    }
-
-    console.log("📧 Attempting to invite:", email);
+    const restaurant_id = userRoles[0].restaurant_id;
     console.log("🏢 Restaurant ID:", restaurant_id);
-    console.log("👤 Role:", actualRole);
+
+    // Parse request body
+    const { email, staffCategoryId } = await req.json();
+
+    if (!email) {
+      return new Response(
+        JSON.stringify({ error: "Missing email" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        }
+      );
+    }
+
+    console.log("📧 Inviting:", email);
     console.log("📋 Staff Category ID:", staffCategoryId);
 
-    const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-      data: inviteData,
-      redirectTo: `${supabaseUrl.replace('.supabase.co', '.vercel.app')}/auth/callback`,
-    });
+    // Check if user already exists
+    const { data: existingUsers } = await supabase.auth.admin.listUsers();
+    const existingUser = existingUsers?.users.find(u => u.email === email);
 
-    if (error) {
-      console.error("❌ Invite error:", error);
-
-      // Handle specific error codes
-      if (error.message?.includes("already been registered") || error.status === 422) {
-        // Check if user is already in THIS restaurant
-        const { data: existingUsers } = await supabase.auth.admin.listUsers();
-        const existingUser = existingUsers?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
-
-        if (existingUser) {
-          const { data: existingRole } = await supabase
-            .from("user_roles")
-            .select("role, staff_category_id, staff_categories(name)")
-            .eq("user_id", existingUser.id)
-            .eq("restaurant_id", restaurant_id)
-            .maybeSingle();
-
-          if (existingRole) {
-            throw new Error(`This user is already a member of your restaurant with role: ${existingRole.staff_categories?.name || existingRole.role}`);
-          }
+    if (existingUser) {
+      return new Response(
+        JSON.stringify({ error: "User with this email already exists" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
         }
-
-        // User exists in auth but not in this restaurant
-        throw new Error("This email is already registered in the system. They may belong to another restaurant. Please use a different email.");
-      }
-
-      throw error;
+      );
     }
 
-    console.log("✅ Invitation sent successfully");
+    // Generate secure invitation token
+    const invitationToken = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes from now
 
-    // Track invite in staff_invites table
+    console.log("🔑 Generated token:", invitationToken);
+    console.log("⏰ Expires at:", expiresAt.toISOString());
+
+    // Store invitation token in database
+    const { error: tokenError } = await supabase
+      .from("invitation_tokens")
+      .insert({
+        email,
+        token: invitationToken,
+        restaurant_id,
+        staff_category_id: staffCategoryId || null,
+        role: 'user',
+        expires_at: expiresAt.toISOString(),
+        created_by: user.id,
+      });
+
+    if (tokenError) {
+      console.error("❌ Token creation error:", tokenError);
+      return new Response(
+        JSON.stringify({ error: "Failed to create invitation token" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 500,
+        }
+      );
+    }
+
+    console.log("✅ Token stored in database");
+
+    // Get restaurant name for email
+    const { data: restaurant } = await supabase
+      .from("restaurants")
+      .select("name")
+      .eq("id", restaurant_id)
+      .single();
+
+    const restaurantName = restaurant?.name || "the restaurant";
+
+    // Create invitation link
+    const appUrl = supabaseUrl.replace('.supabase.co', '.vercel.app');
+    const invitationLink = `${appUrl}/auth/accept-invitation?token=${invitationToken}`;
+
+    console.log("🔗 Invitation link:", invitationLink);
+
+    // Send custom email via Resend
+    const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .container {
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 40px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #1a1a1a;
+      margin-bottom: 20px;
+    }
+    .button {
+      display: inline-block;
+      background: #2563eb;
+      color: #ffffff !important;
+      padding: 14px 28px;
+      text-decoration: none;
+      border-radius: 6px;
+      margin: 20px 0;
+      font-weight: 600;
+    }
+    .expiry {
+      color: #666;
+      font-size: 14px;
+      margin-top: 20px;
+    }
+    .footer {
+      color: #999;
+      font-size: 12px;
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid #eee;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎉 You're Invited!</h1>
+    <p>You've been invited to join <strong>${restaurantName}</strong> as a staff member.</p>
+    
+    <p>Click the button below to accept your invitation and set your password:</p>
+    
+    <a href="${invitationLink}" class="button">Accept Invitation</a>
+    
+    <p class="expiry">⏰ This invitation expires in 30 minutes.</p>
+    
+    <p class="footer">
+      If you didn't expect this invitation, you can safely ignore this email.
+    </p>
+  </div>
+</body>
+</html>
+    `;
+
+    if (!RESEND_API_KEY) {
+      console.warn("⚠️ RESEND_API_KEY not configured, skipping email send");
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Invitation created (email not sent - RESEND_API_KEY missing)",
+          invitationLink // Return link for testing
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        }
+      );
+    }
+
+    // Send email via Resend
+    const emailResponse = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "Dine Delight <onboarding@resend.dev>", // Replace with your verified domain
+        to: [email],
+        subject: `You're invited to join ${restaurantName}`,
+        html: emailHtml,
+      }),
+    });
+
+    if (!emailResponse.ok) {
+      const errorText = await emailResponse.text();
+      console.error("❌ Email send error:", errorText);
+
+      // Delete the token since email failed
+      await supabase
+        .from("invitation_tokens")
+        .delete()
+        .eq("token", invitationToken);
+
+      return new Response(
+        JSON.stringify({ error: "Failed to send invitation email" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 500,
+        }
+      );
+    }
+
+    const emailResult = await emailResponse.json();
+    console.log("✅ Email sent:", emailResult);
+
+    // Record invitation in staff_invites table (for tracking)
     try {
-      const { error: inviteInsertError } = await supabase
+      await supabase
         .from("staff_invites")
         .insert({
-          restaurant_id: restaurant_id,
-          email: email.toLowerCase(),
-          role: actualRole,
-          staff_category_id: staffCategoryId,
+          email,
+          restaurant_id,
           invited_by: user.id,
-          ip_address: clientIp !== 'unknown' ? clientIp : null,
           status: 'pending',
         });
-
-      if (inviteInsertError) {
-        console.error("Failed to track invite in database:", inviteInsertError);
-        // Don't throw - email was sent successfully, tracking is secondary
-      }
-    } catch (trackError) {
-      console.error("Error tracking invite:", trackError);
-      // Continue - email sent successfully
+    } catch (inviteError) {
+      console.warn("⚠️ Failed to record in staff_invites:", inviteError);
+      // Non-critical, continue
     }
 
-    return new Response(JSON.stringify(data), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
-    });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: "Invitation sent successfully",
+        expiresAt: expiresAt.toISOString(),
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      }
+    );
 
-  } catch (error: any) {
-    console.error("Function error:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 400,
-    });
+  } catch (error) {
+    console.error("❌ Unexpected error:", error);
+    return new Response(
+      JSON.stringify({ error: error.message || "Internal server error" }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+      }
+    );
   }
 });
