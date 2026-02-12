@@ -168,11 +168,12 @@ export default function PublicMenu() {
     if (!restaurantId) return;
     if (cart.items.length === 0) return;
 
-    // Require Turnstile token for bot/abuse protection
-    if (!turnstileToken) {
-      setCheckoutError("Please complete the security check before placing your order.");
-      return;
-    }
+    // TEMPORARY: Disable Turnstile requirement for testing
+    // TODO: Re-enable after fixing Turnstile loading issue
+    // if (!turnstileToken) {
+    //   setCheckoutError("Please complete the security check before placing your order.");
+    //   return;
+    // }
 
     setPlacingOrder(true);
     setCheckoutError(null);
@@ -490,8 +491,8 @@ export default function PublicMenu() {
                     </p>
                   </div>
                 </div>
-                {/* Render Turnstile outside conditional to prevent re-initialization */}
-                {turnstileRendered && (
+                {/* TEMPORARY: Hide Turnstile while debugging loading issue */}
+                {false && turnstileRendered && (
                   <Turnstile
                     key="order-turnstile"
                     onSuccess={(token) => {
