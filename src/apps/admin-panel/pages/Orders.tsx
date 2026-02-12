@@ -10,6 +10,7 @@ import { useFeatureAccess } from "../hooks/useFeatureAccess";
 import { orderNotificationService } from "../services/OrderNotificationService";
 import { ManualDiscountDialog } from "../components/orders/ManualDiscountDialog";
 import { generateKOTHtml } from "../components/orders/KOTTemplate";
+import { shortId } from "@/lib/formatting";
 
 // UI Components
 import { Badge } from "@/components/ui/badge";
@@ -40,10 +41,6 @@ const STATUS_MAP: Record<OrderStatus, string> = {
 
 // The Kanban Columns (UI Labels)
 const UI_COLUMNS = ["New", "Preparing", "Ready", "Completed"];
-
-function shortId(id: string) {
-  return id ? `#${id.slice(0, 4)}` : "";
-}
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });

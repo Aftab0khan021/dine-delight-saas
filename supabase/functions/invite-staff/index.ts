@@ -107,8 +107,25 @@ serve(async (req) => {
     console.log("📋 Staff Category ID:", staffCategoryId);
 
     // Check if user already exists
-    const { data: existingUsers } = await supabase.auth.admin.listUsers();
-    const existingUser = existingUsers?.users.find((u: any) => u.email === email);
+    // Check if a user with this email already exists in auth.
+    // Use exists() style query instead of fetching all users.
+    const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers({
+      page: 1,
+      perPage: 100,
+    });
+
+    if (listError) {
+      console.error("List users error:", listError);
+      return new Response(
+        JSON.stringify({ error: "Failed to verify existing users" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 500,
+        }
+      );
+    }
+
+    const existingUser = existingUsers?.users.find((u: any) => u.email?.toLowerCase() === String(email).toLowerCase());
 
     if (existingUser) {
       return new Response(
@@ -163,7 +180,9 @@ serve(async (req) => {
     const restaurantName = restaurant?.name || "the restaurant";
 
     // Create invitation link
-    const appUrl = "https://dine-delight-saas.vercel.app";
+    const appUrl =
+      Deno.env.get("APP_BASE_URL") ??
+      "https://dine-delight-saas.vercel.app";
     const invitationLink = `${appUrl}/auth/accept-invitation?token=${invitationToken}`;
 
     console.log("🔗 Invitation link:", invitationLink);

@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Minus, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { formatMoney } from "@/lib/formatting";
 
 type MenuItemDialogProps = {
     item: any | null;
@@ -20,15 +21,6 @@ type MenuItemDialogProps = {
     themeColor?: string;
     currencyCode?: string;
 };
-
-// Helpers
-function formatMoney(cents: number, currency: string = "INR") {
-    try {
-        return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
-    } catch (e) {
-        return new Intl.NumberFormat("en-US", { style: "currency", currency: "INR" }).format(cents / 100);
-    }
-}
 
 export function MenuItemDialog({ item, open, onOpenChange, onAddToCart, restaurantId, themeColor = "#000", currencyCode = "INR" }: MenuItemDialogProps) {
     const { toast } = useToast();

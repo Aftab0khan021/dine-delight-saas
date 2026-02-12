@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatMoney } from "@/lib/formatting";
 
 type InvoiceRow = {
   id: string;
@@ -32,19 +33,6 @@ type InvoiceRow = {
   invoice_pdf_url: string | null;
   created_at: string;
 };
-
-function formatMoney(cents: number, currencyCode?: string) {
-  const currency = (currencyCode || "USD").trim().toUpperCase();
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 2,
-    }).format((cents || 0) / 100);
-  } catch {
-    return `${((cents || 0) / 100).toFixed(2)} ${currency}`;
-  }
-}
 
 export default function SuperAdminInvoices() {
   const { toast } = useToast();

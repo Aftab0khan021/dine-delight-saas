@@ -4,41 +4,27 @@
  */
 
 class OrderNotificationService {
-    private audio: HTMLAudioElement | null = null;
+    private audioContext: AudioContext | null = null;
     private permissionGranted: boolean = false;
 
     constructor() {
-        this.initializeAudio();
+        this.ensureAudioContext();
         this.checkPermission();
     }
 
     /**
-     * Initialize audio element with notification sound
+     * Lazily create (and reuse) a single AudioContext.
      */
-    private initializeAudio() {
+    private ensureAudioContext(): AudioContext | null {
         try {
-            // Create audio element with data URL (base64 encoded notification sound)
-            // Using a simple beep tone generated programmatically
-            this.audio = new Audio();
-
-            // Generate a simple notification beep using Web Audio API
-            const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-
-            oscillator.frequency.value = 800; // Frequency in Hz
-            oscillator.type = 'sine';
-
-            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-
-            // We'll use a simple approach: play system notification sound
-            // For a custom sound, you would load an MP3 file
+            if (this.audioContext) return this.audioContext;
+            const Ctor = (window as any).AudioContext || (window as any).webkitAudioContext;
+            if (!Ctor) return null;
+            this.audioContext = new Ctor();
+            return this.audioContext;
         } catch (error) {
-            console.error('Failed to initialize audio:', error);
+            console.error('Failed to create AudioContext:', error);
+            return null;
         }
     }
 
@@ -79,8 +65,16 @@ class OrderNotificationService {
      */
     playSound() {
         try {
-            // Use Web Audio API to generate a beep
-            const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const audioContext = this.ensureAudioContext();
+            if (!audioContext) return;
+
+            if (audioContext.state === 'suspended') {
+                audioContext.resume().catch(() => {
+                    // Ignore resume failures; user gesture may be required
+                });
+            }
+
+            // Use Web Audio API to generate a short beep
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
 

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Loader2, CheckCircle2, Clock, ChefHat, ShoppingBag, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { formatMoney } from "@/lib/formatting";
 
 // Types
 type OrderStatus = 'pending' | 'in_progress' | 'ready' | 'completed' | 'cancelled';
@@ -27,10 +28,6 @@ interface OrderItem {
   name_snapshot: string;
   quantity: number;
   line_total_cents: number;
-}
-
-function formatMoney(cents: number, currency: string) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
 }
 
 import { Turnstile } from "@/components/security/Turnstile";
