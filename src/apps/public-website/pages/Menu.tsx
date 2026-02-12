@@ -46,6 +46,14 @@ export default function PublicMenu() {
   const [placedOrderToken, setPlacedOrderToken] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileRendered, setTurnstileRendered] = useState(false);
+
+  // Reset Turnstile when cart opens
+  useEffect(() => {
+    if (cartOpen && !turnstileRendered) {
+      setTurnstileRendered(true);
+    }
+  }, [cartOpen, turnstileRendered]);
 
   const restaurantQuery = useQuery({
     queryKey: ["public-menu", "restaurant", slug],
@@ -481,16 +489,18 @@ export default function PublicMenu() {
                       {formatMoney(cart.subtotalCents, currencyCode)}
                     </p>
                   </div>
+                </div>
+                {/* Render Turnstile outside conditional to prevent re-initialization */}
+                {turnstileRendered && (
                   <Turnstile
-                    key="order-turnstile" // Prevent re-initialization
+                    key="order-turnstile"
                     onSuccess={(token) => {
                       setTurnstileToken(token);
-                      // Clear any stale error when challenge is passed
                       setCheckoutError(null);
                     }}
                     className="mt-2"
                   />
-                </div>
+                )}
                 <Button
                   disabled={
                     cart.items.length === 0 ||
