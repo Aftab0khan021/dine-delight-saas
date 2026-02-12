@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
 import { type StaffRole } from "../components/staff/staff-utils";
+import { InviteStaffDialog } from "../components/staff/InviteStaffDialog";
 
 // UI Components
 import { Badge } from "@/components/ui/badge";
@@ -49,12 +50,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-// --- Validation ---
-const inviteSchema = z.object({
-  email: z.string().email("Enter a valid email"),
-  role: z.enum(["restaurant_admin", "user"]),
-});
-type InviteForm = z.infer<typeof inviteSchema>;
+// --- Validation --- (Removed - now handled by InviteStaffDialog)
 
 // --- Helper Functions ---
 function formatTime(iso: string) {
@@ -88,11 +84,6 @@ export default function AdminStaff() {
   const [roleTarget, setRoleTarget] = useState<{ id: string; name: string; role: string } | null>(null);
   const [newRole, setNewRole] = useState<StaffRole>("user");
 
-  const inviteForm = useForm<InviteForm>({
-    resolver: zodResolver(inviteSchema),
-    defaultValues: { email: "", role: "user" },
-  });
-
   // --- 1. Data Queries (From Repo B) ---
   const staffQuery = useQuery({
     queryKey: ["admin", "staff", restaurant?.id, "roles"],
@@ -100,7 +91,13 @@ export default function AdminStaff() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("user_roles")
-        .select("user_id, role, profiles(full_name, email)")
+        .select(`
+          user_id, 
+          role, 
+          staff_category_id,
+          profiles(full_name, email),
+          staff_categories(id, name, color)
+        `)
         .eq("restaurant_id", restaurant!.id)
         .in("role", ["restaurant_admin", "user"]);
       if (error) throw error;
@@ -121,6 +118,23 @@ export default function AdminStaff() {
       if (error) throw error;
       return data ?? [];
     },
+  });
+
+  // Fetch staff categories for Change Role dialog
+  const categoriesQuery = useQuery({
+    queryKey: ["staff-categories", restaurant?.id],
+    queryFn: async () => {
+      if (!restaurant?.id) return [];
+      const { data, error } = await supabase
+        .from("staff_categories")
+        .select("*")
+        .eq("restaurant_id", restaurant.id)
+        .order("name", { ascending: true });
+
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!restaurant?.id,
   });
 
   const activityQuery = useQuery({
@@ -157,37 +171,7 @@ export default function AdminStaff() {
   const isAtLimit = staffLimit !== undefined && staffLimit !== -1 && currentStaffCount >= staffLimit;
   const isUnlimited = staffLimit === -1;
 
-  // --- 2. Mutations (From Repo B) ---
-  const createInviteMutation = useMutation({
-    mutationFn: async (values: InviteForm) => {
-      if (!restaurant?.id) throw new Error("Missing restaurant");
-
-      const { data, error } = await supabase.functions.invoke("invite-staff", {
-        body: {
-          email: values.email,
-          role: values.role,
-          restaurant_id: restaurant.id,
-        },
-      });
-
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      return data;
-    },
-    onSuccess: () => {
-      setInviteOpen(false);
-      inviteForm.reset();
-      toast({ title: "Invitation sent", description: "Staff member invited successfully." });
-      qc.invalidateQueries({ queryKey: ["admin", "staff"] });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to invite staff.",
-        variant: "destructive"
-      });
-    }
-  });
+  // --- 2. Mutations (From Repo B) --- (Invite mutation removed - handled by InviteStaffDialog)
 
   const changeRoleMutation = useMutation({
     mutationFn: async () => {
@@ -288,6 +272,8 @@ export default function AdminStaff() {
       name: s.profiles?.full_name || "Unknown",
       contact: s.profiles?.email || "—",
       role: s.role,
+      category: s.staff_categories?.name || null,
+      categoryColor: s.staff_categories?.color || null,
       status: "Active",
       type: "active" as const
     }));
@@ -297,6 +283,8 @@ export default function AdminStaff() {
       name: "Pending Accept",
       contact: i.email,
       role: i.role,
+      category: null,
+      categoryColor: null,
       status: "Invited",
       type: "invited" as const
     }));
@@ -320,38 +308,14 @@ export default function AdminStaff() {
           )}
         </div>
 
-        <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-          <DialogTrigger asChild>
-            <Button disabled={isAtLimit}>
-              <UserPlus className="mr-2 h-4 w-4" /> Invite staff
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader><DialogTitle>Invite staff</DialogTitle></DialogHeader>
-            <form className="mt-2 space-y-4" onSubmit={inviteForm.handleSubmit((v) => createInviteMutation.mutate(v))}>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email address</Label>
-                <Input id="email" placeholder="colleague@example.com" {...inviteForm.register("email")} />
-              </div>
-              <div className="space-y-2">
-                <Label>Role</Label>
-                <Select value={inviteForm.watch("role")} onValueChange={(v) => inviteForm.setValue("role", v as any)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="user">User (Staff)</SelectItem>
-                    <SelectItem value="restaurant_admin">Admin (Manager)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="secondary" onClick={() => setInviteOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={createInviteMutation.isPending}>
-                  {createInviteMutation.isPending ? "Sending..." : "Invite"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Button disabled={isAtLimit} onClick={() => setInviteOpen(true)}>
+          <UserPlus className="mr-2 h-4 w-4" /> Invite staff
+        </Button>
+
+        <InviteStaffDialog
+          open={inviteOpen}
+          onOpenChange={setInviteOpen}
+        />
       </header>
 
       {/* Staff Limit Warning */}
@@ -387,6 +351,7 @@ export default function AdminStaff() {
                     <TableRow>
                       <TableHead>Staff</TableHead>
                       <TableHead>Role</TableHead>
+                      <TableHead>Category</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -400,6 +365,21 @@ export default function AdminStaff() {
                         </TableCell>
                         <TableCell>
                           <Badge variant={roleBadgeVariant(s.role)}>{s.role === 'restaurant_admin' ? 'Admin' : 'Staff'}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          {s.category ? (
+                            <Badge
+                              variant="outline"
+                              style={{
+                                borderColor: s.categoryColor,
+                                color: s.categoryColor
+                              }}
+                            >
+                              {s.category}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">—</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant={statusBadgeVariant(s.status)}>{s.status}</Badge>
@@ -474,12 +454,30 @@ export default function AdminStaff() {
               <div className="text-sm text-muted-foreground">{roleTarget?.name}</div>
             </div>
             <div className="space-y-2">
-              <Label>Role</Label>
+              <Label>{categoriesQuery.data && categoriesQuery.data.length > 0 ? "Staff Category" : "Role"}</Label>
               <Select value={newRole} onValueChange={(v) => setNewRole(v as StaffRole)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="user">User (Staff)</SelectItem>
-                  <SelectItem value="restaurant_admin">Admin (Manager)</SelectItem>
+                  {categoriesQuery.data && categoriesQuery.data.length > 0 ? (
+                    <>
+                      {categoriesQuery.data.map((category: any) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: category.color }}
+                            />
+                            <span>{category.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </>
+                  ) : (
+                    <>
+                      <SelectItem value="user">User (Staff)</SelectItem>
+                      <SelectItem value="restaurant_admin">Admin (Manager)</SelectItem>
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>

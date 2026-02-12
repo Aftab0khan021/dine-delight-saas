@@ -1,17 +1,18 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../../state/restaurant-context";
-import { useToast } from "@/hooks/use-toast"; 
+import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { inviteSchema, type InviteValues } from "./validation";
-import type { StaffRole } from "./staff-utils";
+import type { StaffRole, StaffCategory } from "./staff-utils";
 
 type Props = {
   open: boolean;
@@ -29,24 +30,61 @@ export function InviteStaffDialog({ open, onOpenChange }: Props) {
     mode: "onChange",
   });
 
+  // Fetch staff categories
+  const categoriesQuery = useQuery({
+    queryKey: ["staff-categories", restaurant?.id],
+    queryFn: async () => {
+      if (!restaurant?.id) return [];
+      const { data, error } = await supabase
+        .from("staff_categories")
+        .select("*")
+        .eq("restaurant_id", restaurant.id)
+        .order("name", { ascending: true });
+
+      if (error) throw error;
+      return data as StaffCategory[];
+    },
+    enabled: !!restaurant?.id,
+    refetchOnMount: true,
+  });
+
   useEffect(() => {
     if (!open) form.reset({ email: "", role: "user" });
   }, [open, form]);
 
-   const mutation = useMutation({
+  const mutation = useMutation({
     mutationFn: async (values: InviteValues) => {
       if (!restaurant?.id) throw new Error("Restaurant ID missing");
 
+      const payload = {
+        email: values.email,
+        role: values.role,
+        restaurant_id: restaurant.id,
+      };
+
+      console.log("🚀 InviteStaffDialog - Sending payload:", payload);
+      console.log("🔑 Restaurant ID:", restaurant.id);
+      console.log("📧 Email:", values.email);
+      console.log("👤 Role/Category ID:", values.role);
+
       const { data, error } = await supabase.functions.invoke("invite-staff", {
-        body: {
-          email: values.email,
-          role: values.role,
-          restaurant_id: restaurant.id,
-        },
+        body: payload,
       });
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      console.log("📥 Response data:", data);
+      console.log("❌ Response error:", error);
+
+      if (error) {
+        console.error("🔴 Supabase Functions Error:", error);
+        throw new Error(error.message || "Failed to invoke function");
+      }
+
+      if (data?.error) {
+        console.error("🔴 Edge Function returned error:", data.error);
+        throw new Error(data.error);
+      }
+
+      console.log("✅ Invitation successful:", data);
       return data;
     },
     onSuccess: () => {
@@ -55,11 +93,11 @@ export function InviteStaffDialog({ open, onOpenChange }: Props) {
       onOpenChange(false);
     },
     onError: (error) => {
-      console.error(error);
-      toast({ 
-        title: "Error", 
-        description: error.message || "Failed to invite staff.", 
-        variant: "destructive" 
+      console.error("🔴 Mutation Error:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to invite staff.",
+        variant: "destructive"
       });
     },
   });
@@ -67,21 +105,34 @@ export function InviteStaffDialog({ open, onOpenChange }: Props) {
   const onSubmit = (values: InviteValues) => {
     mutation.mutate(values);
   };
-  
+
+  const categories = categoriesQuery.data || [];
+  const hasCategories = categories.length > 0;
+
+  // Debug logging
+  console.log('InviteStaffDialog - Categories:', categories);
+  console.log('InviteStaffDialog - hasCategories:', hasCategories);
+  console.log('InviteStaffDialog - Loading:', categoriesQuery.isLoading);
+  console.log('InviteStaffDialog - Error:', categoriesQuery.error);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Invite staff</DialogTitle>
-          <DialogDescription>Send an invite for this restaurant. (No email sending yet.)</DialogDescription>
+          <DialogDescription>
+            {hasCategories
+              ? "Send an invite and assign a staff category with specific permissions."
+              : "Send an invite for this restaurant. Create staff categories to assign specific permissions."}
+          </DialogDescription>
         </DialogHeader>
 
-            <form
-                className="space-y-4"
-                onSubmit={form.handleSubmit(async (values) => {
-                await onSubmit(values);
-                })}
-               >
+        <form
+          className="space-y-4"
+          onSubmit={form.handleSubmit(async (values) => {
+            await onSubmit(values);
+          })}
+        >
           <div className="space-y-2">
             <Label htmlFor="invite-email">Email</Label>
             <Input id="invite-email" placeholder="name@company.com" {...form.register("email")} />
@@ -91,19 +142,49 @@ export function InviteStaffDialog({ open, onOpenChange }: Props) {
           </div>
 
           <div className="space-y-2">
-            <Label>Role</Label>
+            <Label>
+              {hasCategories ? "Staff Category" : "Role"}
+            </Label>
             <Select value={form.watch("role")} onValueChange={(v) => form.setValue("role", v as StaffRole)}>
               <SelectTrigger>
-                <SelectValue placeholder="Select role" />
+                <SelectValue placeholder={hasCategories ? "Select category" : "Select role"} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="user">User</SelectItem>
-                <SelectItem value="restaurant_admin">Restaurant admin</SelectItem>
+                {hasCategories ? (
+                  <>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: category.color }}
+                          />
+                          <span>{category.name}</span>
+                          {category.is_default && (
+                            <Badge variant="secondary" className="text-xs ml-1">
+                              Default
+                            </Badge>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    <SelectItem value="user">User</SelectItem>
+                    <SelectItem value="restaurant_admin">Restaurant admin</SelectItem>
+                  </>
+                )}
               </SelectContent>
             </Select>
             {form.formState.errors.role?.message ? (
               <p className="text-sm text-destructive">{form.formState.errors.role.message}</p>
             ) : null}
+            {hasCategories && (
+              <p className="text-xs text-muted-foreground">
+                Staff members will inherit permissions from their assigned category
+              </p>
+            )}
           </div>
 
           <div className="flex justify-end gap-2">

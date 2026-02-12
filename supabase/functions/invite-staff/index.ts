@@ -26,24 +26,30 @@ serve(async (req) => {
     });
 
     // 0. IP-based Rate Limiting (Prevent Anonymous Spam)
+    // Note: This is optional and will be skipped if ip_address column doesn't exist
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
 
     if (clientIp !== 'unknown') {
-      const { count: ipInvites } = await supabase
-        .from("staff_invites")
-        .select("*", { count: "exact", head: true })
-        .eq("ip_address", clientIp)
-        .gte("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString()); // Last hour
+      try {
+        const { count: ipInvites } = await supabase
+          .from("staff_invites")
+          .select("*", { count: "exact", head: true })
+          .eq("ip_address", clientIp)
+          .gte("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString()); // Last hour
 
-      if (ipInvites !== null && ipInvites >= 5) {
-        console.warn(`IP rate limit exceeded: ${clientIp}`);
-        return new Response(
-          JSON.stringify({ error: "Too many requests from this IP. Please try again later." }),
-          {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 429,
-          }
-        );
+        if (ipInvites !== null && ipInvites >= 5) {
+          console.warn(`IP rate limit exceeded: ${clientIp}`);
+          return new Response(
+            JSON.stringify({ error: "Too many requests from this IP. Please try again later." }),
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 429,
+            }
+          );
+        }
+      } catch (ipError) {
+        // IP rate limiting is optional - continue if column doesn't exist
+        console.log("IP rate limiting skipped:", ipError);
       }
     }
 
@@ -86,23 +92,83 @@ serve(async (req) => {
 
     if (!restaurant_id) throw new Error("Missing restaurant_id");
 
+    // Helper function to check if a string is a valid UUID
+    const isUUID = (str: string) => {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      return uuidRegex.test(str);
+    };
+
+    // Determine if 'role' is a staff category ID or a legacy role
+    let actualRole = "user"; // Default role
+    let staffCategoryId = null;
+
+    if (role) {
+      if (isUUID(role)) {
+        // It's a staff category ID
+        staffCategoryId = role;
+        // For category-based staff, default to 'user' role
+        // The permissions will be determined by the category
+        actualRole = "user";
+      } else if (["user", "restaurant_admin"].includes(role)) {
+        // It's a legacy role
+        actualRole = role;
+      } else {
+        throw new Error(`Invalid role: ${role}`);
+      }
+    }
+
     // 4. Authorize User (Check Permissions)
+    // Check if user has permission to invite staff for this restaurant
+    // Two scenarios:
+    // 1. User has a user_roles entry for this specific restaurant (restaurant_id matches)
+    // 2. User is a restaurant_admin who owns this restaurant (restaurant_id in user_roles matches OR user created the restaurant)
+
     const { data: userRole, error: roleError } = await supabase
       .from("user_roles")
-      .select("role")
+      .select("role, restaurant_id")
       .eq("user_id", user.id)
-      .eq("restaurant_id", restaurant_id)
+      .or(`restaurant_id.eq.${restaurant_id},and(role.eq.restaurant_admin,restaurant_id.is.null)`)
       .maybeSingle();
 
-    if (roleError || !userRole || !["owner", "restaurant_admin"].includes(userRole.role)) {
+    console.log("🔐 Authorization check:", {
+      userId: user.id,
+      requestedRestaurantId: restaurant_id,
+      userRole: userRole,
+      roleError: roleError
+    });
+
+    // If no role found, check if user is the owner of this restaurant
+    if (!userRole) {
+      const { data: restaurant, error: restError } = await supabase
+        .from("restaurants")
+        .select("id")
+        .eq("id", restaurant_id)
+        .eq("created_by", user.id)
+        .maybeSingle();
+
+      if (restError || !restaurant) {
+        throw new Error("Forbidden: You do not have permission to manage staff for this restaurant.");
+      }
+
+      // User owns the restaurant, allow the invite
+      console.log("✅ User owns restaurant, allowing invite");
+    } else if (roleError || !["restaurant_admin", "super_admin"].includes(userRole.role)) {
       throw new Error("Forbidden: You do not have permission to manage staff for this restaurant.");
     }
+
 
     // 5. Perform Action
     if (action === "resend") {
       if (!email) throw new Error("Missing email for resend");
+
+      const inviteData: any = { restaurant_id, role: actualRole };
+      if (staffCategoryId) {
+        inviteData.staff_category_id = staffCategoryId;
+      }
+
       const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-        data: { restaurant_id, role: role || "user" },
+        data: inviteData,
+        redirectTo: `${supabaseUrl.replace('.supabase.co', '.vercel.app')}/auth/callback`,
       });
       if (error) throw error;
       return new Response(JSON.stringify({ success: true, message: "Invite resent" }), {
@@ -114,14 +180,74 @@ serve(async (req) => {
     // New Invite
     if (!email) throw new Error("Missing email");
 
+    const inviteData: any = { restaurant_id, role: actualRole };
+    if (staffCategoryId) {
+      inviteData.staff_category_id = staffCategoryId;
+    }
+
+    console.log("📧 Attempting to invite:", email);
+    console.log("🏢 Restaurant ID:", restaurant_id);
+    console.log("👤 Role:", actualRole);
+    console.log("📋 Staff Category ID:", staffCategoryId);
+
     const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-      data: {
-        restaurant_id,
-        role: role || "user",
-      },
+      data: inviteData,
+      redirectTo: `${supabaseUrl.replace('.supabase.co', '.vercel.app')}/auth/callback`,
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error("❌ Invite error:", error);
+
+      // Handle specific error codes
+      if (error.message?.includes("already been registered") || error.status === 422) {
+        // Check if user is already in THIS restaurant
+        const { data: existingUsers } = await supabase.auth.admin.listUsers();
+        const existingUser = existingUsers?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
+
+        if (existingUser) {
+          const { data: existingRole } = await supabase
+            .from("user_roles")
+            .select("role, staff_category_id, staff_categories(name)")
+            .eq("user_id", existingUser.id)
+            .eq("restaurant_id", restaurant_id)
+            .maybeSingle();
+
+          if (existingRole) {
+            throw new Error(`This user is already a member of your restaurant with role: ${existingRole.staff_categories?.name || existingRole.role}`);
+          }
+        }
+
+        // User exists in auth but not in this restaurant
+        throw new Error("This email is already registered in the system. They may belong to another restaurant. Please use a different email.");
+      }
+
+      throw error;
+    }
+
+    console.log("✅ Invitation sent successfully");
+
+    // Track invite in staff_invites table
+    try {
+      const { error: inviteInsertError } = await supabase
+        .from("staff_invites")
+        .insert({
+          restaurant_id: restaurant_id,
+          email: email.toLowerCase(),
+          role: actualRole,
+          staff_category_id: staffCategoryId,
+          invited_by: user.id,
+          ip_address: clientIp !== 'unknown' ? clientIp : null,
+          status: 'pending',
+        });
+
+      if (inviteInsertError) {
+        console.error("Failed to track invite in database:", inviteInsertError);
+        // Don't throw - email was sent successfully, tracking is secondary
+      }
+    } catch (trackError) {
+      console.error("Error tracking invite:", trackError);
+      // Continue - email sent successfully
+    }
 
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

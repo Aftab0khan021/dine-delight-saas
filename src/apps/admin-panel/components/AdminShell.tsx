@@ -37,6 +37,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 import { AdminSidebar } from "./AdminSidebar";
 import { AdminBottomNav } from "./AdminBottomNav";
+import { PendingApprovalScreen } from "./PendingApprovalScreen";
 import { useRestaurantContext } from "../state/restaurant-context";
 
 // --- Helper: Time Ago ---
@@ -60,19 +61,36 @@ function timeAgo(dateString: string) {
 
 export function AdminShell({ children }: PropsWithChildren) {
   const navigate = useNavigate();
-  const { loading, restaurant, role, accessDenied, refresh } = useRestaurantContext();
+  const { loading, restaurant, role, staffCategory, accessDenied, refresh } = useRestaurantContext();
 
   const [userEmail, setUserEmail] = useState<string>("Admin");
+  const [accountStatus, setAccountStatus] = useState<string | null>(null);
+  const [checkingStatus, setCheckingStatus] = useState(true);
 
   // Local state for the "Create Restaurant" form
   const [newRestName, setNewRestName] = useState("");
   const [newRestSlug, setNewRestSlug] = useState("");
   const [creating, setCreating] = useState(false);
 
+  // Check account status on mount
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user?.email) setUserEmail(data.user.email);
-    });
+    const checkAccountStatus = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserEmail(user.email || "Admin");
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('account_status')
+          .eq('id', user.id)
+          .single();
+
+        setAccountStatus(profile?.account_status || null);
+      }
+      setCheckingStatus(false);
+    };
+
+    checkAccountStatus();
   }, []);
 
   // --- Real Data: Notifications (Activity Logs) ---
@@ -134,12 +152,17 @@ export function AdminShell({ children }: PropsWithChildren) {
     }
   };
 
-  if (loading) {
+  if (loading || checkingStatus) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-sm text-muted-foreground">Loading…</p>
       </div>
     );
+  }
+
+  // CASE 0: Pending or Denied Account
+  if (accountStatus === 'pending' || accountStatus === 'denied') {
+    return <PendingApprovalScreen userEmail={userEmail} />;
   }
 
   // CASE 1: Access Denied
@@ -149,7 +172,8 @@ export function AdminShell({ children }: PropsWithChildren) {
         <div className="max-w-md w-full space-y-4 text-center">
           <h1 className="text-xl font-semibold">Access denied</h1>
           <p className="text-sm text-muted-foreground">
-            Your account doesn’t have the <span className="font-medium">restaurant_admin</span> role.
+            Your account doesn't have access to the admin panel.
+            Please contact your restaurant administrator.
           </p>
           <Button onClick={handleLogout}>Logout</Button>
         </div>
@@ -211,6 +235,12 @@ export function AdminShell({ children }: PropsWithChildren) {
     );
   }
 
+  // Get role display name
+  const getRoleBadge = () => {
+    if (role === 'restaurant_admin' || role === 'super_admin') return 'Admin';
+    return staffCategory?.name || 'Staff';
+  };
+
   // CASE 3: Normal Dashboard (Has Role & Restaurant)
   return (
     <div className="min-h-screen w-full bg-muted/10">
@@ -238,11 +268,16 @@ export function AdminShell({ children }: PropsWithChildren) {
                 </SelectContent>
               </Select>
 
-              <Badge variant="secondary" className="hidden sm:inline-flex h-6 rounded-full px-2.5 text-[10px] uppercase tracking-wide">
-                {role === 'restaurant_admin' ? 'Admin' : 'Staff'}
+              <Badge
+                variant="secondary"
+                className="hidden sm:inline-flex h-6 rounded-full px-2.5 text-[10px] uppercase tracking-wide"
+                style={staffCategory?.color ? { backgroundColor: staffCategory.color + '20', color: staffCategory.color } : {}}
+              >
+                {getRoleBadge()}
               </Badge>
             </div>
           </div>
+
 
           <Separator orientation="vertical" className="hidden h-6 md:block" />
 

@@ -14,12 +14,15 @@ import QrResolver from "./apps/public-website/pages/QrResolver";
 
 // Admin Panel
 import AdminAuth from "./apps/admin-panel/pages/Auth";
+import SetPassword from "./apps/admin-panel/pages/SetPassword";
+import AuthCallback from "./apps/admin-panel/pages/AuthCallback";
 import { AdminLayout } from "./apps/admin-panel/components/AdminLayout";
 import AdminDashboard from "./apps/admin-panel/pages/Dashboard";
 import AdminOrders from "./apps/admin-panel/pages/Orders";
 import AdminMenu from "./apps/admin-panel/pages/Menu";
 import AdminQrMenu from "./apps/admin-panel/pages/QrMenu";
 import AdminStaff from "./apps/admin-panel/pages/Staff";
+import AdminStaffCategories from "./apps/admin-panel/pages/StaffCategories";
 import AdminBranding from "./apps/admin-panel/pages/Branding";
 import AdminBilling from "./apps/admin-panel/pages/Billing";
 import AdminCoupons from "./apps/admin-panel/pages/Coupons";
@@ -60,6 +63,8 @@ const App = () => (
 
           {/* Admin Panel Routes */}
           <Route path="/admin/auth" element={<AdminAuth />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/auth/set-password" element={<SetPassword />} />
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="dashboard" element={<AdminDashboard />} />
@@ -69,6 +74,7 @@ const App = () => (
             {/* Backwards compatible */}
             <Route path="qr-menu" element={<Navigate to="/admin/qr" replace />} />
             <Route path="staff" element={<AdminStaff />} />
+            <Route path="staff-categories" element={<AdminStaffCategories />} />
             <Route path="branding" element={<AdminBranding />} />
             <Route path="billing" element={<AdminBilling />} />
             <Route path="coupons" element={<AdminCoupons />} />

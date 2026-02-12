@@ -9,15 +9,16 @@ import {
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import type { StaffCategory, StaffRole } from "../components/staff/staff-utils";
 
 export type CurrentRestaurant = Pick<Tables<"restaurants">, "id" | "name" | "slug">;
-
-type RestaurantAdminRole = "restaurant_admin";
 
 type RestaurantContextValue = {
   loading: boolean;
   restaurant: CurrentRestaurant | null;
-  role: RestaurantAdminRole | null;
+  role: StaffRole | null;
+  staffCategory: StaffCategory | null;
+  isAdmin: boolean;
   accessDenied: boolean;
   refresh: () => Promise<void>;
 };
@@ -28,7 +29,8 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [restaurant, setRestaurant] = useState<CurrentRestaurant | null>(null);
-  const [role, setRole] = useState<RestaurantAdminRole | null>(null);
+  const [role, setRole] = useState<StaffRole | null>(null);
+  const [staffCategory, setStaffCategory] = useState<StaffCategory | null>(null);
   const [accessDenied, setAccessDenied] = useState(false);
 
   const load = useCallback(async () => {
@@ -43,24 +45,27 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       return;
     }
 
-    // 1. Check if the user has the role (We removed the restaurant_id check!)
+    // 1. Check if the user has any role in user_roles table
     const { data: userRoleRow, error: roleError } = await supabase
       .from("user_roles")
-      .select("role, restaurant_id")
+      .select("role, restaurant_id, staff_category_id")
       .eq("user_id", session.user.id)
-      .eq("role", "restaurant_admin")
       .maybeSingle();
 
     if (roleError || !userRoleRow) {
-      console.warn("Access Denied: No 'restaurant_admin' role found for this user.");
+      console.warn("Access Denied: No role found for this user.");
       setRestaurant(null);
       setRole(null);
+      setStaffCategory(null);
       setAccessDenied(true);
       setLoading(false);
       return;
     }
 
-    // 2. Fetch restaurant details (Only if they have one linked)
+    // 2. Set role
+    setRole(userRoleRow.role as StaffRole);
+
+    // 3. Fetch restaurant details (if they have one linked)
     let finalRestaurant: CurrentRestaurant | null = null;
 
     if (userRoleRow.restaurant_id) {
@@ -83,9 +88,24 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       }
     }
 
+    // 4. Fetch staff category (if assigned)
+    let finalStaffCategory: StaffCategory | null = null;
+
+    if (userRoleRow.staff_category_id) {
+      const { data: categoryRow } = await supabase
+        .from("staff_categories")
+        .select("*")
+        .eq("id", userRoleRow.staff_category_id)
+        .maybeSingle();
+
+      if (categoryRow) {
+        finalStaffCategory = categoryRow as StaffCategory;
+      }
+    }
+
     setRestaurant(finalRestaurant);
-    setRole("restaurant_admin");
-    setAccessDenied(false); // ✅ Allowed in, even if restaurant is null
+    setStaffCategory(finalStaffCategory);
+    setAccessDenied(false); // ✅ Allowed in for all roles
     setLoading(false);
   }, [navigate]);
 
@@ -103,15 +123,21 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
     return () => subscription.unsubscribe();
   }, [load, navigate]);
 
+  const isAdmin = useMemo(() => {
+    return role === "restaurant_admin" || role === "super_admin";
+  }, [role]);
+
   const value = useMemo<RestaurantContextValue>(
     () => ({
       loading,
       restaurant,
       role,
+      staffCategory,
+      isAdmin,
       accessDenied,
       refresh: load,
     }),
-    [accessDenied, loading, restaurant, role, load],
+    [accessDenied, loading, restaurant, role, staffCategory, isAdmin, load],
   );
 
   return (
