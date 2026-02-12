@@ -1,14 +1,16 @@
 // deno-lint-ignore-file no-explicit-any
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const corsHeaders = {
   "access-control-allow-origin": "*",
   "access-control-allow-headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Resend API configuration
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
+// Gmail SMTP configuration
+const GMAIL_USER = Deno.env.get("GMAIL_USER") ?? "";
+const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD") ?? "";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -106,7 +108,7 @@ serve(async (req) => {
 
     // Check if user already exists
     const { data: existingUsers } = await supabase.auth.admin.listUsers();
-    const existingUser = existingUsers?.users.find(u => u.email === email);
+    const existingUser = existingUsers?.users.find((u: any) => u.email === email);
 
     if (existingUser) {
       return new Response(
@@ -161,12 +163,12 @@ serve(async (req) => {
     const restaurantName = restaurant?.name || "the restaurant";
 
     // Create invitation link
-    const appUrl = supabaseUrl.replace('.supabase.co', '.vercel.app');
+    const appUrl = "https://dine-delight-saas.vercel.app";
     const invitationLink = `${appUrl}/auth/accept-invitation?token=${invitationToken}`;
 
     console.log("🔗 Invitation link:", invitationLink);
 
-    // Send custom email via Resend
+    // Create email HTML
     const emailHtml = `
 <!DOCTYPE html>
 <html>
@@ -233,12 +235,12 @@ serve(async (req) => {
 </html>
     `;
 
-    if (!RESEND_API_KEY) {
-      console.warn("⚠️ RESEND_API_KEY not configured, skipping email send");
+    if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
+      console.warn("⚠️ Gmail SMTP not configured, skipping email send");
       return new Response(
         JSON.stringify({
           success: true,
-          message: "Invitation created (email not sent - RESEND_API_KEY missing)",
+          message: "Invitation created (email not sent - Gmail SMTP not configured)",
           invitationLink // Return link for testing
         }),
         {
@@ -248,24 +250,33 @@ serve(async (req) => {
       );
     }
 
-    // Send email via Resend
-    const emailResponse = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: "Dine Delight <onboarding@resend.dev>", // Replace with your verified domain
-        to: [email],
-        subject: `You're invited to join ${restaurantName}`,
-        html: emailHtml,
-      }),
-    });
+    // Send email via Gmail SMTP
+    try {
+      const client = new SMTPClient({
+        connection: {
+          hostname: "smtp.gmail.com",
+          port: 465,
+          tls: true,
+          auth: {
+            username: GMAIL_USER,
+            password: GMAIL_APP_PASSWORD,
+          },
+        },
+      });
 
-    if (!emailResponse.ok) {
-      const errorText = await emailResponse.text();
-      console.error("❌ Email send error:", errorText);
+      await client.send({
+        from: `Dine Delight <${GMAIL_USER}>`,
+        to: email,
+        subject: `You're invited to join ${restaurantName}`,
+        content: emailHtml,
+        html: emailHtml,
+      });
+
+      await client.close();
+
+      console.log("✅ Email sent via Gmail SMTP");
+    } catch (emailError: any) {
+      console.error("❌ Email send error:", emailError);
 
       // Delete the token since email failed
       await supabase
@@ -274,16 +285,13 @@ serve(async (req) => {
         .eq("token", invitationToken);
 
       return new Response(
-        JSON.stringify({ error: "Failed to send invitation email" }),
+        JSON.stringify({ error: "Failed to send invitation email: " + emailError.message }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 500,
         }
       );
     }
-
-    const emailResult = await emailResponse.json();
-    console.log("✅ Email sent:", emailResult);
 
     // Record invitation in staff_invites table (for tracking)
     try {
@@ -312,7 +320,7 @@ serve(async (req) => {
       }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("❌ Unexpected error:", error);
     return new Response(
       JSON.stringify({ error: error.message || "Internal server error" }),
