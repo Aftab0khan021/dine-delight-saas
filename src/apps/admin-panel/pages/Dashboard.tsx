@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { cn } from "@/lib/utils";
 import { useFeatureAccess } from "../hooks/useFeatureAccess";
+import { formatMoney, shortId } from "@/lib/formatting";
 
 // UI Components
 import { Badge } from "@/components/ui/badge";
@@ -51,16 +52,6 @@ function Sparkline({ values, className }: { values: number[]; className?: string
       </svg>
     </div>
   );
-}
-
-// --- Helpers ---
-function formatMoney(cents: number, currency = "INR") {
-  const amount = (cents ?? 0) / 100;
-  return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
-}
-
-function shortId(id: string) {
-  return id?.slice(0, 4) ?? "—";
 }
 
 const statusVariant = (status: string) => {

@@ -51,14 +51,11 @@ serve(async (req) => {
   // --- TURNSTILE VERIFICATION START ---
   const turnstileToken = payload?.turnstileToken;
 
-  // Detect environment based on Origin or Referer header
-  const origin = req.headers.get('origin') || req.headers.get('referer') || '';
-  const isProduction = origin.includes('yourdomain.com'); // Replace with your actual production domain
-
-  // Use environment-specific secret key
-  const TURNSTILE_SECRET_KEY = isProduction
-    ? Deno.env.get('TURNSTILE_SECRET_KEY_PROD')
-    : Deno.env.get('TURNSTILE_SECRET_KEY_DEV') || '1x0000000000000000000000000000000AA';
+  // Resolve Turnstile secret key strictly from environment variables.
+  // Prefer TURNSTILE_SECRET_KEY_PROD, fall back to TURNSTILE_SECRET_KEY_DEV.
+  const TURNSTILE_SECRET_KEY =
+    Deno.env.get('TURNSTILE_SECRET_KEY_PROD') ??
+    Deno.env.get('TURNSTILE_SECRET_KEY_DEV');
 
   // Optional: Only verify Turnstile if provided (Allows Polling)
   if (turnstileToken && TURNSTILE_SECRET_KEY) {

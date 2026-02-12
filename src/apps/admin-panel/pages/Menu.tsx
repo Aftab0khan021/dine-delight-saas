@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import {
@@ -47,6 +47,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { VariantEditor } from "../components/menu/VariantEditor";
 import { AddonEditor } from "../components/menu/AddonEditor";
+import { formatMoney } from "@/lib/formatting";
 
 // --- Types ---
 type CategoryRow = {
@@ -67,16 +68,6 @@ type MenuItemRow = {
   image_url: string | null;
   is_active: boolean;
 };
-
-// --- Helpers ---
-// --- Helpers ---
-function formatMoney(cents: number, currency: string = "INR") {
-  try {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
-  } catch (e) {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency: "INR" }).format(cents / 100);
-  }
-}
 
 function getCurrencyExample(currencyCode: string = 'INR') {
   const examples: Record<string, { amount: number; symbol: string }> = {

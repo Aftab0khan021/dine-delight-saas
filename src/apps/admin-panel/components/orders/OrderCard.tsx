@@ -4,6 +4,7 @@ import { Clock, Hash, Layers3, Utensils } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { formatMoney, shortId } from "@/lib/formatting";
 
 export type OrderStatus = "pending" | "in_progress" | "ready" | "completed";
 
@@ -16,19 +17,6 @@ export type OrderCardVM = {
   currency_code: string;
   item_summary: string;
 };
-
-function shortId(id: string) {
-  return id?.slice(0, 8) ?? "—";
-}
-
-function formatMoney(cents: number, currency = "INR") {
-  const amount = (cents ?? 0) / 100;
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
-  } catch {
-    return `$${amount.toFixed(2)}`;
-  }
-}
 
 function formatPlacedTime(iso: string) {
   const d = new Date(iso);

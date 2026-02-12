@@ -1,426 +1,389 @@
 import { useMemo } from "react";
+import { format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
-import { startOfDay, addDays } from "date-fns";
-import {
-  ArrowUpRight,
-  ClipboardList,
-  Plus,
-  QrCode,
-  ReceiptText,
-  Sparkles,
-} from "lucide-react";
-import { Link } from "react-router-dom";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
-import { useFeatureLimit } from "../hooks/useFeatureAccess";
 
-// UI Components
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { formatMoney } from "@/lib/formatting";
 
-// --- Helpers ---
-function formatMoney(cents: number, currency = "INR") {
-  const amount = (cents ?? 0) / 100;
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0
-  }).format(amount);
-}
-
-function shortId(id: string) {
-  return id ? `#${id.slice(0, 4)}` : "—";
-}
-
-function formatTime(dateStr: string) {
-  return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-const statusVariant = (status: string) => {
-  switch (status) {
-    case "pending": return "default";
-    case "in_progress": return "secondary";
-    case "ready": return "outline";
-    default: return "secondary";
-  }
+type SubscriptionRow = {
+  id: string;
+  plan_id: string;
+  restaurant_id: string;
+  status: string;
+  current_period_end: string | null;
+  trial_ends_at: string | null;
+  created_at: string;
 };
 
-export default function AdminDashboard() {
+type PlanRow = {
+  id: string;
+  name: string;
+  slug: string;
+  price_cents: number;
+  currency: string;
+  billing_period: "monthly" | "yearly";
+  trial_days: number;
+};
+
+type InvoiceRow = {
+  id: string;
+  provider_invoice_id: string;
+  status: string;
+  currency_code: string;
+  amount_due_cents: number;
+  amount_paid_cents: number;
+  created_at: string;
+  due_at: string | null;
+  paid_at: string | null;
+  hosted_invoice_url: string | null;
+  invoice_pdf_url: string | null;
+};
+
+export default function RestaurantBilling() {
   const { restaurant } = useRestaurantContext();
 
-  // Fetch feature limits
-  const { limit: staffLimit, isUnlimited: staffUnlimited } = useFeatureLimit(restaurant?.id, 'staff_limit');
-  const { limit: menuItemsLimit, isUnlimited: menuUnlimited } = useFeatureLimit(restaurant?.id, 'menu_items_limit');
-
-  // --- 1. Data Fetching (Real Data) ---
-  const { startISO, endISO } = useMemo(() => {
-    const start = startOfDay(new Date());
-    const end = addDays(start, 1);
-    return { startISO: start.toISOString(), endISO: end.toISOString() };
-  }, []);
-
-  // KPI Data: Today's Orders
-  const todayOrdersQuery = useQuery({
-    queryKey: ["admin", "dashboard", restaurant?.id, "todayOrders"],
+  const subscriptionQuery = useQuery({
+    queryKey: ["admin", "billing", restaurant?.id, "subscription"],
     enabled: !!restaurant?.id,
     queryFn: async () => {
+      const restaurantId = restaurant!.id;
+
+      const { data: subscription, error: subError } = await supabase
+        .from("subscriptions")
+        .select(
+          "id, plan_id, restaurant_id, status, current_period_end, trial_ends_at, created_at",
+        )
+        .eq("restaurant_id", restaurantId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (subError) throw subError;
+
+      let plan: PlanRow | null = null;
+      if (subscription?.plan_id) {
+        const { data: planRow, error: planError } = await supabase
+          .from("subscription_plans")
+          .select(
+            "id, name, slug, price_cents, currency, billing_period, trial_days",
+          )
+          .eq("id", subscription.plan_id)
+          .maybeSingle();
+        if (planError) throw planError;
+        plan = planRow as PlanRow | null;
+      }
+
+      return { subscription: subscription as SubscriptionRow | null, plan };
+    },
+  });
+
+  const invoicesQuery = useQuery({
+    queryKey: ["admin", "billing", restaurant?.id, "invoices"],
+    enabled: !!restaurant?.id,
+    queryFn: async () => {
+      const restaurantId = restaurant!.id;
       const { data, error } = await supabase
-        .from("orders")
-        .select("id, placed_at, completed_at, total_cents, currency_code")
-        .eq("restaurant_id", restaurant!.id)
-        .gte("placed_at", startISO)
-        .lt("placed_at", endISO);
+        .from("invoices")
+        .select(
+          "id,provider_invoice_id,status,currency_code,amount_due_cents,amount_paid_cents,created_at,due_at,paid_at,hosted_invoice_url,invoice_pdf_url",
+        )
+        .eq("restaurant_id", restaurantId)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
       if (error) throw error;
-      return data;
+      return (data ?? []) as InvoiceRow[];
     },
   });
 
-  // List Data: Latest 5 Orders
-  const latestOrdersQuery = useQuery({
-    queryKey: ["admin", "dashboard", restaurant?.id, "latestOrders"],
-    enabled: !!restaurant?.id,
-    queryFn: async () => {
-      // Added table_label to the selection
-      const { data, error } = await supabase
-        .from("orders")
-        .select("id, status, placed_at, total_cents, table_label, currency_code")
-        .eq("restaurant_id", restaurant!.id)
-        .order("placed_at", { ascending: false })
-        .limit(5);
-      if (error) throw error;
-      return data;
-    },
-  });
+  const planSummary = useMemo(() => {
+    if (!subscriptionQuery.data) return null;
+    const { subscription, plan } = subscriptionQuery.data;
+    if (!subscription) return null;
 
-  // KPI Data: Top Selling Item (All Time)
-  const topSellingQuery = useQuery({
-    queryKey: ["admin", "dashboard", restaurant?.id, "topSellingItem"],
-    enabled: !!restaurant?.id,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("order_items")
-        .select("name_snapshot, quantity")
-        .eq("restaurant_id", restaurant!.id)
-        .limit(1000); // Fetch sample to calculate client-side for now
-      if (error) throw error;
-      return data;
-    },
-  });
+    const statusLabel =
+      subscription.status === "active"
+        ? "Active"
+        : subscription.status === "trialing"
+        ? "Trialing"
+        : subscription.status === "past_due"
+        ? "Past due"
+        : subscription.status === "canceled"
+        ? "Cancelled"
+        : subscription.status ?? "Unknown";
 
-  // Checklist Data
-  const setupQuery = useQuery({
-    queryKey: ["admin", "dashboard", restaurant?.id, "setupChecklist"],
-    enabled: !!restaurant?.id,
-    queryFn: async () => {
-      const [{ data: restaurantRow }, menuCount, qrCount] = await Promise.all([
-        supabase.from("restaurants").select("logo_url, currency_code").eq("id", restaurant!.id).maybeSingle(),
-        supabase.from("menu_items").select("id", { count: "exact", head: true }).eq("restaurant_id", restaurant!.id),
-        supabase.from("qr_codes").select("id", { count: "exact", head: true }).eq("restaurant_id", restaurant!.id),
-      ]);
-      return {
-        logoUrl: restaurantRow?.logo_url ?? null,
-        currencyCode: restaurantRow?.currency_code ?? "INR",
-        menuItemsCount: menuCount.count ?? 0,
-        qrCodesCount: qrCount.count ?? 0,
-      };
-    },
-  });
+    const nextRenewal =
+      subscription.current_period_end &&
+      format(new Date(subscription.current_period_end), "PP");
 
-  // --- 2. Calculations ---
-  const kpis = useMemo(() => {
-    const todayOrders = todayOrdersQuery.data ?? [];
-    const currency = setupQuery.data?.currencyCode ?? todayOrders[0]?.currency_code ?? "INR";
+    const trialEnds =
+      subscription.trial_ends_at &&
+      format(new Date(subscription.trial_ends_at), "PP");
 
-    // Revenue
-    const revenue = todayOrders.reduce((sum, o) => sum + (o.total_cents ?? 0), 0);
+    return {
+      subscription,
+      plan,
+      statusLabel,
+      nextRenewal,
+      trialEnds,
+    };
+  }, [subscriptionQuery.data]);
 
-    // Avg Prep Time
-    const completed = todayOrders.filter((o) => o.completed_at).map((o) =>
-      new Date(o.completed_at!).getTime() - new Date(o.placed_at).getTime()
-    );
-    const avgPrepMs = completed.length ? completed.reduce((a, b) => a + b, 0) / completed.length : 0;
-    const avgPrepMins = Math.round(avgPrepMs / 1000 / 60);
-
-    // Top Item Calculation
-    const items = topSellingQuery.data ?? [];
-    const counts = new Map<string, number>();
-    items.forEach(i => {
-      const k = i.name_snapshot;
-      counts.set(k, (counts.get(k) || 0) + (i.quantity || 1));
-    });
-
-    let topItem = { name: "No sales yet", qty: 0 };
-    counts.forEach((qty, name) => {
-      if (qty > topItem.qty) topItem = { name, qty };
-    });
-
-    return [
-      {
-        label: "Today’s Orders",
-        value: todayOrders.length.toString(),
-        delta: "Since midnight",
-        tone: "neutral",
-      },
-      {
-        label: "Revenue",
-        value: formatMoney(revenue, currency),
-        delta: "Gross total",
-        tone: "good",
-      },
-      {
-        label: "Avg Prep Time",
-        value: avgPrepMins > 0 ? `${avgPrepMins}m` : "—",
-        delta: "Completed orders",
-        tone: "neutral",
-      },
-      {
-        label: "Top Selling Item",
-        value: topItem.qty > 0 ? topItem.name : "—",
-        delta: topItem.qty > 0 ? `${topItem.qty} sold` : "All time",
-        tone: "neutral",
-      },
-    ];
-  }, [todayOrdersQuery.data, topSellingQuery.data, setupQuery.data]);
-
-  const setupChecklist = [
-    {
-      label: "Branding",
-      detail: "Logo uploaded",
-      status: setupQuery.data?.logoUrl ? "Done" : "Pending",
-      isDone: !!setupQuery.data?.logoUrl
-    },
-    {
-      label: "First Menu Item",
-      detail: "At least 1 item",
-      status: (setupQuery.data?.menuItemsCount ?? 0) > 0 ? "Done" : "Pending",
-      isDone: (setupQuery.data?.menuItemsCount ?? 0) > 0
-    },
-    {
-      label: "QR Published",
-      detail: "Codes generated",
-      status: (setupQuery.data?.qrCodesCount ?? 0) > 0 ? "Done" : "Pending",
-      isDone: (setupQuery.data?.qrCodesCount ?? 0) > 0
-    },
-  ];
-
-  // --- 3. Render ---
   return (
     <div className="space-y-6">
-      <section className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            A clear snapshot of today—built for busy service.
-          </p>
-        </div>
-
-        {/* Quick actions (top) */}
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" asChild>
-            <Link to="/admin/orders">
-              View orders <ArrowUpRight className="ml-2 h-4 w-4" />
-            </Link>
-          </Button>
-          <Button asChild>
-            <Link to="/admin/menu">
-              Add menu item <Plus className="ml-2 h-4 w-4" />
-            </Link>
-          </Button>
-        </div>
+      <section className="space-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight">Billing</h1>
+        <p className="text-sm text-muted-foreground">
+          Manage your subscription, review invoices, and understand your
+          current plan.
+        </p>
       </section>
 
-      {/* KPI cards */}
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {kpis.map((k) => (
-          <Card key={k.label} className="shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {k.label}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex items-end justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-2xl font-semibold tracking-tight truncate" title={k.value}>
-                  {k.value}
-                </div>
-                <div className="mt-1 text-xs text-muted-foreground">{k.delta}</div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </section>
-
-      {/* Feature Limits Card */}
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base">Plan Features & Limits</CardTitle>
-          <CardDescription>Your current plan's feature limits and usage</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="font-medium">Staff Members</span>
-              <span className="text-muted-foreground">
-                {staffUnlimited ? 'Unlimited' : `Limit: ${staffLimit}`}
-              </span>
-            </div>
-            {!staffUnlimited && staffLimit !== undefined && (
-              <Progress value={0} className="h-2" />
-            )}
-          </div>
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="font-medium">Menu Items</span>
-              <span className="text-muted-foreground">
-                {menuUnlimited ? 'Unlimited' : `Limit: ${menuItemsLimit}`}
-              </span>
-            </div>
-            {!menuUnlimited && menuItemsLimit !== undefined && (
-              <Progress value={0} className="h-2" />
-            )}
-          </div>
-          <Button variant="outline" className="w-full mt-4" asChild>
-            <Link to="/admin/staff">View Staff Usage</Link>
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Body grid */}
-      <section className="grid gap-3 lg:grid-cols-3">
-        {/* Live Orders */}
-        <Card className="shadow-sm lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between gap-4">
-            <div>
-              <CardTitle className="text-base">Live orders</CardTitle>
-              <div className="mt-1 text-xs text-muted-foreground">
-                Latest 5 orders.
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="relative inline-flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/40 motion-reduce:hidden" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-              </span>
-              <span className="text-xs text-muted-foreground">Live</span>
-            </div>
+      <section className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <Card className="shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-base">Current plan</CardTitle>
+            <CardDescription>
+              Your restaurant&apos;s subscription and renewal details.
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {(latestOrdersQuery.data ?? []).map((o) => (
-                <div
-                  key={o.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background p-3"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">#{shortId(o.id)}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {o.table_label ? o.table_label : "Takeaway"}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {formatTime(o.placed_at)} • {formatMoney(o.total_cents, o.currency_code)}
-                    </div>
+          <CardContent className="space-y-4">
+            {!restaurant?.id ? (
+              <p className="text-sm text-muted-foreground">
+                Select a restaurant to view billing information.
+              </p>
+            ) : subscriptionQuery.isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading plan…</p>
+            ) : subscriptionQuery.isError ? (
+              <p className="text-sm text-destructive">
+                Unable to load subscription details.
+              </p>
+            ) : !planSummary ? (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">
+                  No active subscription found.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Contact support to choose a plan and activate billing
+                  for this restaurant.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Plan
+                    </p>
+                    <p className="text-lg font-semibold">
+                      {planSummary.plan?.name ?? "Custom plan"}
+                    </p>
+                    {planSummary.plan && (
+                      <p className="text-sm text-muted-foreground">
+                        {formatMoney(
+                          planSummary.plan.price_cents,
+                          planSummary.plan.currency,
+                        )}{" "}
+                        / {planSummary.plan.billing_period}
+                      </p>
+                    )}
                   </div>
-                  <Badge variant={statusVariant(o.status)} className="shrink-0 capitalize">
-                    {o.status.replace("_", " ")}
-                  </Badge>
+                  <Badge variant="secondary">{planSummary.statusLabel}</Badge>
                 </div>
-              ))}
-              {(latestOrdersQuery.data?.length === 0) && (
-                <div className="text-center py-8 text-sm text-muted-foreground border-dashed border rounded-xl">
-                  No orders today yet.
-                </div>
-              )}
-            </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button variant="secondary" size="sm" asChild>
-                <Link to="/admin/orders">
-                  View full board <ReceiptText className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-              <Button variant="secondary" size="sm" asChild>
-                <Link to="/admin/qr">
-                  Print QR <QrCode className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
+                <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <dt className="text-muted-foreground">Restaurant</dt>
+                    <dd className="font-medium">{restaurant?.name}</dd>
+                  </div>
+                  {planSummary.trialEnds && (
+                    <div className="space-y-1">
+                      <dt className="text-muted-foreground">
+                        Trial ends
+                      </dt>
+                      <dd className="font-medium">{planSummary.trialEnds}</dd>
+                    </div>
+                  )}
+                  {planSummary.nextRenewal && (
+                    <div className="space-y-1">
+                      <dt className="text-muted-foreground">
+                        Next renewal
+                      </dt>
+                      <dd className="font-medium">
+                        {planSummary.nextRenewal}
+                      </dd>
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    <dt className="text-muted-foreground">
+                      Subscription since
+                    </dt>
+                    <dd className="font-medium">
+                      {planSummary.subscription.created_at
+                        ? format(
+                            new Date(planSummary.subscription.created_at),
+                            "PP",
+                          )
+                        : "—"}
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    Changes to plan, billing cadence, or payment method
+                    are currently managed by the platform team.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                  >
+                    Contact support about billing
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Setup + quick actions */}
-        <div className="space-y-3">
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-base">Setup checklist</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="rounded-xl border border-border bg-background p-3">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  <div className="text-sm font-medium">Ready in 3 steps</div>
-                </div>
-                <ul className="mt-3 space-y-2 text-sm">
-                  {setupChecklist.map((i) => (
-                    <li key={i.label} className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium">{i.label}</div>
-                        <div className="text-xs text-muted-foreground">{i.detail}</div>
-                      </div>
-                      <Badge variant={i.isDone ? "default" : "secondary"} className="shrink-0">
-                        {i.status}
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
+        <Card className="shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-base">Invoices</CardTitle>
+            <CardDescription>
+              Recent invoices for this restaurant.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {invoicesQuery.isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading invoices…</p>
+            ) : invoicesQuery.isError ? (
+              <p className="text-sm text-destructive">
+                Unable to load invoices.
+              </p>
+            ) : invoicesQuery.data?.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No invoices found yet.
+              </p>
+            ) : (
+              <div className="w-full overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[180px]">
+                        Invoice
+                      </TableHead>
+                      <TableHead className="min-w-[120px]">
+                        Status
+                      </TableHead>
+                      <TableHead className="min-w-[140px]">
+                        Amount due
+                      </TableHead>
+                      <TableHead className="min-w-[140px]">
+                        Amount paid
+                      </TableHead>
+                      <TableHead className="min-w-[140px]">
+                        Issued
+                      </TableHead>
+                      <TableHead className="min-w-[140px]">
+                        Paid
+                      </TableHead>
+                      <TableHead className="min-w-[140px] text-right">
+                        Actions
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {invoicesQuery.data!.map((invoice) => (
+                      <TableRow key={invoice.id}>
+                        <TableCell className="font-mono text-xs">
+                          {invoice.provider_invoice_id}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{invoice.status}</Badge>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {formatMoney(
+                            invoice.amount_due_cents,
+                            invoice.currency_code,
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {formatMoney(
+                            invoice.amount_paid_cents,
+                            invoice.currency_code,
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {invoice.created_at
+                            ? format(new Date(invoice.created_at), "PP")
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {invoice.paid_at
+                            ? format(new Date(invoice.paid_at), "PP")
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="inline-flex flex-wrap justify-end gap-2">
+                            <Button
+                              asChild
+                              size="sm"
+                              variant="outline"
+                              disabled={!invoice.hosted_invoice_url}
+                            >
+                              <a
+                                href={invoice.hosted_invoice_url ?? undefined}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                View
+                              </a>
+                            </Button>
+                            <Button
+                              asChild
+                              size="sm"
+                              variant="outline"
+                              disabled={!invoice.invoice_pdf_url}
+                            >
+                              <a
+                                href={invoice.invoice_pdf_url ?? undefined}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                PDF
+                              </a>
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
-              <Button className="w-full" variant="secondary" asChild>
-                <Link to="/admin/branding">
-                  Open setup <ClipboardList className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-base">Quick actions</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-2">
-              <Button className="w-full justify-between" variant="secondary" asChild>
-                <Link to="/admin/menu">
-                  <span className="flex items-center gap-2">
-                    <Plus className="h-4 w-4" />
-                    Add Menu Item
-                  </span>
-                  <ArrowUpRight className="h-4 w-4" />
-                </Link>
-              </Button>
-              <Button className="w-full justify-between" variant="secondary" asChild>
-                <Link to="/admin/qr">
-                  <span className="flex items-center gap-2">
-                    <QrCode className="h-4 w-4" />
-                    Print QR
-                  </span>
-                  <ArrowUpRight className="h-4 w-4" />
-                </Link>
-              </Button>
-              <Button className="w-full justify-between" variant="secondary" asChild>
-                <Link to="/admin/orders">
-                  <span className="flex items-center gap-2">
-                    <ReceiptText className="h-4 w-4" />
-                    View Orders
-                  </span>
-                  <ArrowUpRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+            )}
+          </CardContent>
+        </Card>
       </section>
     </div>
   );
