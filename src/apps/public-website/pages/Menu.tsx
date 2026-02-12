@@ -482,6 +482,7 @@ export default function PublicMenu() {
                     </p>
                   </div>
                   <Turnstile
+                    key="order-turnstile" // Prevent re-initialization
                     onSuccess={(token) => {
                       setTurnstileToken(token);
                       // Clear any stale error when challenge is passed
