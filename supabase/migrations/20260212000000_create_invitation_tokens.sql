@@ -33,7 +33,7 @@ CREATE POLICY "Restaurant admins can view own invitations"
       SELECT restaurant_id 
       FROM user_roles 
       WHERE user_id = auth.uid() 
-      AND role IN ('restaurant_admin', 'owner')
+      AND role = 'restaurant_admin'
     )
   );
 
@@ -46,7 +46,7 @@ CREATE POLICY "Restaurant admins can create invitations"
       SELECT restaurant_id 
       FROM user_roles 
       WHERE user_id = auth.uid() 
-      AND role IN ('restaurant_admin', 'owner')
+      AND role = 'restaurant_admin'
     )
   );
 

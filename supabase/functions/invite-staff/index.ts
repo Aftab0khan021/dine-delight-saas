@@ -62,7 +62,7 @@ serve(async (req) => {
       .from("user_roles")
       .select("role, restaurant_id")
       .eq("user_id", user.id)
-      .or("role.eq.restaurant_admin,role.eq.owner");
+      .eq("role", "restaurant_admin");
 
     if (rolesError) {
       console.error("Roles query error:", rolesError);
