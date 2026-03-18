@@ -59,7 +59,7 @@ serve(async (req) => {
 
     console.log("✅ User authenticated:", user.id);
 
-    // Check if user is restaurant_admin
+    // Check if user is restaurant_admin and load all restaurants they manage
     const { data: userRoles, error: rolesError } = await supabase
       .from("user_roles")
       .select("role, restaurant_id")
@@ -87,11 +87,21 @@ serve(async (req) => {
       );
     }
 
-    const restaurant_id = userRoles[0].restaurant_id;
-    console.log("🏢 Restaurant ID:", restaurant_id);
-
     // Parse request body
-    const { email, staffCategoryId } = await req.json();
+    const body = await req.json();
+    const {
+      email,
+      restaurantId,
+      staffCategoryId,
+      role,
+      action,
+    } = body as {
+      email?: string;
+      restaurantId?: string;
+      staffCategoryId?: string | null;
+      role?: string | null;
+      action?: string | null;
+    };
 
     if (!email) {
       return new Response(
@@ -103,29 +113,43 @@ serve(async (req) => {
       );
     }
 
+    // Determine target restaurant: prefer explicit restaurantId from client, but
+    // ensure it belongs to the authenticated admin.
+    const targetRestaurantId = restaurantId ?? userRoles[0].restaurant_id;
+    const hasAccessToRestaurant = userRoles.some(
+      (r) => r.restaurant_id === targetRestaurantId,
+    );
+
+    if (!hasAccessToRestaurant) {
+      return new Response(
+        JSON.stringify({ error: "You do not manage this restaurant" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 403,
+        },
+      );
+    }
+
+    console.log("🏢 Restaurant ID:", targetRestaurantId);
     console.log("📧 Inviting:", email);
     console.log("📋 Staff Category ID:", staffCategoryId);
+    console.log("🛡 Role (if provided):", role);
+    console.log("🔁 Action:", action);
 
-    // Check if user already exists
-    // Check if a user with this email already exists in auth.
-    // Use exists() style query instead of fetching all users.
-    const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers({
-      page: 1,
-      perPage: 100,
-    });
+    // Check if user already exists (use direct lookup instead of paginated list)
+    const { data: existingUser, error: existingUserError } =
+      await supabase.auth.admin.getUserByEmail(email);
 
-    if (listError) {
-      console.error("List users error:", listError);
+    if (existingUserError) {
+      console.error("getUserByEmail error:", existingUserError);
       return new Response(
         JSON.stringify({ error: "Failed to verify existing users" }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 500,
-        }
+        },
       );
     }
-
-    const existingUser = existingUsers?.users.find((u: any) => u.email?.toLowerCase() === String(email).toLowerCase());
 
     if (existingUser) {
       return new Response(
@@ -133,8 +157,112 @@ serve(async (req) => {
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 400,
-        }
+        },
       );
+    }
+
+    // Enforce staff limit on the backend as well
+    const { data: staffLimit, error: staffLimitError } = await supabase.rpc(
+      "get_feature_limit_for_restaurant",
+      {
+        p_restaurant_id: targetRestaurantId,
+        p_feature_key: "staff_limit",
+      },
+    );
+
+    if (staffLimitError) {
+      console.error("Staff limit RPC error:", staffLimitError);
+      return new Response(
+        JSON.stringify({ error: "Failed to check staff limit" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 500,
+        },
+      );
+    }
+
+    if (typeof staffLimit === "number" && staffLimit !== -1) {
+      // Count current active staff
+      const { count: activeStaffCount, error: staffCountError } = await supabase
+        .from("user_roles")
+        .select("user_id", { count: "exact", head: true })
+        .eq("restaurant_id", targetRestaurantId)
+        .in("role", ["restaurant_admin", "user"]);
+
+      if (staffCountError) {
+        console.error("Staff count error:", staffCountError);
+        return new Response(
+          JSON.stringify({ error: "Failed to check staff limit" }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 500,
+          },
+        );
+      }
+
+      // Count pending invites
+      const { count: pendingInvitesCount, error: invitesCountError } =
+        await supabase
+          .from("staff_invites")
+          .select("id", { count: "exact", head: true })
+          .eq("restaurant_id", targetRestaurantId)
+          .eq("status", "pending");
+
+      if (invitesCountError) {
+        console.error("Invites count error:", invitesCountError);
+        return new Response(
+          JSON.stringify({ error: "Failed to check staff limit" }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 500,
+          },
+        );
+      }
+
+      const totalPlannedStaff =
+        (activeStaffCount ?? 0) + (pendingInvitesCount ?? 0);
+
+      if (totalPlannedStaff >= staffLimit) {
+        return new Response(
+          JSON.stringify({
+            error:
+              "Staff limit reached for this restaurant. Please upgrade your plan to invite more staff.",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 400,
+          },
+        );
+      }
+    }
+
+    // Basic IP-based rate limiting using staff_invites.ip_address
+    const forwardedFor = req.headers.get("x-forwarded-for") || "";
+    const ipAddress = forwardedFor.split(",")[0]?.trim() || null;
+
+    if (ipAddress) {
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const { count: recentFromIp, error: rateError } = await supabase
+        .from("staff_invites")
+        .select("id", { count: "exact", head: true })
+        .eq("ip_address", ipAddress)
+        .gte("created_at", oneHourAgo);
+
+      if (rateError) {
+        console.error("Rate limiting query error:", rateError);
+      } else if ((recentFromIp ?? 0) > 20) {
+        // More than 20 invites from same IP in last hour
+        return new Response(
+          JSON.stringify({
+            error:
+              "Too many invitations sent from this IP address. Please try again later.",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 429,
+          },
+        );
+      }
     }
 
     // Generate secure invitation token
@@ -144,15 +272,18 @@ serve(async (req) => {
     console.log("🔑 Generated token:", invitationToken);
     console.log("⏰ Expires at:", expiresAt.toISOString());
 
+    // Store invitation token in database. Role defaults to 'user' if not provided.
+    const effectiveRole = role && role.length > 0 ? role : "user";
+
     // Store invitation token in database
     const { error: tokenError } = await supabase
       .from("invitation_tokens")
       .insert({
         email,
         token: invitationToken,
-        restaurant_id,
+        restaurant_id: targetRestaurantId,
         staff_category_id: staffCategoryId || null,
-        role: 'user',
+        role: effectiveRole,
         expires_at: expiresAt.toISOString(),
         created_by: user.id,
       });
@@ -174,7 +305,7 @@ serve(async (req) => {
     const { data: restaurant } = await supabase
       .from("restaurants")
       .select("name")
-      .eq("id", restaurant_id)
+      .eq("id", targetRestaurantId)
       .single();
 
     const restaurantName = restaurant?.name || "the restaurant";
@@ -294,8 +425,13 @@ serve(async (req) => {
       await client.close();
 
       console.log("✅ Email sent via Gmail SMTP");
-    } catch (emailError: any) {
+    } catch (emailError: unknown) {
       console.error("❌ Email send error:", emailError);
+
+      const emailErrorMessage =
+        emailError instanceof Error
+          ? emailError.message
+          : String(emailError);
 
       // Delete the token since email failed
       await supabase
@@ -304,7 +440,9 @@ serve(async (req) => {
         .eq("token", invitationToken);
 
       return new Response(
-        JSON.stringify({ error: "Failed to send invitation email: " + emailError.message }),
+        JSON.stringify({
+          error: "Failed to send invitation email: " + emailErrorMessage,
+        }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 500,
@@ -312,15 +450,30 @@ serve(async (req) => {
       );
     }
 
+    // Helper: compute a stable token hash for staff_invites tracking
+    async function sha256Hex(value: string): Promise<string> {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(value);
+      const hash = await crypto.subtle.digest("SHA-256", data);
+      return Array.from(new Uint8Array(hash))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+    }
+
+    const tokenHash = await sha256Hex(invitationToken);
+
     // Record invitation in staff_invites table (for tracking)
     try {
       await supabase
         .from("staff_invites")
         .insert({
           email,
-          restaurant_id,
+          restaurant_id: targetRestaurantId,
           invited_by: user.id,
           status: 'pending',
+          token_hash: tokenHash,
+          expires_at: expiresAt.toISOString(),
+          ip_address: ipAddress,
         });
     } catch (inviteError) {
       console.warn("⚠️ Failed to record in staff_invites:", inviteError);
@@ -339,10 +492,11 @@ serve(async (req) => {
       }
     );
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("❌ Unexpected error:", error);
+    const message = error instanceof Error ? error.message : String(error);
     return new Response(
-      JSON.stringify({ error: error.message || "Internal server error" }),
+      JSON.stringify({ error: message || "Internal server error" }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 500,
