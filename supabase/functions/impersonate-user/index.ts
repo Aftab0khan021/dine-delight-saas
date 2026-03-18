@@ -163,9 +163,10 @@ serve(async (req) => {
                 throw new Error("Failed to create impersonation session");
             }
 
-            // Generate impersonation URL
-            const baseUrl = supabaseUrl.replace('.supabase.co', '.app') || 'http://localhost:8080';
-            const impersonationUrl = `${baseUrl}/admin?impersonate_token=${sessionToken}`;
+            // Generate impersonation URL using the configured app base URL
+            // APP_BASE_URL must be set in Supabase function secrets (e.g. https://your-app.vercel.app)
+            const appBaseUrl = Deno.env.get("APP_BASE_URL") ?? "http://localhost:8080";
+            const impersonationUrl = `${appBaseUrl}/admin?impersonate_token=${sessionToken}`;
 
             console.log(`Impersonation session created: ${session.id} by ${user.email} for ${targetUserRole.profiles?.email}`);
 

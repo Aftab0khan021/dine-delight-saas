@@ -69,29 +69,18 @@ export function InviteStaffDialog({ open, onOpenChange }: Props) {
         payload.role = values.role;
       }
 
-      console.log("🚀 InviteStaffDialog - Sending payload:", payload);
-      console.log("🔑 Restaurant ID:", restaurant.id);
-      console.log("📧 Email:", values.email);
-      console.log("👤 Role/Category ID:", values.role);
-
       const { data, error } = await supabase.functions.invoke("invite-staff", {
         body: payload,
       });
 
-      console.log("📥 Response data:", data);
-      console.log("❌ Response error:", error);
-
       if (error) {
-        console.error("🔴 Supabase Functions Error:", error);
         throw new Error(error.message || "Failed to invoke function");
       }
 
       if (data?.error) {
-        console.error("🔴 Edge Function returned error:", data.error);
         throw new Error(data.error);
       }
 
-      console.log("✅ Invitation successful:", data);
       return data;
     },
     onSuccess: () => {
@@ -100,7 +89,6 @@ export function InviteStaffDialog({ open, onOpenChange }: Props) {
       onOpenChange(false);
     },
     onError: (error) => {
-      console.error("🔴 Mutation Error:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to invite staff.",
@@ -116,11 +104,6 @@ export function InviteStaffDialog({ open, onOpenChange }: Props) {
   const categories = categoriesQuery.data || [];
   const hasCategories = categories.length > 0;
 
-  // Debug logging
-  console.log('InviteStaffDialog - Categories:', categories);
-  console.log('InviteStaffDialog - hasCategories:', hasCategories);
-  console.log('InviteStaffDialog - Loading:', categoriesQuery.isLoading);
-  console.log('InviteStaffDialog - Error:', categoriesQuery.error);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
