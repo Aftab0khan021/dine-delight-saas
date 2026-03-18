@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.order-lookup]
 verify_jwt = false
+
+[functions.place-order]
+verify_jwt = false

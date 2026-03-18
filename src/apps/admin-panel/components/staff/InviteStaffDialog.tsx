@@ -56,11 +56,18 @@ export function InviteStaffDialog({ open, onOpenChange }: Props) {
     mutationFn: async (values: InviteValues) => {
       if (!restaurant?.id) throw new Error("Restaurant ID missing");
 
-      const payload = {
+      // When staff categories exist, the "role" field actually holds a staff_category_id.
+      // When there are no categories yet, it holds a concrete role ("user" | "restaurant_admin").
+      const payload: Record<string, unknown> = {
         email: values.email,
-        role: values.role,
-        restaurant_id: restaurant.id,
+        restaurantId: restaurant.id,
       };
+
+      if (hasCategories) {
+        payload.staffCategoryId = values.role;
+      } else {
+        payload.role = values.role;
+      }
 
       console.log("🚀 InviteStaffDialog - Sending payload:", payload);
       console.log("🔑 Restaurant ID:", restaurant.id);

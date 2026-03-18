@@ -242,9 +242,10 @@ export default function AdminStaff() {
 
       const { data, error } = await supabase.functions.invoke("invite-staff", {
         body: {
-          email: email,
-          restaurant_id: restaurant.id,
+          email,
+          restaurantId: restaurant.id,
           action: "resend",
+          inviteId: id,
         },
       });
 
