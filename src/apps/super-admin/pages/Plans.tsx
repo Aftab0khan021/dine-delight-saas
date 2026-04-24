@@ -400,8 +400,8 @@ export default function Plans() {
             {/* Plans Table */}
             <Card>
                 <CardContent className="p-0 overflow-x-auto">
-          <div className="min-w-[600px]">
-            <Table>
+                    <div className="min-w-[600px]">
+                        <Table>
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-[50px]"></TableHead>
@@ -478,6 +478,7 @@ export default function Plans() {
                             )}
                         </TableBody>
                     </Table>
+                    </div>
                 </CardContent>
             </Card>
 

@@ -175,8 +175,8 @@ export default function FeatureAccess() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="p-0 overflow-x-auto">
-          <div className="min-w-[600px]">
-            <Table>
+                    <div className="min-w-[600px]">
+                        <Table>
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Restaurant</TableHead>
@@ -233,6 +233,7 @@ export default function FeatureAccess() {
                             )}
                         </TableBody>
                     </Table>
+                    </div>
                 </CardContent>
             </Card>
 
