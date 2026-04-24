@@ -40,6 +40,7 @@ import { AdminSidebar } from "./AdminSidebar";
 import { AdminBottomNav } from "./AdminBottomNav";
 import { PendingApprovalScreen } from "./PendingApprovalScreen";
 import { useRestaurantContext } from "../state/restaurant-context";
+import { useToast } from "@/hooks/use-toast";
 
 // --- Helper: Time Ago ---
 function timeAgo(dateString: string) {
@@ -73,6 +74,8 @@ export function AdminShell({ children }: PropsWithChildren) {
   const [newRestName, setNewRestName] = useState("");
   const [newRestSlug, setNewRestSlug] = useState("");
   const [creating, setCreating] = useState(false);
+  const [notificationsRead, setNotificationsRead] = useState(false);
+  const { toast } = useToast();
 
   // Close sidebar on escape key
   useEffect(() => {
@@ -156,7 +159,7 @@ export function AdminShell({ children }: PropsWithChildren) {
       await refresh();
 
     } catch (err: any) {
-      alert("Error creating restaurant: " + err.message);
+      toast({ title: "Error creating restaurant", description: err.message, variant: "destructive" });
     } finally {
       setCreating(false);
     }
@@ -329,13 +332,13 @@ export function AdminShell({ children }: PropsWithChildren) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="relative h-9 w-9 shrink-0">
                 <Bell className="h-5 w-5 text-muted-foreground" />
-                {notifications.length > 0 && (
+                {notifications.length > 0 && !notificationsRead && (
                   <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
                 )}
                 <span className="sr-only">Notifications</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[min(340px,90vw)]">
+            <DropdownMenuContent align="end" className="w-[min(340px,90vw)]" onPointerDownOutside={() => setNotificationsRead(true)}>
               <DropdownMenuLabel>Notifications</DropdownMenuLabel>
               <DropdownMenuSeparator />
 
@@ -355,7 +358,10 @@ export function AdminShell({ children }: PropsWithChildren) {
               )}
 
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-xs justify-center text-primary font-medium">
+              <DropdownMenuItem
+                className="text-xs justify-center text-primary font-medium"
+                onClick={() => navigate("/admin/activity" as any)}
+              >
                 View Activity Log
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -385,10 +391,10 @@ export function AdminShell({ children }: PropsWithChildren) {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/admin/branding")}>
                 <User className="mr-2 h-4 w-4" /> Profile
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/admin/branding")}>
                 <Settings className="mr-2 h-4 w-4" /> Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />

@@ -50,6 +50,8 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       .from("user_roles")
       .select("role, restaurant_id, staff_category_id")
       .eq("user_id", session.user.id)
+      .order("role", { ascending: false }) // restaurant_admin > user alphabetically
+      .limit(1)
       .maybeSingle();
 
     if (roleError || !userRoleRow) {

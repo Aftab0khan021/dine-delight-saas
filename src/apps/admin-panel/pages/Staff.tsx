@@ -83,6 +83,7 @@ export default function AdminStaff() {
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [roleTarget, setRoleTarget] = useState<{ id: string; name: string; role: string } | null>(null);
   const [newRole, setNewRole] = useState<StaffRole>("user");
+  const [newCategoryId, setNewCategoryId] = useState<string | null>(null);
 
   // --- 1. Data Queries (From Repo B) ---
   const staffQuery = useQuery({
@@ -177,8 +178,14 @@ export default function AdminStaff() {
     mutationFn: async () => {
       if (!restaurant?.id || !roleTarget) throw new Error("Missing data");
 
+      // If categories exist, update the staff_category_id; otherwise update the role enum
+      const hasCats = categoriesQuery.data && categoriesQuery.data.length > 0;
+      const updatePayload = hasCats
+        ? { staff_category_id: newCategoryId }
+        : { role: newRole };
+
       const { error } = await supabase.from("user_roles")
-        .update({ role: newRole })
+        .update(updatePayload)
         .eq("restaurant_id", restaurant.id)
         .eq("user_id", roleTarget.id);
 
@@ -201,7 +208,11 @@ export default function AdminStaff() {
     },
     onSuccess: () => {
       setRoleDialogOpen(false);
-      toast({ title: "Role updated", description: `${roleTarget?.name} is now ${newRole}` });
+      const hasCats = categoriesQuery.data && categoriesQuery.data.length > 0;
+      const label = hasCats
+        ? (categoriesQuery.data?.find(c => c.id === newCategoryId)?.name ?? newCategoryId)
+        : newRole;
+      toast({ title: "Role updated", description: `${roleTarget?.name} is now ${label}` });
       qc.invalidateQueries({ queryKey: ["admin", "staff"] });
     },
     onError: (error: Error) => {
@@ -458,7 +469,16 @@ export default function AdminStaff() {
             </div>
             <div className="space-y-2">
               <Label>{categoriesQuery.data && categoriesQuery.data.length > 0 ? "Staff Category" : "Role"}</Label>
-              <Select value={newRole} onValueChange={(v) => setNewRole(v as StaffRole)}>
+              <Select
+                value={categoriesQuery.data && categoriesQuery.data.length > 0 ? (newCategoryId ?? "") : newRole}
+                onValueChange={(v) => {
+                  if (categoriesQuery.data && categoriesQuery.data.length > 0) {
+                    setNewCategoryId(v);
+                  } else {
+                    setNewRole(v as StaffRole);
+                  }
+                }}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {categoriesQuery.data && categoriesQuery.data.length > 0 ? (
