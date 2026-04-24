@@ -57,10 +57,12 @@ export default function KitchenDashboard() {
 
   const ordersQuery = useQuery({
     queryKey: ["kitchen-orders", restaurant?.id, brandFilter, statusFilter],
-    enabled: !!restaurant?.id,
+    enabled: !!restaurant?.id && allRestaurantIds.length > 0,
     refetchInterval: 15_000,
     queryFn: async () => {
       const ids = brandFilter === "all" ? allRestaurantIds : [brandFilter];
+      // Guard: never call .in() with empty array — PostgREST throws
+      if (ids.length === 0) return [];
       let q = supabase
         .from("orders")
         .select(`

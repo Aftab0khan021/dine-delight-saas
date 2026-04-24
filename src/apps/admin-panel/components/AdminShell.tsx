@@ -82,7 +82,10 @@ export function AdminShell({ children }: PropsWithChildren) {
     queryKey: ["shell", "brands", restaurant?.id, (restaurant as any)?.parent_kitchen_id],
     enabled: !!restaurant?.id,
     queryFn: async () => {
-      const parentId = (restaurant as any)?.parent_kitchen_id ?? restaurant?.id;
+      const restaurantIdSafe = restaurant?.id;
+      if (!restaurantIdSafe) return [];
+      const parentId = (restaurant as any)?.parent_kitchen_id ?? restaurantIdSafe;
+      // Fetch this restaurant + all siblings sharing same parent
       const { data } = await supabase
         .from("restaurants")
         .select("id, name, brand_color, slug")
