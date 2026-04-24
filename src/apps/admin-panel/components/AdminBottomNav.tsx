@@ -21,18 +21,18 @@ const items = [
 
 export function AdminBottomNav() {
   return (
-    <nav className="md:hidden fixed inset-x-0 bottom-0 border-t bg-background">
-      <div className="flex items-stretch justify-between gap-1 px-1 py-1 overflow-x-auto">
+    <nav className="md:hidden fixed inset-x-0 bottom-0 border-t bg-background/95 backdrop-blur z-30">
+      <div className="flex items-stretch justify-around gap-0 px-0 py-1 overflow-x-auto scrollbar-none">
         {items.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.end as any}
-            className="flex flex-col items-center justify-center gap-1 rounded-md px-3 py-2 min-w-[4.25rem] text-xs text-muted-foreground"
+            className="flex flex-col items-center justify-center gap-0.5 rounded-md px-1 py-2 flex-1 min-w-0 text-[10px] text-muted-foreground"
             activeClassName="bg-muted text-foreground"
           >
-            <item.icon className="h-4 w-4" />
-            <span>{item.label}</span>
+            <item.icon className="h-4 w-4 shrink-0" />
+            <span className="truncate w-full text-center">{item.label}</span>
           </NavLink>
         ))}
       </div>

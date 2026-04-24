@@ -411,7 +411,7 @@ export default function AdminMenu() {
         </Alert>
       )}
 
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className="grid gap-3 grid-cols-1 lg:grid-cols-3">
         {/* LEFT COLUMN: Categories (Draggable) */}
         <Card className="shadow-sm lg:col-span-1 h-fit">
           <CardHeader>
@@ -453,7 +453,7 @@ export default function AdminMenu() {
 
         {/* RIGHT COLUMN: Items */}
         <Card className="shadow-sm lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between space-y-0">
             <div>
               <CardTitle className="text-base">Menu Items</CardTitle>
               {menuItemsLimit !== undefined && !isUnlimited && (
@@ -462,7 +462,7 @@ export default function AdminMenu() {
                 </CardDescription>
               )}
             </div>
-            <div className="relative w-full max-w-xs">
+            <div className="relative w-full sm:max-w-xs">
               <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search items..."

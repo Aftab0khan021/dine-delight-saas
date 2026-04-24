@@ -203,7 +203,7 @@ export default function AdminBranding() {
         </div>
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
         {/* LEFT COLUMN: Editor Form */}
         <div className="lg:col-span-2 space-y-6">
 
@@ -411,7 +411,7 @@ export default function AdminBranding() {
           </Card>
 
           {/* 2. Visual Preview Card */}
-          <Card className="shadow-sm overflow-hidden sticky top-6">
+          <Card className="shadow-sm overflow-hidden lg:sticky lg:top-6">
             <CardHeader className="bg-muted/30 border-b pb-3">
               <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Mobile Preview

@@ -8,7 +8,8 @@ import {
   ChevronDown,
   Settings,
   User,
-  Menu
+  Menu,
+  X
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -66,11 +67,21 @@ export function AdminShell({ children }: PropsWithChildren) {
   const [userEmail, setUserEmail] = useState<string>("Admin");
   const [accountStatus, setAccountStatus] = useState<string | null>(null);
   const [checkingStatus, setCheckingStatus] = useState(true);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Local state for the "Create Restaurant" form
   const [newRestName, setNewRestName] = useState("");
   const [newRestSlug, setNewRestSlug] = useState("");
   const [creating, setCreating] = useState(false);
+
+  // Close sidebar on escape key
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileSidebarOpen(false);
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
 
   // Check account status on mount
   useEffect(() => {
@@ -106,7 +117,6 @@ export function AdminShell({ children }: PropsWithChildren) {
         .limit(5);
       return data || [];
     },
-    // Refresh every minute to check for new activity
     refetchInterval: 60000
   });
 
@@ -155,7 +165,10 @@ export function AdminShell({ children }: PropsWithChildren) {
   if (loading || checkingStatus) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        </div>
       </div>
     );
   }
@@ -212,12 +225,12 @@ export function AdminShell({ children }: PropsWithChildren) {
               <div className="space-y-2">
                 <Label htmlFor="rest-slug">URL Slug</Label>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">.../menu/</span>
+                  <span className="text-sm text-muted-foreground shrink-0">.../menu/</span>
                   <Input
                     id="rest-slug"
                     placeholder="joes-burgers"
                     value={newRestSlug}
-                    onChange={e => setNewRestSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
+                    onChange={e => setNewRestSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/\s+/g, '-'))}
                     required
                   />
                 </div>
@@ -245,20 +258,51 @@ export function AdminShell({ children }: PropsWithChildren) {
   return (
     <div className="min-h-screen w-full bg-muted/10">
 
+      {/* --- MOBILE SIDEBAR OVERLAY (backdrop) --- */}
+      {mobileSidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* --- MOBILE SIDEBAR DRAWER --- */}
+      <div
+        className={`fixed inset-y-0 left-0 z-50 md:hidden transform transition-transform duration-300 ease-in-out ${
+          mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="relative h-full">
+          <button
+            className="absolute top-3 right-[-40px] z-10 flex h-8 w-8 items-center justify-center rounded-md bg-background border text-muted-foreground hover:bg-accent"
+            onClick={() => setMobileSidebarOpen(false)}
+            aria-label="Close sidebar"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <AdminSidebar />
+        </div>
+      </div>
+
       {/* --- HEADER --- */}
       <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex h-14 items-center gap-3 px-4 lg:px-8">
+        <div className="flex h-14 items-center gap-2 px-3 sm:px-4 lg:px-8">
 
-          {/* Mobile Menu Icon */}
-          <div className="md:hidden -ml-2 p-2 text-muted-foreground">
+          {/* Mobile Hamburger */}
+          <button
+            className="md:hidden -ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            onClick={() => setMobileSidebarOpen(true)}
+            aria-label="Open sidebar"
+          >
             <Menu className="h-5 w-5" />
-          </div>
+          </button>
 
-          {/* Restaurant Switcher */}
-          <div className="min-w-0 flex-1">
+          {/* Restaurant Name Switcher */}
+          <div className="min-w-0 flex-1 overflow-hidden">
             <div className="flex items-center gap-2">
               <Select value={restaurant?.id} disabled>
-                <SelectTrigger className="h-9 w-auto min-w-[200px] max-w-[340px] bg-transparent border-0 shadow-none hover:bg-accent/50 focus:ring-0 font-medium">
+                <SelectTrigger className="h-9 w-auto min-w-0 max-w-[150px] sm:max-w-[240px] bg-transparent border-0 shadow-none hover:bg-accent/50 focus:ring-0 font-medium">
                   <SelectValue placeholder="Select restaurant" />
                 </SelectTrigger>
                 <SelectContent>
@@ -270,7 +314,7 @@ export function AdminShell({ children }: PropsWithChildren) {
 
               <Badge
                 variant="secondary"
-                className="hidden sm:inline-flex h-6 rounded-full px-2.5 text-[10px] uppercase tracking-wide"
+                className="hidden sm:inline-flex h-6 rounded-full px-2.5 text-[10px] uppercase tracking-wide shrink-0"
                 style={staffCategory?.color ? { backgroundColor: staffCategory.color + '20', color: staffCategory.color } : {}}
               >
                 {getRoleBadge()}
@@ -278,13 +322,12 @@ export function AdminShell({ children }: PropsWithChildren) {
             </div>
           </div>
 
+          <Separator orientation="vertical" className="hidden h-6 md:block shrink-0" />
 
-          <Separator orientation="vertical" className="hidden h-6 md:block" />
-
-          {/* Notifications (REAL DATA) */}
+          {/* Notifications */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative h-9 w-9">
+              <Button variant="ghost" size="icon" className="relative h-9 w-9 shrink-0">
                 <Bell className="h-5 w-5 text-muted-foreground" />
                 {notifications.length > 0 && (
                   <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
@@ -292,19 +335,17 @@ export function AdminShell({ children }: PropsWithChildren) {
                 <span className="sr-only">Notifications</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[340px]">
+            <DropdownMenuContent align="end" className="w-[min(340px,90vw)]">
               <DropdownMenuLabel>Notifications</DropdownMenuLabel>
               <DropdownMenuSeparator />
 
-              {/* Loop through REAL Activity Logs */}
               {notifications.length > 0 ? (
-                notifications.map((n: any) => (
+                (notifications as any[]).map((n) => (
                   <DropdownMenuItem key={n.id} className="flex flex-col items-start gap-1 p-3 cursor-pointer">
                     <div className="flex w-full items-center justify-between gap-4">
                       <span className="text-sm font-medium line-clamp-1">{n.message}</span>
                       <span className="text-[10px] text-muted-foreground shrink-0">{timeAgo(n.created_at)}</span>
                     </div>
-                    {/* Activity logs don't usually have a separate 'detail' field, so we just use message */}
                   </DropdownMenuItem>
                 ))
               ) : (
@@ -323,14 +364,14 @@ export function AdminShell({ children }: PropsWithChildren) {
           {/* Account Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-9 gap-2 px-2 hover:bg-accent/50">
+              <Button variant="ghost" className="h-9 gap-1.5 px-2 hover:bg-accent/50 shrink-0">
                 <Avatar className="h-7 w-7 border">
                   <AvatarImage src="" />
                   <AvatarFallback className="bg-primary/10 text-primary text-xs">
                     {userEmail.substring(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <span className="hidden text-sm font-medium md:inline max-w-[120px] truncate">
+                <span className="hidden text-sm font-medium sm:inline max-w-[100px] truncate">
                   {userEmail}
                 </span>
                 <ChevronDown className="h-4 w-4 text-muted-foreground opacity-50" />
@@ -340,7 +381,7 @@ export function AdminShell({ children }: PropsWithChildren) {
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium leading-none">My Account</p>
-                  <p className="text-xs leading-none text-muted-foreground">{userEmail}</p>
+                  <p className="text-xs leading-none text-muted-foreground truncate">{userEmail}</p>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
@@ -362,11 +403,11 @@ export function AdminShell({ children }: PropsWithChildren) {
 
       {/* Main Content Layout */}
       <div className="flex min-h-[calc(100vh-3.5rem)] w-full">
-        <div className="hidden md:block">
+        <div className="hidden md:block shrink-0">
           <AdminSidebar />
         </div>
 
-        <main className="flex-1 p-4 md:p-8 pb-20 md:pb-8 overflow-auto">
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 pb-20 md:pb-8 overflow-auto">
           {children}
         </main>
       </div>
