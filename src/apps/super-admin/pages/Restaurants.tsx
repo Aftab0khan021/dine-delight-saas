@@ -323,7 +323,9 @@ export default function Restaurants() {
 
       {/* Table */}
       <Card>
-        <CardContent className="p-0 overflow-x-auto"><div className="min-w-[600px]"><Table>
+        <CardContent className="p-0 overflow-x-auto">
+          <div className="min-w-[600px]">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Restaurant</TableHead>

@@ -174,7 +174,9 @@ export default function FeatureAccess() {
                         {filteredData?.length || 0} feature access records
                     </CardDescription>
                 </CardHeader>
-                <CardContent className="p-0 overflow-x-auto"><div className="min-w-[600px]"><Table>
+                <CardContent className="p-0 overflow-x-auto">
+          <div className="min-w-[600px]">
+            <Table>
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Restaurant</TableHead>

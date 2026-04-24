@@ -399,7 +399,9 @@ export default function Plans() {
 
             {/* Plans Table */}
             <Card>
-                <CardContent className="p-0 overflow-x-auto"><div className="min-w-[600px]"><Table>
+                <CardContent className="p-0 overflow-x-auto">
+          <div className="min-w-[600px]">
+            <Table>
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-[50px]"></TableHead>
