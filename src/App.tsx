@@ -2,7 +2,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 import NotFound from "./pages/NotFound";
 
 // Public Website
@@ -48,12 +49,38 @@ import SuperAdminUsers from "./apps/super-admin/pages/Users";
 
 const queryClient = new QueryClient();
 
+/**
+ * Intercepts Supabase auth hash tokens on ANY page.
+ * When a recovery/invite email redirects to the root (/#access_token=...&type=recovery),
+ * this catches the hash and forwards the user to /auth/set-password.
+ */
+function AuthHashHandler() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash) return;
+
+    const params = new URLSearchParams(hash.replace("#", ""));
+    const type = params.get("type");
+    const accessToken = params.get("access_token");
+
+    if ((type === "recovery" || type === "invite") && accessToken) {
+      // Preserve the hash so SetPassword.tsx can read the tokens
+      navigate("/auth/set-password" + hash, { replace: true });
+    }
+  }, [navigate]);
+
+  return null;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <AuthHashHandler />
         <Routes>
           {/* Public Website */}
           <Route path="/" element={<Home />} />
