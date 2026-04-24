@@ -13,7 +13,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Ticket,
-  Settings
+  Settings,
+  MessageCircle,
+  BarChart3,
+  Code2,
+  Flame
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -28,9 +32,10 @@ type NavItem = {
   adminOnly?: boolean; // Only visible to admins
 };
 
-const allNavItems: NavItem[] = [
-  { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard }, // Always visible
+const coreNavItems: NavItem[] = [
+  { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/admin/orders", label: "Orders", icon: ReceiptText, permission: PERMISSIONS.VIEW_ORDERS },
+  { to: "/admin/kitchen", label: "Kitchen Board", icon: ChefHat, permission: PERMISSIONS.VIEW_ORDERS },
   { to: "/admin/menu", label: "Menu", icon: Salad, permission: PERMISSIONS.VIEW_MENU },
   { to: "/admin/qr", label: "QR Menu", icon: QrCode, permission: PERMISSIONS.VIEW_QR },
   { to: "/admin/staff", label: "Staff", icon: Users, permission: PERMISSIONS.VIEW_STAFF },
@@ -39,6 +44,41 @@ const allNavItems: NavItem[] = [
   { to: "/admin/billing", label: "Billing", icon: CreditCard, adminOnly: true },
   { to: "/admin/coupons", label: "Coupons", icon: Ticket, permission: PERMISSIONS.VIEW_COUPONS },
 ];
+
+const growthNavItems: NavItem[] = [
+  { to: "/admin/marketing", label: "WhatsApp CRM", icon: MessageCircle, adminOnly: true },
+  { to: "/admin/insights", label: "Menu Insights", icon: BarChart3, adminOnly: true },
+  { to: "/admin/developer", label: "Developer API", icon: Code2, adminOnly: true },
+];
+
+const allNavItems: NavItem[] = [...coreNavItems, ...growthNavItems];
+
+function NavItem({ item, isCollapsed }: { item: NavItem; isCollapsed: boolean }) {
+  return (
+    <li>
+      <NavLink
+        to={item.to}
+        title={isCollapsed ? item.label : undefined}
+        className={({ isActive }) =>
+          cn(
+            "flex items-center rounded-lg transition-colors",
+            isCollapsed ? "justify-center h-10 w-10 mx-auto" : "gap-3 px-3 py-2",
+            isActive
+              ? "bg-primary/10 text-primary shadow-sm"
+              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          )
+        }
+      >
+        {({ isActive }) => (
+          <>
+            <item.icon className={cn("shrink-0", isCollapsed ? "h-5 w-5" : "h-4 w-4", !isActive && !isCollapsed && "opacity-70")} />
+            {!isCollapsed && <span className="text-sm font-medium truncate">{item.label}</span>}
+          </>
+        )}
+      </NavLink>
+    </li>
+  );
+}
 
 export function AdminSidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -89,39 +129,24 @@ export function AdminSidebar() {
       {/* 2. Scrollable Nav Area */}
       <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4">
         <ul className="space-y-1 px-3">
-          {navItems.map((item) => (
-            <li key={item.to}>
-              <NavLink
-                to={item.to}
-                title={isCollapsed ? item.label : undefined}
-                className={({ isActive }) =>
-                  cn(
-                    "flex items-center rounded-lg transition-colors",
-                    isCollapsed
-                      ? "justify-center h-10 w-10 mx-auto"
-                      : "gap-3 px-3 py-2",
-                    isActive
-                      ? "bg-primary/10 text-primary shadow-sm"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                  )
-                }
-              >
-                {/* FIXED: We now access isActive inside the children function */}
-                {({ isActive }) => (
-                  <>
-                    <item.icon className={cn(
-                      "shrink-0",
-                      isCollapsed ? "h-5 w-5" : "h-4 w-4",
-                      !isActive && !isCollapsed && "opacity-70"
-                    )} />
+          {navItems.filter(i => coreNavItems.some(c => c.to === i.to)).map((item) => (
+            <NavItem key={item.to} item={item} isCollapsed={isCollapsed} />
+          ))}
 
-                    {!isCollapsed && (
-                      <span className="text-sm font-medium truncate">{item.label}</span>
-                    )}
-                  </>
-                )}
-              </NavLink>
+          {/* Growth features separator */}
+          {navItems.some(i => growthNavItems.some(g => g.to === i.to)) && (
+            <li className="pt-3 pb-1">
+              {!isCollapsed ? (
+                <div className="flex items-center gap-2 px-3">
+                  <Flame className="h-3 w-3 text-orange-500" />
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Growth</span>
+                </div>
+              ) : <div className="border-t border-border/40 mx-2" />}
             </li>
+          )}
+
+          {navItems.filter(i => growthNavItems.some(g => g.to === i.to)).map((item) => (
+            <NavItem key={item.to} item={item} isCollapsed={isCollapsed} />
           ))}
         </ul>
       </nav>

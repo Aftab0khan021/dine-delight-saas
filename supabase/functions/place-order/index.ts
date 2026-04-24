@@ -57,7 +57,7 @@ serve(async (req) => {
       return json({ error: "Invalid JSON" }, 400);
     }
 
-    const { restaurant_id, items, table_label, turnstileToken } = payload;
+    const { restaurant_id, items, table_label, turnstileToken, customer_phone, customer_name } = payload;
 
     // Resolve Turnstile secret key strictly from environment variables.
     // Prefer TURNSTILE_SECRET_KEY_PROD, fall back to TURNSTILE_SECRET_KEY_DEV.
@@ -316,7 +316,9 @@ serve(async (req) => {
         ip_address: clientIp,
         table_label: table_label || null,
         order_token: order_token,
-        payment_method: 'cash' // Default to cash for now, update later
+        payment_method: 'cash',
+        customer_phone: customer_phone || null,
+        customer_name: customer_name || null,
       })
       .select()
       .single();
@@ -341,6 +343,23 @@ serve(async (req) => {
     }
 
     console.log(`Order created successfully: ${order.id}, Total: $${totalCents / 100}`);
+
+    // Fire WhatsApp receipt asynchronously (non-blocking)
+    if (customer_phone) {
+      const itemsSummary = orderItemsData.slice(0, 3).map(i => `${i.quantity}x ${i.name_snapshot}`).join(', ');
+      supabase.functions.invoke('send-whatsapp', {
+        body: {
+          order_id: order.id,
+          restaurant_id,
+          phone: customer_phone,
+          customer_name: customer_name || null,
+          items_summary: itemsSummary + (orderItemsData.length > 3 ? ` +${orderItemsData.length - 3} more` : ''),
+          total: finalTotal,
+          currency: 'USD',
+        }
+      }).catch(err => console.warn('WhatsApp send failed (non-critical):', err));
+    }
+
     return json(order, 200);
 
   } catch (error: any) {

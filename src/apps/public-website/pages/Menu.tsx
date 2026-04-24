@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,6 +7,8 @@ import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Drawer,
   DrawerClose,
@@ -18,9 +20,11 @@ import {
 } from "@/components/ui/drawer";
 import { useToast } from "@/hooks/use-toast";
 import { CopyButton } from "@/apps/admin-panel/components/qr/CopyButton";
-import { Minus, Plus, ShoppingBag } from "lucide-react";
+import { Minus, Plus, ShoppingBag, Flame, Users } from "lucide-react";
 import { useRestaurantCart } from "../hooks/useRestaurantCart";
+import { useCollaborativeCart } from "../hooks/useCollaborativeCart";
 import { MenuItemDialog } from "../components/MenuItemDialog";
+import { TablePresence } from "../components/TablePresence";
 import { Turnstile } from "@/components/security/Turnstile";
 import { formatMoney } from "@/lib/formatting";
 
@@ -36,7 +40,18 @@ export default function PublicMenu() {
   const [searchParams] = useSearchParams();
   const slug = (restaurantSlug ?? "").trim();
 
+  const tableLabel = searchParams.get("table") ?? null;
+  const useCollabCart = !!tableLabel;
+
   const cart = useRestaurantCart(slug);
+  const collabCart = useCollaborativeCart(
+    restaurantQuery.data?.id ?? "",
+    tableLabel ?? ""
+  );
+
+  // Use collaborative cart when table param is present, else regular cart
+  const activeCart = useCollabCart && collabCart.initialized ? collabCart : cart;
+
   const [cartOpen, setCartOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MenuItemRow | null>(null);
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
@@ -46,6 +61,12 @@ export default function PublicMenu() {
   const [placedOrderToken, setPlacedOrderToken] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [customerName, setCustomerName] = useState("");
+
+  // Smart menu ranking
+  const [rankedIds, setRankedIds] = useState<string[] | null>(null);
+  const [popularIds, setPopularIds] = useState<string[]>([]);
 
   const restaurantQuery = useQuery({
     queryKey: ["public-menu", "restaurant", slug],
@@ -173,8 +194,8 @@ export default function PublicMenu() {
     try {
       const payload = {
         restaurant_id: restaurantId,
-        table_label: cart.tableLabel ?? undefined,
-        items: cart.items.map((i) => ({
+        table_label: activeCart.tableLabel ?? undefined,
+        items: activeCart.items.map((i) => ({
           menu_item_id: i.menu_item_id,
           quantity: i.quantity,
           variant_id: i.variant_id,
@@ -183,6 +204,8 @@ export default function PublicMenu() {
         })),
         coupon_code: cart.couponCode ?? undefined,
         turnstileToken,
+        customer_phone: customerPhone.trim() || undefined,
+        customer_name: customerName.trim() || undefined,
       };
 
       const { data, error } = await supabase.functions.invoke("place-order", {
@@ -196,11 +219,11 @@ export default function PublicMenu() {
 
       setPlacedOrderId(data.id);
       setPlacedOrderToken(data.order_token);
-      cart.clear();
+      activeCart.clear();
       setCartOpen(true);
       toast({
-        title: "Order placed",
-        description: "Save your order token to track status.",
+        title: "Order placed! 🎉",
+        description: customerPhone ? "Receipt sent to your WhatsApp!" : "Save your order token to track status.",
       });
     } catch (e: any) {
       console.error("Place order error:", e);
@@ -216,8 +239,28 @@ export default function PublicMenu() {
   }, [restaurantQuery.data?.name]);
 
   useEffect(() => {
-    if (cart.itemCount === 0 && !placedOrderToken) setCartOpen(false);
-  }, [cart.itemCount, placedOrderToken]);
+    if (activeCart.itemCount === 0 && !placedOrderToken) setCartOpen(false);
+  }, [activeCart.itemCount, placedOrderToken]);
+
+  // Fetch smart menu ranking after restaurant loads
+  useEffect(() => {
+    const restaurantId = restaurantQuery.data?.id;
+    if (!restaurantId) return;
+    supabase.functions.invoke("smart-menu-rank", {
+      body: null,
+      headers: {},
+    }).catch(() => {});
+    // Use GET via fetch directly
+    fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/smart-menu-rank?restaurant_id=${restaurantId}`, {
+      headers: { "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.ranked_ids) setRankedIds(d.ranked_ids);
+        if (d.popular_ids) setPopularIds(d.popular_ids);
+      })
+      .catch(() => {}); // Non-critical, graceful degradation
+  }, [restaurantQuery.data?.id]);
 
   if (!slug) {
     return (
@@ -321,7 +364,14 @@ export default function PublicMenu() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="font-medium truncate">{item.name}</p>
+                          <p className="font-medium truncate">
+                            {item.name}
+                            {popularIds.includes(item.id) && (
+                              <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-orange-500">
+                                <Flame className="h-3 w-3" /> Hot
+                              </span>
+                            )}
+                          </p>
                               {item.description ? (
                                 <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
                                   {item.description}
@@ -395,7 +445,17 @@ export default function PublicMenu() {
           </DrawerHeader>
 
           <div className="px-4 pb-4 overflow-auto">
-            {cart.items.length === 0 ? (
+            {/* Collaborative cart presence */}
+            {useCollabCart && collabCart.participants.length > 1 && (
+              <div className="mb-3">
+                <TablePresence
+                  participants={collabCart.participants}
+                  isLeader={collabCart.isLeader}
+                  tableLabel={tableLabel ?? ""}
+                />
+              </div>
+            )}
+            {activeCart.items.length === 0 ? (
               placedOrderToken ? (
                 <Card className="p-6">
                   <p className="text-sm text-muted-foreground">Order placed</p>
@@ -420,7 +480,7 @@ export default function PublicMenu() {
               )
             ) : (
               <div className="space-y-3">
-                {cart.items.map((line) => (
+                {activeCart.items.map((line) => (
                   <Card key={line.cart_id} className="p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -439,30 +499,21 @@ export default function PublicMenu() {
 
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          onClick={() => cart.decrement(line.cart_id)}
-                          aria-label={`Decrease ${line.name}`}
-                        >
+                        <Button size="icon" variant="outline"
+                          onClick={() => activeCart.decrement(line.cart_id)}
+                          aria-label={`Decrease ${line.name}`}>
                           <Minus className="h-4 w-4" />
                         </Button>
                         <span className="min-w-8 text-center tabular-nums">{line.quantity}</span>
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          onClick={() => cart.increment(line.cart_id)}
-                          aria-label={`Increase ${line.name}`}
-                        >
+                        <Button size="icon" variant="outline"
+                          onClick={() => activeCart.increment(line.cart_id)}
+                          aria-label={`Increase ${line.name}`}>
                           <Plus className="h-4 w-4" />
                         </Button>
                       </div>
-
-                      <Button
-                        variant="ghost"
-                        onClick={() => cart.removeItem(line.cart_id)}
-                        className="text-muted-foreground"
-                      >
+                      <Button variant="ghost"
+                        onClick={() => activeCart.removeItem(line.cart_id)}
+                        className="text-muted-foreground">
                         Remove
                       </Button>
                     </div>
@@ -473,36 +524,60 @@ export default function PublicMenu() {
           </div>
 
           <DrawerFooter>
-            {cart.items.length > 0 ? (
+            {activeCart.items.length > 0 ? (
               <>
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-muted-foreground">Subtotal</p>
                     <p className="font-medium tabular-nums">
-                      {formatMoney(cart.subtotalCents, currencyCode)}
+                      {formatMoney(activeCart.subtotalCents, currencyCode)}
                     </p>
                   </div>
                 </div>
-                {/* TEMPORARY: Hide Turnstile while debugging loading issue */}
-                {false && turnstileRendered && (
-                  <Turnstile
-                    key="order-turnstile"
-                    onSuccess={(token) => {
-                      setTurnstileToken(token);
-                      setCheckoutError(null);
-                    }}
+
+                {/* WhatsApp contact capture */}
+                <div className="border rounded-lg p-3 space-y-3 bg-muted/40">
+                  <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                    📱 Get receipt on WhatsApp (optional)
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Name</Label>
+                      <Input
+                        placeholder="Your name"
+                        value={customerName}
+                        onChange={e => setCustomerName(e.target.value)}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">WhatsApp number</Label>
+                      <Input
+                        placeholder="+91 98765 43210"
+                        value={customerPhone}
+                        onChange={e => setCustomerPhone(e.target.value)}
+                        type="tel"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {false && (
+                  <Turnstile key="order-turnstile"
+                    onSuccess={(token) => { setTurnstileToken(token); setCheckoutError(null); }}
                     className="mt-2"
                   />
                 )}
+
                 <Button
-                  disabled={
-                    cart.items.length === 0 ||
-                    placingOrder ||
-                    !restaurantQuery.data?.id
-                  }
+                  disabled={activeCart.items.length === 0 || placingOrder || !restaurantQuery.data?.id
+                    || (useCollabCart && !collabCart.isLeader)}
                   onClick={placeOrder}
                 >
-                  {placingOrder ? "Placing…" : "Place order"}
+                  {placingOrder ? "Placing…" :
+                    useCollabCart && !collabCart.isLeader ? "Waiting for table leader…" :
+                    "Place order"}
                 </Button>
                 {checkoutError ? (
                   <p className="text-sm text-destructive">{checkoutError}</p>
@@ -514,28 +589,15 @@ export default function PublicMenu() {
               <DrawerClose asChild>
                 <Button variant="outline">Close</Button>
               </DrawerClose>
-              {cart.items.length > 0 ? (
-                <Button
-                  variant="ghost"
-                  onClick={cart.clear}
-                  disabled={cart.items.length === 0}
-                  className="text-muted-foreground"
-                >
-                  Clear
-                </Button>
+              {activeCart.items.length > 0 ? (
+                <Button variant="ghost" onClick={activeCart.clear}
+                  disabled={activeCart.items.length === 0}
+                  className="text-muted-foreground">Clear</Button>
               ) : (
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setPlacedOrderId(null);
-                    setPlacedOrderToken(null);
-                    setCheckoutError(null);
-                  }}
+                <Button variant="ghost"
+                  onClick={() => { setPlacedOrderId(null); setPlacedOrderToken(null); setCheckoutError(null); }}
                   disabled={!placedOrderToken}
-                  className="text-muted-foreground"
-                >
-                  Done
-                </Button>
+                  className="text-muted-foreground">Done</Button>
               )}
             </div>
           </DrawerFooter>
@@ -548,7 +610,7 @@ export default function PublicMenu() {
         open={itemDialogOpen}
         onOpenChange={setItemDialogOpen}
         onAddToCart={(cartItem) => {
-          cart.addItem(cartItem);
+          activeCart.addItem(cartItem);
           setCartOpen(true);
         }}
         restaurantId={restaurantQuery.data?.id ?? ""}
