@@ -309,9 +309,11 @@ export default function AdminStaff() {
           )}
         </div>
 
-        <Button disabled={isAtLimit} onClick={() => setInviteOpen(true)}>
-          <UserPlus className="mr-2 h-4 w-4" /> Invite staff
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button disabled={isAtLimit} onClick={() => setInviteOpen(true)}>
+            <UserPlus className="mr-2 h-4 w-4" /> Invite staff
+          </Button>
+        </div>
 
         <InviteStaffDialog
           open={inviteOpen}
@@ -347,7 +349,7 @@ export default function AdminStaff() {
               <div className="text-center py-8 text-muted-foreground border-dashed border rounded-lg">No staff found. Invite someone!</div>
             ) : (
               <div className="rounded-xl border border-border bg-background overflow-x-auto">
-                <Table>
+                <Table className="min-w-[560px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Staff</TableHead>

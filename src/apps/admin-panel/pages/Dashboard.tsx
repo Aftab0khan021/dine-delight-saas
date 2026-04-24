@@ -200,7 +200,7 @@ export default function AdminDashboard() {
       </section>
 
       {/* KPI Cards */}
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {analyticsEnabled ? (
           kpis.map((k) => (
             <Card key={k.label} className="shadow-sm">

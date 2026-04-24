@@ -206,10 +206,10 @@ export default function AdminAuth() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="signin">Sign In</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
-              <TabsTrigger value="restaurant">Restaurant Admin</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-3 h-auto">
+              <TabsTrigger value="signin" className="text-xs sm:text-sm py-2">Sign In</TabsTrigger>
+              <TabsTrigger value="signup" className="text-xs sm:text-sm py-2">Sign Up</TabsTrigger>
+              <TabsTrigger value="restaurant" className="text-xs sm:text-sm py-2 leading-tight">Restaurant<br className="sm:hidden" /> Admin</TabsTrigger>
             </TabsList>
 
             <TabsContent value="signin">
@@ -260,7 +260,7 @@ export default function AdminAuth() {
               {/* Forgot Password Modal */}
               {showForgotPassword && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                  <div className="bg-background rounded-lg p-6 w-full max-w-sm shadow-xl space-y-4">
+                  <div className="bg-background rounded-lg p-5 sm:p-6 w-full max-w-[min(400px,92vw)] shadow-xl space-y-4">
                     {forgotSent ? (
                       <div className="text-center space-y-3">
                         <div className="text-4xl">📬</div>

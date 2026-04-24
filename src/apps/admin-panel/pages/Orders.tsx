@@ -472,7 +472,7 @@ export default function AdminOrders() {
 
         {/* Top Toolbar (Filters) */}
         <Card className="shadow-sm">
-          <CardContent className="grid gap-2 p-3 md:grid-cols-4">
+          <CardContent className="grid gap-2 p-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="bg-background">
                 <SelectValue placeholder="Status" />
@@ -498,7 +498,7 @@ export default function AdminOrders() {
               </SelectContent>
             </Select>
 
-            <div className="relative md:col-span-2">
+            <div className="relative sm:col-span-2">
               <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 value={search}
@@ -522,39 +522,41 @@ export default function AdminOrders() {
         </Alert>
       )}
 
-      {/* Kanban Board */}
-      <section className="grid gap-3 md:grid-cols-2 lg:grid-cols-4 items-start">
-        {UI_COLUMNS.map((col) => (
-          <Card key={col} className="shadow-sm border-0 bg-transparent shadow-none md:bg-card md:border md:shadow-sm h-full">
-            <CardHeader className="pb-3 px-0 md:px-6 pt-0 md:pt-6">
-              <CardTitle className="flex items-center justify-between text-sm">
-                <span>{col}</span>
-                <Badge variant="secondary">{byColumn[col].length}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 px-0 md:px-6 pb-0 md:pb-6">
-              {byColumn[col].map((o) => (
-                <OrderCard
-                  key={o.id}
-                  order={o}
-                  onAdvance={(id, status) => advanceMutation.mutate({ id, currentStatus: status })}
-                  loadingId={advancingId}
-                />
-              ))}
+      {/* Kanban Board — horizontal scroll on mobile, grid on desktop */}
+      <div className="-mx-4 px-4 overflow-x-auto pb-2 sm:mx-0 sm:px-0">
+        <section className="grid gap-3 min-w-[640px] sm:grid-cols-2 lg:grid-cols-4 items-start">
+          {UI_COLUMNS.map((col) => (
+            <Card key={col} className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center justify-between text-sm">
+                  <span>{col}</span>
+                  <Badge variant="secondary">{byColumn[col].length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {byColumn[col].map((o) => (
+                  <OrderCard
+                    key={o.id}
+                    order={o}
+                    onAdvance={(id, status) => advanceMutation.mutate({ id, currentStatus: status })}
+                    loadingId={advancingId}
+                  />
+                ))}
 
-              {byColumn[col].length === 0 && (
-                <div className="rounded-xl border border-border border-dashed p-4 text-center text-sm text-muted-foreground bg-background/50">
-                  No orders
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </section>
+                {byColumn[col].length === 0 && (
+                  <div className="rounded-xl border border-border border-dashed p-4 text-center text-sm text-muted-foreground bg-background/50">
+                    No orders
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </section>
+      </div>
 
       {/* Pagination Controls */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 mt-4">
+        <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
           <Button
             variant="outline"
             size="sm"
@@ -563,8 +565,8 @@ export default function AdminOrders() {
           >
             Previous
           </Button>
-          <span className="text-sm text-muted-foreground">
-            Page {page + 1} of {totalPages} ({totalCount} total orders)
+          <span className="text-sm text-muted-foreground text-center">
+            Page {page + 1} of {totalPages} ({totalCount} orders)
           </span>
           <Button
             variant="outline"
