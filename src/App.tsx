@@ -28,6 +28,10 @@ import AdminStaffCategories from "./apps/admin-panel/pages/StaffCategories";
 import AdminBranding from "./apps/admin-panel/pages/Branding";
 import AdminBilling from "./apps/admin-panel/pages/Billing";
 import AdminCoupons from "./apps/admin-panel/pages/Coupons";
+import AdminMarketing from "./apps/admin-panel/pages/Marketing";
+import AdminMenuInsights from "./apps/admin-panel/pages/MenuInsights";
+import AdminDeveloperAPI from "./apps/admin-panel/pages/DeveloperAPI";
+import AdminKitchenDashboard from "./apps/admin-panel/pages/KitchenDashboard";
 
 // Super Admin
 import SuperAdminAuth from "./apps/super-admin/pages/Auth";
@@ -108,6 +112,10 @@ const App = () => (
             <Route path="branding" element={<AdminBranding />} />
             <Route path="billing" element={<AdminBilling />} />
             <Route path="coupons" element={<AdminCoupons />} />
+            <Route path="marketing" element={<AdminMarketing />} />
+            <Route path="insights" element={<AdminMenuInsights />} />
+            <Route path="developer" element={<AdminDeveloperAPI />} />
+            <Route path="kitchen" element={<AdminKitchenDashboard />} />
           </Route>
 
           {/* Super Admin Routes */}
