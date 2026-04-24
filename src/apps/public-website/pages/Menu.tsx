@@ -46,14 +46,6 @@ export default function PublicMenu() {
   const [placedOrderToken, setPlacedOrderToken] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
-  const [turnstileRendered, setTurnstileRendered] = useState(false);
-
-  // Reset Turnstile when cart opens
-  useEffect(() => {
-    if (cartOpen && !turnstileRendered) {
-      setTurnstileRendered(true);
-    }
-  }, [cartOpen, turnstileRendered]);
 
   const restaurantQuery = useQuery({
     queryKey: ["public-menu", "restaurant", slug],
@@ -429,7 +421,7 @@ export default function PublicMenu() {
             ) : (
               <div className="space-y-3">
                 {cart.items.map((line) => (
-                  <Card key={line.menu_item_id} className="p-4">
+                  <Card key={line.cart_id} className="p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-medium truncate">{line.name}</p>

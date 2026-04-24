@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addDays, startOfDay, subHours, subDays, subMonths, subQuarters, subYears } from "date-fns";
-import { Search, Download, Lock, Bell, BellOff, Printer } from "lucide-react";
+import { Search, Lock, Bell, BellOff, Printer, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
@@ -269,7 +269,7 @@ export default function AdminOrders() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [restaurant?.id, notificationsEnabled]);
+  }, [restaurant?.id, notificationsEnabled, toast, qc]);
 
   // --- 2. Data Fetching ---
   const ordersQuery = useQuery({
@@ -290,7 +290,7 @@ export default function AdminOrders() {
 
       // Fetch Items for these orders (to show summary)
       const orderIds = orders.map(o => o.id);
-      if (orderIds.length === 0) return [];
+      if (orderIds.length === 0) return { orders: [], totalCount: count || 0 };
 
       const { data: items } = await supabase
         .from("order_items")
@@ -411,7 +411,10 @@ export default function AdminOrders() {
 
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
-      const matchesSearch = search ? o.id.includes(search) || o.table_label?.toLowerCase().includes(search.toLowerCase()) : true;
+      const matchesSearch = search
+        ? shortId(o.id).toLowerCase().includes(search.toLowerCase()) ||
+          o.table_label?.toLowerCase().includes(search.toLowerCase())
+        : true;
       const uiStatus = STATUS_MAP[o.status as OrderStatus];
       const matchesStatus = statusFilter === "all" ? true : uiStatus === statusFilter;
       return matchesSearch && matchesStatus;

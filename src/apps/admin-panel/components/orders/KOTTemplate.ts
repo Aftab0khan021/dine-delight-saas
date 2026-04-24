@@ -1,24 +1,35 @@
 
 import { format } from "date-fns";
 
+/** Escapes HTML special characters to prevent XSS in printed KOT output */
+function escHtml(str: string | null | undefined): string {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function generateKOTHtml(order: any, restaurantName: string = "Restaurant") {
     const itemsHtml = order.item_details?.map((item: any) => `
     <div class="item">
-      <span class="qty">${item.quantity}</span>
+      <span class="qty">${escHtml(String(item.quantity))}</span>
       <span class="name">
-        ${item.name_snapshot}
-        ${item.variant_name ? `<br><small>(${item.variant_name})</small>` : ''}
-        ${item.addons?.length ? `<br><small>+ ${item.addons.map((a: any) => a.name).join(', ')}</small>` : ''}
+        ${escHtml(item.name_snapshot)}
+        ${item.variant_name ? `<br><small>(${escHtml(item.variant_name)})</small>` : ''}
+        ${item.addons?.length ? `<br><small>+ ${item.addons.map((a: any) => escHtml(a.name)).join(', ')}</small>` : ''}
       </span>
     </div>
-    ${item.notes ? `<div class="notes">Note: ${item.notes}</div>` : ''}
+    ${item.notes ? `<div class="notes">Note: ${escHtml(item.notes)}</div>` : ''}
   `).join("") || "<div>No items</div>";
 
     return `
     <!DOCTYPE html>
     <html>
     <head>
-      <title>KOT #${order.id.slice(0, 4)}</title>
+      <title>KOT #${escHtml(order.id.slice(0, 4))}</title>
       <style>
         body { font-family: monospace; width: 80mm; margin: 0; padding: 10px; box-sizing: border-box; }
         .header { text-align: center; margin-bottom: 20px; border-bottom: 1px dashed #000; padding-bottom: 10px; }
@@ -37,10 +48,10 @@ export function generateKOTHtml(order: any, restaurantName: string = "Restaurant
       <div class="header">
         <div class="title">KITCHEN ORDER TICKET</div>
         <div class="meta">
-          ${restaurantName}<br>
-          Order #${order.id.slice(0, 4)}<br>
+          ${escHtml(restaurantName)}<br>
+          Order #${escHtml(order.id.slice(0, 4))}<br>
           ${format(new Date(order.placed_at), "MMM d, h:mm a")}<br>
-          <strong>${order.table_label ? `Table: ${order.table_label}` : "TAKEAWAY"}</strong>
+          <strong>${order.table_label ? `Table: ${escHtml(order.table_label)}` : "TAKEAWAY"}</strong>
         </div>
       </div>
       

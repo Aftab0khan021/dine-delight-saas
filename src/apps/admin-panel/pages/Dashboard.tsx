@@ -146,29 +146,24 @@ export default function AdminDashboard() {
 
     return [
       {
-        label: "Today’s Orders",
+        label: "Today's Orders",
         value: count.toString(),
         delta: "Since midnight",
-        // Mock trend for visual flair (since we don't have historical data easily available)
-        trend: [count * 0.5, count * 0.2, count * 0.8, count],
       },
       {
         label: "Revenue",
         value: formatMoney(revenue, currency),
         delta: "Gross total",
-        trend: [revenue * 0.4, revenue * 0.6, revenue * 0.5, revenue],
       },
       {
         label: "Avg Prep Time",
         value: avgPrep > 0 ? `${avgPrep}m` : "—",
         delta: "Completed orders",
-        trend: [15, 12, 18, avgPrep || 15],
       },
       {
         label: "Active Tables",
-        value: "—", // Placeholder as we don't track "Active Sessions" yet
+        value: "—",
         delta: "Currently seated",
-        trend: [2, 4, 3, 5],
       }
     ];
   }, [todayOrdersQuery.data, setupQuery.data]);
