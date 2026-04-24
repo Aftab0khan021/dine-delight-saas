@@ -37,16 +37,25 @@ export default function KitchenDashboard() {
   const [brandFilter, setBrandFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("active");
 
-  // Get child brands if this is a cloud kitchen
+  // Get child brands if this is a cloud kitchen.
+  // Uses parent_kitchen_id from 20260424_cloud_kitchen.sql migration.
+  // Returns [] gracefully if migration not yet applied.
   const brandsQuery = useQuery({
     queryKey: ["cloud-kitchen-brands", restaurant?.id],
     enabled: !!restaurant?.id,
+    retry: false,
+    throwOnError: false,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("restaurants")
-        .select("id, name, brand_color, slug")
-        .eq("parent_kitchen_id", restaurant!.id);
-      return data ?? [];
+      try {
+        const { data, error } = await supabase
+          .from("restaurants")
+          .select("id, name, brand_color, slug")
+          .eq("parent_kitchen_id", restaurant!.id);
+        if (error) return []; // column may not exist yet
+        return data ?? [];
+      } catch {
+        return [];
+      }
     },
   });
 

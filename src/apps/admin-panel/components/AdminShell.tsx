@@ -77,20 +77,30 @@ export function AdminShell({ children }: PropsWithChildren) {
   const [notificationsRead, setNotificationsRead] = useState(false);
   const { toast } = useToast();
 
-  // Fetch sibling brands if this is a cloud kitchen or child brand
+  // Fetch sibling brands for cloud kitchen brand-switcher.
+  // This query uses columns added by 20260424_cloud_kitchen.sql.
+  // If that migration hasn't run yet, PostgREST returns 42703 (column not exist).
+  // We catch all errors and return [] so a missing migration NEVER crashes the shell.
   const brandsQuery = useQuery({
-    queryKey: ["shell", "brands", restaurant?.id, (restaurant as any)?.parent_kitchen_id],
+    queryKey: ["shell", "brands", restaurant?.id],
     enabled: !!restaurant?.id,
+    retry: false,             // don't retry — if column missing it'll keep failing
+    throwOnError: false,      // CRITICAL: never let this bubble to Error Boundary
     queryFn: async () => {
-      const restaurantIdSafe = restaurant?.id;
-      if (!restaurantIdSafe) return [];
-      const parentId = (restaurant as any)?.parent_kitchen_id ?? restaurantIdSafe;
-      // Fetch this restaurant + all siblings sharing same parent
-      const { data } = await supabase
-        .from("restaurants")
-        .select("id, name, brand_color, slug")
-        .or(`id.eq.${parentId},parent_kitchen_id.eq.${parentId}`);
-      return data ?? [];
+      try {
+        const restaurantIdSafe = restaurant?.id;
+        if (!restaurantIdSafe) return [];
+        const parentId = (restaurant as any)?.parent_kitchen_id ?? restaurantIdSafe;
+        const { data, error } = await supabase
+          .from("restaurants")
+          .select("id, name, brand_color, slug")
+          .or(`id.eq.${parentId},parent_kitchen_id.eq.${parentId}`);
+        // If migration not applied (42703, 400), return [] gracefully
+        if (error) return [];
+        return data ?? [];
+      } catch {
+        return [];
+      }
     },
   });
 
