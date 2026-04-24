@@ -181,8 +181,8 @@ export default function AdminDashboard() {
 
   // --- 3. Render (Repo A Layout) ---
   return (
-    <div className="space-y-6">
-      <section className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+    <div className="flex flex-col gap-4 w-full">
+      <section className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between w-full">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
           <p className="mt-1 text-sm text-muted-foreground">

@@ -186,7 +186,7 @@ export default function AdminQrMenu() {
   };
 
   return (
-    <div className="space-y-6 print:space-y-0">
+    <div className="flex flex-col gap-4 w-full print:block">
       <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between print:hidden">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">QR Menu Generator</h1>
@@ -216,7 +216,7 @@ export default function AdminQrMenu() {
         </Alert>
       )}
 
-      <section className="grid gap-3 lg:grid-cols-3 print:block">
+      <section className="grid gap-3 grid-cols-1 lg:grid-cols-3 print:block">
         {/* LEFT COLUMN: Generator (Hidden on Print) */}
         <Card className="shadow-sm lg:col-span-1 h-fit print:hidden">
           <CardHeader>

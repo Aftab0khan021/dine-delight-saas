@@ -429,8 +429,8 @@ export default function AdminOrders() {
 
   // --- 5. Render (Repo A Design) ---
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4 w-full">
+      <header className="flex flex-col gap-3 w-full">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Orders</h1>
@@ -522,9 +522,9 @@ export default function AdminOrders() {
         </Alert>
       )}
 
-      {/* Kanban Board — horizontal scroll on mobile, grid on desktop */}
-      <div className="-mx-4 px-4 overflow-x-auto pb-2 sm:mx-0 sm:px-0">
-        <section className="grid gap-3 min-w-[640px] sm:grid-cols-2 lg:grid-cols-4 items-start">
+      {/* Kanban Board — fills full width on desktop, scrolls horizontally on mobile */}
+      <div className="overflow-x-auto w-full">
+        <section className="grid gap-3 w-full grid-cols-2 lg:grid-cols-4 items-start" style={{minWidth: '520px'}}>
           {UI_COLUMNS.map((col) => (
             <Card key={col} className="shadow-sm">
               <CardHeader className="pb-3">

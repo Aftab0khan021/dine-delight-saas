@@ -162,16 +162,16 @@ export default function StaffCategories() {
     const isLoading = categoriesQuery.isLoading || permissionsQuery.isLoading || categoryPermissionsQuery.isLoading;
 
     return (
-        <div className="space-y-6">
+        <div className="flex flex-col gap-4 w-full">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">Staff Categories</h1>
                     <p className="text-sm text-muted-foreground mt-1">
                         Create custom staff roles and assign granular permissions
                     </p>
                 </div>
-                <Button onClick={handleCreateNew}>
+                <Button onClick={handleCreateNew} className="shrink-0">
                     <Plus className="mr-2 h-4 w-4" />
                     Create Category
                 </Button>

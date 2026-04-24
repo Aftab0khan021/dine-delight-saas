@@ -203,15 +203,15 @@ export default function AdminCoupons() {
     };
 
     return (
-        <div className="space-y-6">
-            <header className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 w-full">
+            <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">Coupons & Discounts</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
                         Manage promo codes and discounts for your customers.
                     </p>
                 </div>
-                <Button onClick={() => { clearForm(); setDialogOpen(true); }}>
+                <Button onClick={() => { clearForm(); setDialogOpen(true); }} className="shrink-0">
                     <Plus className="mr-2 h-4 w-4" /> Create Coupon
                 </Button>
             </header>

@@ -139,7 +139,7 @@ export default function RestaurantBilling() {
   }, [subscriptionQuery.data]);
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-4 w-full">
       <section className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Billing</h1>
         <p className="text-sm text-muted-foreground">
@@ -148,7 +148,7 @@ export default function RestaurantBilling() {
         </p>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      <section className="grid gap-4 grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="text-base">Current plan</CardTitle>
