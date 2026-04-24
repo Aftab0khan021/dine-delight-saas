@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { formatMoney } from "@/lib/formatting";
 
 // UI Components
 import { Badge } from "@/components/ui/badge";
@@ -260,7 +261,7 @@ export default function AdminCoupons() {
                                                 <Badge variant="outline">
                                                     {coupon.discount_type === 'percentage'
                                                         ? `${coupon.discount_value}% OFF`
-                                                        : `$${(coupon.discount_value / 100).toFixed(2)} OFF`}
+                                                        : formatMoney(coupon.discount_value, (couponsQuery.data?.[0] as any)?.currency ?? 'USD')  + ' OFF'}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell>
