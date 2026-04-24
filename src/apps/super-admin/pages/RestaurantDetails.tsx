@@ -414,9 +414,9 @@ export default function RestaurantDetails() {
     const owner = restaurant.user_roles?.find(ur => ur.role === 'restaurant_admin');
 
     return (
-        <section className="space-y-6">
+        <section className="flex flex-col gap-4 w-full">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div className="flex items-center gap-4">
                     <Button
                         variant="ghost"
@@ -484,7 +484,7 @@ export default function RestaurantDetails() {
                 </div>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
                 {/* Basic Info */}
                 <Card>
                     <CardHeader>
@@ -703,7 +703,7 @@ export default function RestaurantDetails() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="grid gap-4 md:grid-cols-2">
+                        <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
                             <FeatureLimitIndicator
                                 limitKey="staff_limit"
                                 limitName="Staff Members"
@@ -734,7 +734,7 @@ export default function RestaurantDetails() {
                             Create a restaurant-specific override for {selectedFeature}
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4">
+                    <div className="flex flex-col gap-4 w-full">
                         <div className="space-y-2">
                             <Label>Feature</Label>
                             <p className="text-sm font-mono bg-muted px-2 py-1 rounded">
@@ -830,7 +830,7 @@ export default function RestaurantDetails() {
                             Access this restaurant's admin panel for debugging and support purposes.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4">
+                    <div className="flex flex-col gap-4 w-full">
                         <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
                             <div className="flex items-start gap-3">
                                 <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
@@ -862,7 +862,7 @@ export default function RestaurantDetails() {
 
                             <Separator />
 
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                                 <div className="space-y-0.5">
                                     <Label className="text-base">Read-Only Mode</Label>
                                     <p className="text-sm text-muted-foreground">

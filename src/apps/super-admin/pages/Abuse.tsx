@@ -360,8 +360,8 @@ export default function SuperAdminAbuse() {
   }, [isError, error, toast]);
 
   return (
-    <section className="space-y-6 pb-20">
-      <header className="flex items-center justify-between">
+    <section className="flex flex-col gap-4 w-full pb-20">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Security & Abuse Monitoring</h1>
           <p className="text-sm text-muted-foreground">
@@ -407,7 +407,7 @@ export default function SuperAdminAbuse() {
       {/* Filters and Table */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <CardTitle className="text-base">Abuse Alerts</CardTitle>
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4 text-muted-foreground" />

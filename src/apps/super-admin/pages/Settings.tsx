@@ -79,7 +79,7 @@ export default function SuperAdminSettings() {
     settings?.manual_subscription_controls_enabled === 'true';
 
   return (
-    <section className="space-y-6">
+    <section className="flex flex-col gap-4 w-full">
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground">Platform-level configuration and feature flags</p>
@@ -91,7 +91,7 @@ export default function SuperAdminSettings() {
             <CardTitle>Platform Info</CardTitle>
             <CardDescription>Read-only environment details</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="flex flex-col gap-4 w-full">
             <div className="space-y-2">
               <Label>App Name</Label>
               <Input value={appName} readOnly />
@@ -115,7 +115,7 @@ export default function SuperAdminSettings() {
             <CardTitle>Subscription Features</CardTitle>
             <CardDescription>Control subscription management capabilities</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="flex flex-col gap-4 w-full">
             <div className="flex items-center justify-between gap-4">
               <div className="space-y-1 flex-1">
                 <Label>Manual Subscription Controls</Label>
@@ -143,7 +143,7 @@ export default function SuperAdminSettings() {
             <CardTitle>Feature Flags</CardTitle>
             <CardDescription>Global platform features</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="flex flex-col gap-4 w-full">
             <div className="flex items-center justify-between gap-4">
               <div className="space-y-1">
                 <Label>New Signups Enabled</Label>
@@ -187,7 +187,7 @@ export default function SuperAdminSettings() {
             <CardTitle>Limits</CardTitle>
             <CardDescription>Platform-wide limits and quotas</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="flex flex-col gap-4 w-full">
             <div className="space-y-2">
               <Label>Max Restaurants</Label>
               <Input

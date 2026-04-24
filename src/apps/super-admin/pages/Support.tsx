@@ -200,8 +200,8 @@ export default function SuperAdminSupport() {
     };
 
     return (
-        <section className="space-y-6">
-            <header className="flex items-center justify-between">
+        <section className="flex flex-col gap-4 w-full">
+            <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div className="space-y-1">
                     <h1 className="text-2xl font-semibold tracking-tight">Support Tickets</h1>
                     <p className="text-sm text-muted-foreground">
@@ -225,7 +225,7 @@ export default function SuperAdminSupport() {
             </header>
 
             {/* Statistics */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -280,7 +280,7 @@ export default function SuperAdminSupport() {
             {/* Filters and Table */}
             <Card>
                 <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                         <CardTitle className="text-base">All Tickets</CardTitle>
                         <div className="flex items-center gap-2">
                             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>

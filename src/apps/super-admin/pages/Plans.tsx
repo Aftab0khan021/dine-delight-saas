@@ -175,8 +175,8 @@ export default function Plans() {
     };
 
     return (
-        <section className="space-y-6">
-            <header className="flex items-center justify-between">
+        <section className="flex flex-col gap-4 w-full">
+            <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">Subscription Plans</h1>
                     <p className="text-sm text-muted-foreground">
@@ -199,8 +199,8 @@ export default function Plans() {
                                 Configure pricing, features, and trial period for this plan
                             </DialogDescription>
                         </DialogHeader>
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div className="grid gap-4 md:grid-cols-2">
+                        <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-full">
+                            <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
                                 <div className="space-y-2">
                                     <Label htmlFor="name">Plan Name</Label>
                                     <Input
@@ -234,7 +234,7 @@ export default function Plans() {
                                 />
                             </div>
 
-                            <div className="grid gap-4 md:grid-cols-3">
+                            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                                 <div className="space-y-2">
                                     <Label htmlFor="price">Price (USD)</Label>
                                     <Input
@@ -278,8 +278,8 @@ export default function Plans() {
 
                             <Separator className="my-4" />
 
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between">
+                            <div className="flex flex-col gap-4 w-full">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                                     <div>
                                         <Label className="text-base">Plan Features</Label>
                                         <p className="text-sm text-muted-foreground">
@@ -399,8 +399,7 @@ export default function Plans() {
 
             {/* Plans Table */}
             <Card>
-                <CardContent className="p-0">
-                    <Table>
+                <CardContent className="p-0 overflow-x-auto"><div className="min-w-[600px]"><Table>
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-[50px]"></TableHead>

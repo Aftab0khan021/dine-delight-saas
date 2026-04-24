@@ -122,7 +122,7 @@ export default function PendingApprovals() {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="flex flex-col gap-4 w-full">
             <div>
                 <h1 className="text-3xl font-bold tracking-tight">Pending Approvals</h1>
                 <p className="text-muted-foreground mt-2">
@@ -164,7 +164,7 @@ export default function PendingApprovals() {
                                 </Badge>
                             </div>
                         </CardHeader>
-                        <CardContent className="space-y-4">
+                        <CardContent className="flex flex-col gap-4 w-full">
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                                 {request.business_type && (
                                     <div>

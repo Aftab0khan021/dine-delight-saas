@@ -159,7 +159,7 @@ export default function SuperAdminActivity() {
   }, [logsQuery.isError, logsQuery.error, restaurantsQuery.isError, restaurantsQuery.error, toast]);
 
   return (
-    <section className="space-y-6">
+    <section className="flex flex-col gap-4 w-full">
       <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Activity</h1>

@@ -79,7 +79,7 @@ export default function SuperAdminAuth() {
           <CardDescription>Sign in to access the admin dashboard</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSignIn} className="space-y-4">
+          <form onSubmit={handleSignIn} className="flex flex-col gap-4 w-full">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input

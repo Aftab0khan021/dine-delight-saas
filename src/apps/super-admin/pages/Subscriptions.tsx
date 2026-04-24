@@ -155,8 +155,8 @@ export default function Subscriptions() {
   const totalPages = Math.ceil((subscriptionsData?.total || 0) / pageSize);
 
   return (
-    <section className="space-y-6">
-      <header className="flex items-center justify-between">
+    <section className="flex flex-col gap-4 w-full">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Subscriptions</h1>
           <p className="text-sm text-muted-foreground">
@@ -187,7 +187,7 @@ export default function Subscriptions() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -258,8 +258,7 @@ export default function Subscriptions() {
 
       {/* Table */}
       <Card>
-        <CardContent className="p-0">
-          <Table>
+        <CardContent className="p-0 overflow-x-auto"><div className="min-w-[600px]"><Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Restaurant</TableHead>
@@ -388,7 +387,7 @@ export default function Subscriptions() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <p className="text-sm text-muted-foreground">
             Showing {(page - 1) * pageSize + 1} to{' '}
             {Math.min(page * pageSize, subscriptionsData?.total || 0)} of{' '}
