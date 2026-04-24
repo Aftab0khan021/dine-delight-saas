@@ -68,6 +68,27 @@ export default function PublicMenu() {
   const [rankedIds, setRankedIds] = useState<string[] | null>(null);
   const [popularIds, setPopularIds] = useState<string[]>([]);
 
+  // Upsell suggestions
+  const [upsellItems, setUpsellItems] = useState<any[]>([]);
+  const [upsellOpen, setUpsellOpen] = useState(false);
+  const [upsellForItem, setUpsellForItem] = useState<string | null>(null);
+
+  const fetchUpsell = useCallback(async (itemId: string, restaurantId: string) => {
+    const currencyCode = restaurantQuery.data?.currency_code || "USD";
+    try {
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/menu-upsell?item_id=${itemId}&restaurant_id=${restaurantId}`,
+        { headers: { "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY } }
+      );
+      const data = await resp.json();
+      if (data.suggestions?.length > 0) {
+        setUpsellItems(data.suggestions);
+        setUpsellForItem(itemId);
+        setUpsellOpen(true);
+      }
+    } catch { /* non-critical, ignore */ }
+  }, [restaurantQuery.data?.currency_code]);
+
   const restaurantQuery = useQuery({
     queryKey: ["public-menu", "restaurant", slug],
     enabled: !!slug,
@@ -428,13 +449,13 @@ export default function PublicMenu() {
                 <ShoppingBag className="h-4 w-4" />
                 Cart
               </Button>
-              {cart.itemCount > 0 ? (
-                <span className="absolute -top-2 -right-2">
-                  <Badge variant="secondary" className="min-w-6 justify-center">
-                    {cart.itemCount}
-                  </Badge>
-                </span>
-              ) : null}
+              {activeCart.itemCount > 0 ? (
+              <span className="absolute -top-2 -right-2">
+                <Badge variant="secondary" className="min-w-6 justify-center">
+                  {activeCart.itemCount}
+                </Badge>
+              </span>
+            ) : null}
             </div>
           </button>
         </DrawerTrigger>
@@ -611,12 +632,65 @@ export default function PublicMenu() {
         onOpenChange={setItemDialogOpen}
         onAddToCart={(cartItem) => {
           activeCart.addItem(cartItem);
-          setCartOpen(true);
+          setCartOpen(false);
+          // Trigger upsell after adding
+          if (restaurantQuery.data?.id) {
+            fetchUpsell(cartItem.menu_item_id, restaurantQuery.data.id);
+          }
         }}
         restaurantId={restaurantQuery.data?.id ?? ""}
         themeColor={restaurantQuery.data?.theme_color}
         currencyCode={restaurantQuery.data?.currency_code}
       />
+
+      {/* Upsell Bottom Sheet: "People also order..." */}
+      {upsellOpen && upsellItems.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setUpsellOpen(false)}>
+          <div
+            className="w-full max-w-lg bg-background border-t rounded-t-2xl shadow-2xl p-4 pb-8 space-y-3 animate-in slide-in-from-bottom-4 duration-300"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <p className="font-semibold text-sm">🍽️ People also order...</p>
+              <button onClick={() => setUpsellOpen(false)} className="text-muted-foreground hover:text-foreground text-xl leading-none">×</button>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {upsellItems.map((suggestion: any) => (
+                <div key={suggestion.id} className="border rounded-xl p-2 space-y-1 cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => {
+                    activeCart.addItem({
+                      cart_id: `${suggestion.id}-upsell-${Date.now()}`,
+                      menu_item_id: suggestion.id,
+                      name: suggestion.name,
+                      price_cents: suggestion.price_cents,
+                      quantity: 1,
+                      variant_id: null,
+                      addons: [],
+                      notes: "",
+                    });
+                    setUpsellOpen(false);
+                    toast({ title: `Added ${suggestion.name} to cart` });
+                  }}>
+                  {suggestion.image_url && (
+                    <img src={suggestion.image_url} alt={suggestion.name}
+                      className="w-full h-16 object-cover rounded-lg" />
+                  )}
+                  <p className="text-xs font-medium line-clamp-2">{suggestion.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatMoney(suggestion.price_cents, restaurantQuery.data?.currency_code)}
+                  </p>
+                  <Button size="sm" className="w-full h-6 text-xs" variant="secondary">
+                    <Plus className="h-3 w-3 mr-1" /> Add
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <Button variant="outline" className="w-full" onClick={() => { setUpsellOpen(false); setCartOpen(true); }}>
+              View Cart ({activeCart.itemCount} items)
+            </Button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

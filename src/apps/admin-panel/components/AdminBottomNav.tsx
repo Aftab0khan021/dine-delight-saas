@@ -6,17 +6,23 @@ import {
   Salad,
   ShoppingBag,
   Users,
+  ChefHat,
+  MessageCircle,
+  BarChart3,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 
 const items = [
   { label: "Dashboard", to: "/admin/dashboard", icon: LayoutDashboard, end: true },
   { label: "Orders", to: "/admin/orders", icon: ShoppingBag },
+  { label: "Kitchen", to: "/admin/kitchen", icon: ChefHat },
   { label: "Menu", to: "/admin/menu", icon: Salad },
   { label: "QR", to: "/admin/qr", icon: Barcode },
   { label: "Staff", to: "/admin/staff", icon: Users },
   { label: "Brand", to: "/admin/branding", icon: Brush },
   { label: "Billing", to: "/admin/billing", icon: CreditCard },
+  { label: "Marketing", to: "/admin/marketing", icon: MessageCircle },
+  { label: "Insights", to: "/admin/insights", icon: BarChart3 },
 ];
 
 export function AdminBottomNav() {
