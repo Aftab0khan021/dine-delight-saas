@@ -51,6 +51,7 @@ import SuperAdminErrors from "./apps/super-admin/pages/Errors";
 import SuperAdminSettings from "./apps/super-admin/pages/Settings";
 import SuperAdminUsers from "./apps/super-admin/pages/Users";
 import SuperAdminPendingApprovals from "./apps/super-admin/pages/PendingApprovals";
+import SuperAdminCloudKitchens from "./apps/super-admin/pages/CloudKitchens";
 
 const queryClient = new QueryClient();
 
@@ -138,6 +139,7 @@ const App = () => (
             <Route path="users" element={<SuperAdminUsers />} />
             <Route path="settings" element={<SuperAdminSettings />} />
             <Route path="approvals" element={<SuperAdminPendingApprovals />} />
+            <Route path="cloud-kitchens" element={<SuperAdminCloudKitchens />} />
           </Route>
 
           {/* Legacy redirects: /super-admin -> /superadmin */}

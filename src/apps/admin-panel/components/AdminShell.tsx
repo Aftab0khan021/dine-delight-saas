@@ -77,6 +77,20 @@ export function AdminShell({ children }: PropsWithChildren) {
   const [notificationsRead, setNotificationsRead] = useState(false);
   const { toast } = useToast();
 
+  // Fetch sibling brands if this is a cloud kitchen or child brand
+  const brandsQuery = useQuery({
+    queryKey: ["shell", "brands", restaurant?.id, (restaurant as any)?.parent_kitchen_id],
+    enabled: !!restaurant?.id,
+    queryFn: async () => {
+      const parentId = (restaurant as any)?.parent_kitchen_id ?? restaurant?.id;
+      const { data } = await supabase
+        .from("restaurants")
+        .select("id, name, brand_color, slug")
+        .or(`id.eq.${parentId},parent_kitchen_id.eq.${parentId}`);
+      return data ?? [];
+    },
+  });
+
   // Close sidebar on escape key
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -301,19 +315,53 @@ export function AdminShell({ children }: PropsWithChildren) {
             <Menu className="h-5 w-5" />
           </button>
 
-          {/* Restaurant Name Switcher */}
+          {/* Restaurant Name / Brand Switcher */}
           <div className="min-w-0 flex-1 overflow-hidden">
             <div className="flex items-center gap-2">
-              <Select value={restaurant?.id} disabled>
-                <SelectTrigger className="h-9 w-auto min-w-0 max-w-[150px] sm:max-w-[240px] bg-transparent border-0 shadow-none hover:bg-accent/50 focus:ring-0 font-medium">
-                  <SelectValue placeholder="Select restaurant" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={restaurant?.id || "current"}>
-                    {restaurant?.name}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              {brandsQuery.data && brandsQuery.data.length > 1 ? (
+                // Live brand switcher for cloud kitchens
+                <Select
+                  value={restaurant?.id}
+                  onValueChange={(id) => {
+                    const brand = brandsQuery.data?.find((b: any) => b.id === id);
+                    if (brand) {
+                      // Navigate to kitchen dashboard of selected brand
+                      navigate("/admin/kitchen");
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-9 w-auto min-w-0 max-w-[180px] sm:max-w-[260px] bg-transparent border-0 shadow-none hover:bg-accent/50 focus:ring-0 font-medium">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {(restaurant as any)?.brand_color && (
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: (restaurant as any).brand_color }} />
+                      )}
+                      <SelectValue placeholder={restaurant?.name} />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {brandsQuery.data.map((b: any) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: b.brand_color || "#6366f1" }} />
+                          {b.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                // Single restaurant — show name only
+                <Select value={restaurant?.id} disabled>
+                  <SelectTrigger className="h-9 w-auto min-w-0 max-w-[150px] sm:max-w-[240px] bg-transparent border-0 shadow-none hover:bg-accent/50 focus:ring-0 font-medium">
+                    <SelectValue placeholder="Select restaurant" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={restaurant?.id || "current"}>
+                      {restaurant?.name}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
 
               <Badge
                 variant="secondary"

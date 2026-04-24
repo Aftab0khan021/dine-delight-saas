@@ -36,7 +36,9 @@ import {
   CheckCircle,
   Download,
   Filter,
-  X
+  X,
+  Layers,
+  Link2
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -72,6 +74,9 @@ export default function Restaurants() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [planFilter, setPlanFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
+  const [linkKitchenOpen, setLinkKitchenOpen] = useState(false);
+  const [linkTargetId, setLinkTargetId] = useState<string | null>(null);
+  const [linkParentId, setLinkParentId] = useState<string>("");
   const pageSize = 20;
 
   // Fetch restaurants with filters
@@ -238,10 +243,15 @@ export default function Restaurants() {
             Manage all restaurants on the platform
           </p>
         </div>
-        <Button onClick={handleExportCSV} variant="outline">
-          <Download className="h-4 w-4 mr-2" />
-          Export CSV
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => navigate("/superadmin/cloud-kitchens")} variant="outline">
+            <Layers className="h-4 w-4 mr-2" /> Cloud Kitchens
+          </Button>
+          <Button onClick={handleExportCSV} variant="outline">
+            <Download className="h-4 w-4 mr-2" />
+            Export CSV
+          </Button>
+        </div>
       </header>
 
       {/* Filters */}
@@ -398,6 +408,17 @@ export default function Restaurants() {
                             <Eye className="h-4 w-4 mr-2" />
                             View Details
                           </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setLinkTargetId(restaurant.id);
+                              setLinkParentId("");
+                              setLinkKitchenOpen(true);
+                            }}
+                          >
+                            <Link2 className="h-4 w-4 mr-2" />
+                            Link to Cloud Kitchen
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
                           {restaurant.status === 'active' ? (
                             <DropdownMenuItem
                               onClick={() => handleSuspend(restaurant.id, restaurant.name)}
@@ -451,6 +472,33 @@ export default function Restaurants() {
             >
               Next
             </Button>
+          </div>
+        </div>
+      )}
+      {/* Link to Cloud Kitchen Dialog */}
+      {linkKitchenOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-background rounded-xl border shadow-lg p-6 w-80 space-y-4">
+            <p className="font-semibold">Link to Cloud Kitchen</p>
+            <Select value={linkParentId} onValueChange={setLinkParentId}>
+              <SelectTrigger><SelectValue placeholder="Select parent kitchen" /></SelectTrigger>
+              <SelectContent>
+                {(restaurantsData?.restaurants ?? []).filter((r: any) => r.id !== linkTargetId).map((r: any) => (
+                  <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setLinkKitchenOpen(false)}>Cancel</Button>
+              <Button disabled={!linkParentId} onClick={async () => {
+                if (!linkTargetId || !linkParentId) return;
+                const { error } = await supabase.from("restaurants")
+                  .update({ parent_kitchen_id: linkParentId })
+                  .eq("id", linkTargetId);
+                if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+                else { toast({ title: "Linked to kitchen" }); setLinkKitchenOpen(false); refetch(); }
+              }}>Link</Button>
+            </div>
           </div>
         </div>
       )}
