@@ -402,12 +402,12 @@ export function AdminShell({ children }: PropsWithChildren) {
       </header>
 
       {/* Main Content Layout */}
-      <div className="flex min-h-[calc(100vh-3.5rem)] w-full">
+      <div className="flex w-full min-h-[calc(100vh-3.5rem)]">
         <div className="hidden md:block shrink-0">
           <AdminSidebar />
         </div>
 
-        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 pb-20 md:pb-8 overflow-auto">
+        <main className="flex-1 min-w-0 w-full p-4 sm:p-6 lg:p-8 pb-20 md:pb-8 overflow-y-auto">
           {children}
         </main>
       </div>
