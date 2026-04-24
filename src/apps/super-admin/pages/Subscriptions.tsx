@@ -258,7 +258,9 @@ export default function Subscriptions() {
 
       {/* Table */}
       <Card>
-        <CardContent className="p-0 overflow-x-auto"><div className="min-w-[600px]"><Table>
+        <CardContent className="p-0 overflow-x-auto">
+          <div className="min-w-[600px]">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Restaurant</TableHead>
@@ -382,6 +384,7 @@ export default function Subscriptions() {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 

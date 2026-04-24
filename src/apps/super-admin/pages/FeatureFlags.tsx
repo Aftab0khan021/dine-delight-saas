@@ -300,7 +300,9 @@ export default function FeatureFlags() {
                                 Control features across the entire platform
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="p-0 overflow-x-auto"><div className="min-w-[600px]"><Table>
+                        <CardContent className="p-0 overflow-x-auto">
+          <div className="min-w-[600px]">
+            <Table>
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Feature</TableHead>
@@ -411,7 +413,9 @@ export default function FeatureFlags() {
                                 Features enabled/disabled for specific restaurants
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="p-0 overflow-x-auto"><div className="min-w-[600px]"><Table>
+                        <CardContent className="p-0 overflow-x-auto">
+          <div className="min-w-[600px]">
+            <Table>
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Restaurant</TableHead>
