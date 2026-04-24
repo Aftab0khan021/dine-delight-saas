@@ -15,6 +15,7 @@ interface FeatureAccess {
  */
 export function useFeatureAccess(restaurantId: string | undefined) {
     // Fetch all features for the restaurant
+    // staleTime: 5min — feature flags rarely change; avoids re-running CROSS JOIN view on every page navigation
     const { data: features, isLoading } = useQuery({
         queryKey: ['restaurant-features', restaurantId],
         queryFn: async () => {
@@ -29,6 +30,7 @@ export function useFeatureAccess(restaurantId: string | undefined) {
             return data as FeatureAccess[];
         },
         enabled: !!restaurantId,
+        staleTime: 5 * 60 * 1000, // 5 minutes — feature flags don't change per-request
     });
 
     // Check if a boolean feature is enabled

@@ -72,17 +72,19 @@ export default function StaffCategories() {
         },
     });
 
-    // Fetch category permissions
+    // Fetch category permissions — scoped to this restaurant only via staff_categories join
+    // FIX: Old query had no restaurant filter — exposed ALL restaurants' permissions cross-tenant
     const categoryPermissionsQuery = useQuery({
         queryKey: ["category-permissions", restaurant?.id],
         queryFn: async () => {
             if (!restaurant?.id) return [];
             const { data, error } = await supabase
                 .from("category_permissions")
-                .select("*");
+                .select("category_id, permission_id, staff_categories!inner(restaurant_id)")
+                .eq("staff_categories.restaurant_id", restaurant.id);
 
             if (error) throw error;
-            return data as CategoryPermission[];
+            return (data ?? []).map(({ category_id, permission_id }) => ({ category_id, permission_id })) as CategoryPermission[];
         },
         enabled: !!restaurant?.id,
     });

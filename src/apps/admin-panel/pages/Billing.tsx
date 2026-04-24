@@ -61,6 +61,7 @@ type InvoiceRow = {
 export default function RestaurantBilling() {
   const { restaurant } = useRestaurantContext();
 
+  // FIX: Was 2 sequential queries (subscription then plan). Now one embedded join.
   const subscriptionQuery = useQuery({
     queryKey: ["admin", "billing", restaurant?.id, "subscription"],
     enabled: !!restaurant?.id,
@@ -70,7 +71,7 @@ export default function RestaurantBilling() {
       const { data: subscription, error: subError } = await supabase
         .from("subscriptions")
         .select(
-          "id, plan_id, restaurant_id, status, current_period_end, trial_ends_at, created_at",
+          "id, plan_id, restaurant_id, status, current_period_end, trial_ends_at, created_at, subscription_plans(id, name, slug, price_cents, currency, billing_period, trial_days)",
         )
         .eq("restaurant_id", restaurantId)
         .order("created_at", { ascending: false })
@@ -78,21 +79,10 @@ export default function RestaurantBilling() {
         .maybeSingle();
 
       if (subError) throw subError;
+      if (!subscription) return { subscription: null, plan: null };
 
-      let plan: PlanRow | null = null;
-      if (subscription?.plan_id) {
-        const { data: planRow, error: planError } = await supabase
-          .from("subscription_plans")
-          .select(
-            "id, name, slug, price_cents, currency, billing_period, trial_days",
-          )
-          .eq("id", subscription.plan_id)
-          .maybeSingle();
-        if (planError) throw planError;
-        plan = planRow as PlanRow | null;
-      }
-
-      return { subscription: subscription as SubscriptionRow | null, plan };
+      const { subscription_plans: plan, ...sub } = subscription as any;
+      return { subscription: sub as SubscriptionRow, plan: plan as PlanRow | null };
     },
   });
 
