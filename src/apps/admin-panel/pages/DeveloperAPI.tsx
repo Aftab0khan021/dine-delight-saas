@@ -73,10 +73,17 @@ export default function DeveloperAPI() {
     queryKey: ["webhook-deliveries", restaurant?.id],
     enabled: !!restaurant?.id,
     queryFn: async () => {
+      // Get deliveries via endpoint_id (RLS on webhook_endpoints scopes to restaurant)
+      const { data: eps } = await supabase
+        .from("webhook_endpoints")
+        .select("id")
+        .eq("restaurant_id", restaurant!.id);
+      const endpointIds = (eps ?? []).map((e: any) => e.id);
+      if (endpointIds.length === 0) return [];
       const { data, error } = await supabase
         .from("webhook_deliveries")
         .select("*")
-        .eq("restaurant_id", restaurant!.id)
+        .in("endpoint_id", endpointIds)
         .order("created_at", { ascending: false })
         .limit(20);
       if (error) throw error;
