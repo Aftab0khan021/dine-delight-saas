@@ -144,8 +144,8 @@ export default function TrackOrder() {
   const backLink = order.restaurant?.slug ? `/r/${order.restaurant.slug}/menu` : "/";
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-md mx-auto space-y-6">
+    <div className="min-h-screen w-full bg-gray-50 py-8 px-4">
+      <div className="w-full max-w-md mx-auto space-y-6">
 
         {/* Header */}
         <div className="flex items-center justify-between">

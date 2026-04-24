@@ -46,8 +46,8 @@ function SuperAdminShell() {
       <div className="min-h-screen flex w-full bg-background">
         <SuperAdminSidebar />
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="border-b">
+        <div className="flex min-w-0 flex-1 flex-col w-full">
+          <header className="border-b shrink-0">
             <div className="flex h-12 items-center justify-between px-4">
               <div className="flex items-center gap-2">
                 <SidebarTrigger />
@@ -55,7 +55,7 @@ function SuperAdminShell() {
               </div>
 
               <div className="flex items-center gap-3">
-                <span className="hidden sm:inline text-sm text-muted-foreground">{userEmail}</span>
+                <span className="hidden sm:inline text-sm text-muted-foreground truncate max-w-[180px]">{userEmail}</span>
                 <Button variant="outline" size="sm" onClick={handleSignOut}>
                   Sign out
                 </Button>
@@ -63,7 +63,7 @@ function SuperAdminShell() {
             </div>
           </header>
 
-          <main className="flex-1 min-w-0 p-4 md:p-6">
+          <main className="flex-1 min-w-0 w-full overflow-y-auto p-4 md:p-6 lg:p-8">
             <Outlet />
           </main>
         </div>

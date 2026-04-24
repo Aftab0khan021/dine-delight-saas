@@ -98,7 +98,7 @@ export default function SuperAdminInvoices() {
   }, [query.data]);
 
   return (
-    <section className="space-y-6">
+    <section className="flex flex-col gap-4 w-full">
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Invoices</h1>
         <p className="text-sm text-muted-foreground">Read-only invoices with quick links.</p>

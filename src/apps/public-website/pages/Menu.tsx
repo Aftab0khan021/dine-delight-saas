@@ -247,9 +247,9 @@ export default function PublicMenu() {
   }
 
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen w-full bg-background">
       <header className="border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4 max-w-3xl">
+        <div className="w-full max-w-3xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             {restaurantQuery.data?.logo_url ? (
               <img
@@ -278,7 +278,7 @@ export default function PublicMenu() {
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8 max-w-3xl pb-28">
+      <div className="w-full max-w-3xl mx-auto px-4 py-8 pb-28">
         {loading ? (
           <Card className="p-6">
             <p className="text-sm text-muted-foreground">Loading menu…</p>

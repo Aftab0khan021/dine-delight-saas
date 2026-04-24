@@ -78,7 +78,7 @@ export default function RestaurantProfile() {
   const contactPhone = settings?.contact_phone;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen w-full bg-background flex flex-col">
 
       {/* --- HERO SECTION --- */}
       <div className="relative h-[55vh] w-full bg-muted overflow-hidden">
@@ -104,10 +104,10 @@ export default function RestaurantProfile() {
 
           {/* Text */}
           <div className="space-y-2 max-w-2xl text-white drop-shadow-md">
-            <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight">
               {restaurant.name}
             </h1>
-            <p className="text-lg md:text-xl opacity-90 font-light">
+            <p className="text-base sm:text-lg md:text-xl opacity-90 font-light">
               Experience the best flavors in town.
             </p>
           </div>
@@ -142,7 +142,7 @@ export default function RestaurantProfile() {
       )}
 
       {/* --- DETAILS SECTION --- */}
-      <div className="flex-1 max-w-5xl mx-auto w-full p-6 md:p-12 space-y-12">
+      <div className="flex-1 w-full max-w-5xl mx-auto p-4 sm:p-6 md:p-12 space-y-12">
 
         {/* About */}
         <section className="space-y-4 text-center">
@@ -156,7 +156,7 @@ export default function RestaurantProfile() {
         </section>
 
         {/* Info Grid */}
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Hours */}
           <div className="p-6 bg-card border rounded-2xl flex flex-col items-center text-center gap-3 shadow-sm">
             <Clock className="h-8 w-8 text-primary/60" />

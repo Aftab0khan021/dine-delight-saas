@@ -187,8 +187,8 @@ export default function FeatureFlags() {
     };
 
     return (
-        <section className="space-y-6">
-            <header className="flex items-center justify-between">
+        <section className="flex flex-col gap-4 w-full">
+            <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">Feature Flags</h1>
                     <p className="text-sm text-muted-foreground">
@@ -215,8 +215,8 @@ export default function FeatureFlags() {
                                     Configure a new feature flag for the platform
                                 </DialogDescription>
                             </DialogHeader>
-                            <form onSubmit={handleSubmit} className="space-y-4">
-                                <div className="grid gap-4 md:grid-cols-2">
+                            <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-full">
+                                <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
                                     <div className="space-y-2">
                                         <Label htmlFor="key">Key</Label>
                                         <Input
@@ -300,8 +300,7 @@ export default function FeatureFlags() {
                                 Control features across the entire platform
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="p-0">
-                            <Table>
+                        <CardContent className="p-0 overflow-x-auto"><div className="min-w-[600px]"><Table>
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Feature</TableHead>
@@ -384,7 +383,7 @@ export default function FeatureFlags() {
                         <CardContent>
                             <div className="space-y-4">
                                 {flags?.filter(f => ['online_ordering', 'qr_menu', 'api_access'].includes(f.key)).map((flag) => (
-                                    <div key={flag.id} className="flex items-center justify-between">
+                                    <div key={flag.id} className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                                         <div>
                                             <Label className="font-medium">{flag.name}</Label>
                                             <p className="text-sm text-muted-foreground">
@@ -412,8 +411,7 @@ export default function FeatureFlags() {
                                 Features enabled/disabled for specific restaurants
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="p-0">
-                            <Table>
+                        <CardContent className="p-0 overflow-x-auto"><div className="min-w-[600px]"><Table>
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Restaurant</TableHead>
