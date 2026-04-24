@@ -18,12 +18,32 @@ export default function SetPassword() {
     const [checking, setChecking] = useState(true);
 
     useEffect(() => {
-        // Check if user is authenticated (they clicked the invite link)
+        // Check if user is authenticated (they clicked the invite/recovery link)
         const checkAuth = async () => {
             const { data: { session } } = await supabase.auth.getSession();
 
+            // Also check hash fragment for recovery tokens (Supabase sends them in hash)
+            const hash = window.location.hash;
+            const hashParams = new URLSearchParams(hash.replace("#", ""));
+            const hashAccessToken = hashParams.get("access_token");
+            const hashRefreshToken = hashParams.get("refresh_token");
+            const hashType = hashParams.get("type");
+
+            if (!session && hashAccessToken && hashRefreshToken) {
+                // Set session from hash tokens (password recovery flow)
+                const { error } = await supabase.auth.setSession({
+                    access_token: hashAccessToken,
+                    refresh_token: hashRefreshToken,
+                });
+                if (error) {
+                    setError("Invalid or expired recovery link. Please request a new one.");
+                }
+                setChecking(false);
+                return;
+            }
+
             if (!session) {
-                setError("Invalid or expired invitation link. Please request a new invitation.");
+                setError("Invalid or expired link. Please request a new one.");
                 setChecking(false);
                 return;
             }
@@ -61,9 +81,10 @@ export default function SetPassword() {
 
             setSuccess(true);
 
-            // Redirect to admin dashboard after 2 seconds
+            // After password reset, sign out and redirect to login
+            await supabase.auth.signOut();
             setTimeout(() => {
-                navigate("/admin/dashboard");
+                navigate("/admin/auth");
             }, 2000);
         } catch (err: any) {
             console.error("Password setup error:", err);
@@ -95,8 +116,8 @@ export default function SetPassword() {
                     <CardContent className="pt-6">
                         <div className="text-center space-y-4">
                             <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto" />
-                            <h2 className="text-xl font-semibold">Password Set Successfully!</h2>
-                            <p className="text-gray-600">Redirecting to login...</p>
+                            <h2 className="text-xl font-semibold">Password Updated Successfully!</h2>
+                            <p className="text-gray-600">Redirecting to login page...</p>
                         </div>
                     </CardContent>
                 </Card>
@@ -108,9 +129,9 @@ export default function SetPassword() {
         <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
             <Card className="w-full max-w-md">
                 <CardHeader>
-                    <CardTitle>Set Your Password</CardTitle>
+                    <CardTitle>Reset Your Password</CardTitle>
                     <CardDescription>
-                        Welcome! Please set a password to complete your account setup.
+                        Enter a new password for your account.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
