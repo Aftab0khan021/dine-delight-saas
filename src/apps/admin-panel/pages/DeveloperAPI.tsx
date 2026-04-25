@@ -44,13 +44,14 @@ export default function DeveloperAPI() {
   const keysQuery = useQuery({
     queryKey: ["api-keys", restaurant?.id],
     enabled: !!restaurant?.id,
+    retry: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("api_keys")
         .select("id, name, key_prefix, scopes, last_used_at, is_active, created_at, expires_at")
         .eq("restaurant_id", restaurant!.id)
         .order("created_at", { ascending: false });
-      if (error) throw error;
+      if (error) return []; // table may not exist yet
       return data ?? [];
     }
   });
@@ -58,13 +59,14 @@ export default function DeveloperAPI() {
   const webhooksQuery = useQuery({
     queryKey: ["webhook-endpoints", restaurant?.id],
     enabled: !!restaurant?.id,
+    retry: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("webhook_endpoints")
         .select("*, webhook_deliveries(id, status, created_at)")
         .eq("restaurant_id", restaurant!.id)
         .order("created_at", { ascending: false });
-      if (error) throw error;
+      if (error) return []; // table may not exist yet
       return data ?? [];
     }
   });

@@ -26,6 +26,7 @@ export default function Marketing() {
   const campaignsQuery = useQuery({
     queryKey: ["marketing", "campaigns", restaurant?.id],
     enabled: !!restaurant?.id,
+    retry: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("whatsapp_campaigns")
@@ -33,7 +34,7 @@ export default function Marketing() {
         .eq("restaurant_id", restaurant!.id)
         .order("created_at", { ascending: false })
         .limit(100);
-      if (error) throw error;
+      if (error) return []; // table may not exist yet (migration pending)
       return data ?? [];
     },
   });

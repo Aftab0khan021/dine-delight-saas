@@ -53,7 +53,16 @@ import SuperAdminUsers from "./apps/super-admin/pages/Users";
 import SuperAdminPendingApprovals from "./apps/super-admin/pages/PendingApprovals";
 import SuperAdminCloudKitchens from "./apps/super-admin/pages/CloudKitchens";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      // Critical: prevents unhandled query errors from crashing Error Boundary.
+      // Pages show empty states instead of crashing.
+      throwOnError: false,
+    },
+  },
+});
 
 /**
  * Intercepts Supabase auth hash tokens on ANY page.
