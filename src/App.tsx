@@ -52,6 +52,13 @@ import SuperAdminSettings from "./apps/super-admin/pages/Settings";
 import SuperAdminUsers from "./apps/super-admin/pages/Users";
 import SuperAdminPendingApprovals from "./apps/super-admin/pages/PendingApprovals";
 import SuperAdminCloudKitchens from "./apps/super-admin/pages/CloudKitchens";
+// From dev branch: AI management + WhatsApp bot pages
+import SuperAdminAIProviders from "./apps/super-admin/pages/AIProviders";
+import SuperAdminAICostTracking from "./apps/super-admin/pages/AICostTracking";
+import SuperAdminAIUsageAnalytics from "./apps/super-admin/pages/AIUsageAnalytics";
+import SuperAdminRestaurantAIConfig from "./apps/super-admin/pages/RestaurantAIConfig";
+import SuperAdminWhatsAppManagement from "./apps/super-admin/pages/WhatsAppManagement";
+import AdminWhatsAppSettings from "./apps/admin-panel/pages/WhatsAppSettings";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -126,6 +133,8 @@ const App = () => (
             <Route path="insights" element={<AdminMenuInsights />} />
             <Route path="developer" element={<AdminDeveloperAPI />} />
             <Route path="kitchen" element={<AdminKitchenDashboard />} />
+            {/* WhatsApp bot settings (from dev merge) */}
+            <Route path="whatsapp" element={<AdminWhatsAppSettings />} />
           </Route>
 
           {/* Super Admin Routes */}
@@ -149,6 +158,13 @@ const App = () => (
             <Route path="settings" element={<SuperAdminSettings />} />
             <Route path="approvals" element={<SuperAdminPendingApprovals />} />
             <Route path="cloud-kitchens" element={<SuperAdminCloudKitchens />} />
+            {/* AI Management (from dev merge) */}
+            <Route path="ai/providers" element={<SuperAdminAIProviders />} />
+            <Route path="ai/costs" element={<SuperAdminAICostTracking />} />
+            <Route path="ai/usage" element={<SuperAdminAIUsageAnalytics />} />
+            <Route path="restaurants/:id/ai" element={<SuperAdminRestaurantAIConfig />} />
+            {/* WhatsApp Bot Management (from dev merge) */}
+            <Route path="whatsapp" element={<SuperAdminWhatsAppManagement />} />
           </Route>
 
           {/* Legacy redirects: /super-admin -> /superadmin */}
