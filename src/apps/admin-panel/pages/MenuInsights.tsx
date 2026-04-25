@@ -24,6 +24,7 @@ export default function MenuInsights() {
   const popularQuery = useQuery({
     queryKey: ["menu-insights", "popular", restaurant?.id],
     enabled: !!restaurant?.id,
+    retry: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("menu_item_popularity")
@@ -31,7 +32,7 @@ export default function MenuInsights() {
         .eq("restaurant_id", restaurant!.id)
         .order("order_count_7d", { ascending: false })
         .limit(20);
-      if (error) throw error;
+      if (error) return []; // view may not exist yet
       return data ?? [];
     },
   });
@@ -39,12 +40,13 @@ export default function MenuInsights() {
   const itemsQuery = useQuery({
     queryKey: ["menu-items-map", restaurant?.id],
     enabled: !!restaurant?.id,
+    retry: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("menu_items")
         .select("id, name, price_cents")
         .eq("restaurant_id", restaurant!.id);
-      if (error) throw error;
+      if (error) return {};
       const map: Record<string, { name: string; price_cents: number }> = {};
       for (const i of data ?? []) map[i.id] = i;
       return map;
@@ -54,6 +56,7 @@ export default function MenuInsights() {
   const pairsQuery = useQuery({
     queryKey: ["menu-insights", "pairs", restaurant?.id],
     enabled: !!restaurant?.id && view === "pairs",
+    retry: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("order_item_pairs")
@@ -61,7 +64,7 @@ export default function MenuInsights() {
         .eq("restaurant_id", restaurant!.id)
         .order("co_order_count", { ascending: false })
         .limit(20);
-      if (error) throw error;
+      if (error) return []; // table may not exist yet
       return data ?? [];
     },
   });
