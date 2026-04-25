@@ -18,6 +18,11 @@ import { Link } from "react-router-dom";
 
 // --- Visual Component: Sparkline (From Repo A) ---
 function Sparkline({ values, className }: { values: number[]; className?: string }) {
+  // Guard: need at least 2 points to draw a line
+  if (!values || values.length < 2) {
+    return <div className={cn("w-24 h-8", className)} aria-hidden />;
+  }
+
   const w = 96;
   const h = 32;
   const pad = 2;
@@ -149,21 +154,25 @@ export default function AdminDashboard() {
         label: "Today's Orders",
         value: count.toString(),
         delta: "Since midnight",
+        trend: todayOrders.map((_, i) => i + 1),
       },
       {
         label: "Revenue",
         value: formatMoney(revenue, currency),
         delta: "Gross total",
+        trend: todayOrders.map(o => o.total_cents ?? 0),
       },
       {
         label: "Avg Prep Time",
         value: avgPrep > 0 ? `${avgPrep}m` : "—",
         delta: "Completed orders",
+        trend: completed.map(ms => Math.round(ms / 60000)),
       },
       {
         label: "Active Tables",
         value: "—",
         delta: "Currently seated",
+        trend: [0],
       }
     ];
   }, [todayOrdersQuery.data, setupQuery.data]);
