@@ -40,6 +40,7 @@ import {
     Trash2,
     Settings,
     AlertTriangle,
+    Zap,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -447,6 +448,13 @@ export default function RestaurantDetails() {
 
                 {/* Actions */}
                 <div className="flex gap-2">
+                    <Button
+                        variant="outline"
+                        onClick={() => navigate(`/superadmin/restaurants/${id}/ai-config`)}
+                    >
+                        <Zap className="h-4 w-4 mr-2" />
+                        AI Configuration
+                    </Button>
                     <Button variant="outline" onClick={handleImpersonate}>
                         <UserCog className="h-4 w-4 mr-2" />
                         Impersonate
