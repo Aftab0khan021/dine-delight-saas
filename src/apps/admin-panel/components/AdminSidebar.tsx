@@ -46,9 +46,11 @@ const coreNavItems: NavItem[] = [
 ];
 
 const growthNavItems: NavItem[] = [
-  { to: "/admin/marketing", label: "WhatsApp CRM", icon: MessageCircle, adminOnly: true },
-  { to: "/admin/insights", label: "Menu Insights", icon: BarChart3, adminOnly: true },
-  { to: "/admin/developer", label: "Developer API", icon: Code2, adminOnly: true },
+  { to: "/admin/kitchen",    label: "Kitchen Board",  icon: ChefHat,        permission: PERMISSIONS.VIEW_ORDERS, adminOnly: false },
+  { to: "/admin/marketing",  label: "WhatsApp CRM",   icon: MessageCircle,  adminOnly: true },
+  { to: "/admin/insights",   label: "Menu Insights",  icon: BarChart3,      adminOnly: true },
+  { to: "/admin/developer",  label: "Developer API",  icon: Code2,          adminOnly: true },
+  { to: "/admin/whatsapp",   label: "WhatsApp Bot",   icon: MessageCircle,  adminOnly: true },
 ];
 
 const allNavItems: NavItem[] = [...coreNavItems, ...growthNavItems];
