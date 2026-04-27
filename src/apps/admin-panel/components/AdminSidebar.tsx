@@ -17,7 +17,8 @@ import {
   MessageCircle,
   BarChart3,
   Code2,
-  Flame
+  Flame,
+  Bot,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -33,25 +34,26 @@ type NavItem = {
 };
 
 const coreNavItems: NavItem[] = [
-  { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/admin/orders", label: "Orders", icon: ReceiptText, permission: PERMISSIONS.VIEW_ORDERS },
-  { to: "/admin/kitchen", label: "Kitchen Board", icon: ChefHat, permission: PERMISSIONS.VIEW_ORDERS },
-  { to: "/admin/menu", label: "Menu", icon: Salad, permission: PERMISSIONS.VIEW_MENU },
-  { to: "/admin/qr", label: "QR Menu", icon: QrCode, permission: PERMISSIONS.VIEW_QR },
-  { to: "/admin/staff", label: "Staff", icon: Users, permission: PERMISSIONS.VIEW_STAFF },
-  { to: "/admin/staff-categories", label: "Staff Categories", icon: Settings, permission: PERMISSIONS.MANAGE_CATEGORIES_STAFF, adminOnly: true },
-  { to: "/admin/branding", label: "Branding", icon: Palette, permission: PERMISSIONS.MANAGE_SETTINGS },
-  { to: "/admin/billing", label: "Billing", icon: CreditCard, adminOnly: true },
-  { to: "/admin/coupons", label: "Coupons", icon: Ticket, permission: PERMISSIONS.VIEW_COUPONS },
+  { to: "/admin/dashboard",        label: "Dashboard",        icon: LayoutDashboard },
+  { to: "/admin/orders",           label: "Orders",           icon: ReceiptText,    permission: PERMISSIONS.VIEW_ORDERS },
+  { to: "/admin/kitchen",          label: "Kitchen Board",    icon: ChefHat,        permission: PERMISSIONS.VIEW_ORDERS },
+  { to: "/admin/menu",             label: "Menu",             icon: Salad,          permission: PERMISSIONS.VIEW_MENU },
+  { to: "/admin/qr",               label: "QR Menu",          icon: QrCode,         permission: PERMISSIONS.VIEW_QR },
+  { to: "/admin/staff",            label: "Staff",            icon: Users,          permission: PERMISSIONS.VIEW_STAFF },
+  { to: "/admin/staff-categories", label: "Staff Categories", icon: Settings,       permission: PERMISSIONS.MANAGE_CATEGORIES_STAFF, adminOnly: true },
+  { to: "/admin/branding",         label: "Branding",         icon: Palette,        permission: PERMISSIONS.MANAGE_SETTINGS },
+  { to: "/admin/billing",          label: "Billing",          icon: CreditCard,     adminOnly: true },
+  { to: "/admin/coupons",          label: "Coupons",          icon: Ticket,         permission: PERMISSIONS.VIEW_COUPONS },
 ];
 
+// Growth pillar pages — shown under "Growth" separator, admin-only unless noted
 const growthNavItems: NavItem[] = [
-  { to: "/admin/kitchen",    label: "Kitchen Board",  icon: ChefHat,        permission: PERMISSIONS.VIEW_ORDERS, adminOnly: false },
-  { to: "/admin/marketing",  label: "WhatsApp CRM",   icon: MessageCircle,  adminOnly: true },
-  { to: "/admin/insights",   label: "Menu Insights",  icon: BarChart3,      adminOnly: true },
-  { to: "/admin/developer",  label: "Developer API",  icon: Code2,          adminOnly: true },
-  { to: "/admin/whatsapp",   label: "WhatsApp Bot",   icon: MessageCircle,  adminOnly: true },
+  { to: "/admin/marketing",  label: "WhatsApp CRM",   icon: MessageCircle, adminOnly: true },
+  { to: "/admin/insights",   label: "Menu Insights",  icon: BarChart3,     adminOnly: true },
+  { to: "/admin/developer",  label: "Developer API",  icon: Code2,         adminOnly: true },
+  { to: "/admin/whatsapp",   label: "WhatsApp Bot",   icon: Bot,           adminOnly: true },
 ];
+
 
 const allNavItems: NavItem[] = [...coreNavItems, ...growthNavItems];
 
