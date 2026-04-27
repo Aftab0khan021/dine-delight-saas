@@ -43,6 +43,24 @@ export default function PublicMenu() {
   const tableLabel = searchParams.get("table") ?? null;
   const useCollabCart = !!tableLabel;
 
+  // 1. Restaurant query — must be first (collabCart + fetchUpsell depend on it)
+  const restaurantQuery = useQuery({
+    queryKey: ["public-menu", "restaurant", slug],
+    enabled: !!slug,
+    queryFn: async (): Promise<RestaurantRow> => {
+      const { data, error } = await supabase
+        .from("restaurants")
+        .select("*")
+        .eq("slug", slug)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data) throw new Error("Restaurant not found");
+      return data;
+    },
+  });
+
+  // 2. Carts — now safe to reference restaurantQuery.data
   const cart = useRestaurantCart(slug);
   const collabCart = useCollaborativeCart(
     restaurantQuery.data?.id ?? "",
@@ -89,21 +107,6 @@ export default function PublicMenu() {
     } catch { /* non-critical, ignore */ }
   }, [restaurantQuery.data?.currency_code]);
 
-  const restaurantQuery = useQuery({
-    queryKey: ["public-menu", "restaurant", slug],
-    enabled: !!slug,
-    queryFn: async (): Promise<RestaurantRow> => {
-      const { data, error } = await supabase
-        .from("restaurants")
-        .select("*")
-        .eq("slug", slug)
-        .maybeSingle();
-
-      if (error) throw error;
-      if (!data) throw new Error("Restaurant not found");
-      return data;
-    },
-  });
 
   const categoriesQuery = useQuery({
     queryKey: ["public-menu", "categories", slug, restaurantQuery.data?.id],
