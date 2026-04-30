@@ -147,16 +147,16 @@ export default function AICostTracking() {
 
     return (
         <div className="w-full space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold">AI Cost Tracking</h1>
-                    <p className="text-muted-foreground mt-2">
+                    <h1 className="text-2xl sm:text-3xl font-bold">AI Cost Tracking</h1>
+                    <p className="text-muted-foreground mt-1">
                         Monitor and analyze AI service costs
                     </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <Select value={timeRange} onValueChange={setTimeRange}>
-                        <SelectTrigger className="w-[180px]">
+                        <SelectTrigger className="w-full sm:w-[180px]">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -227,6 +227,7 @@ export default function AICostTracking() {
                     <CardDescription>Breakdown of costs by AI provider</CardDescription>
                 </CardHeader>
                 <CardContent>
+                    <div className="overflow-x-auto">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -249,6 +250,7 @@ export default function AICostTracking() {
                             ))}
                         </TableBody>
                     </Table>
+                    </div>
                 </CardContent>
             </Card>
 
@@ -259,6 +261,8 @@ export default function AICostTracking() {
                     <CardDescription>Highest AI service costs by restaurant</CardDescription>
                 </CardHeader>
                 <CardContent>
+                    <div className="overflow-x-auto">
+                    <div className="min-w-[600px]">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -288,6 +292,8 @@ export default function AICostTracking() {
                             ))}
                         </TableBody>
                     </Table>
+                    </div>
+                    </div>
                 </CardContent>
             </Card>
         </div>

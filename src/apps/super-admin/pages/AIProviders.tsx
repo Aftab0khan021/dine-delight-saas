@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Star, DollarSign, CheckCircle, XCircle } from 'lucide-react';
 
 interface AIProvider {
@@ -147,48 +148,50 @@ export default function AIProvidersPage() {
                 </CardHeader>
                 <CardContent>
                     <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b">
-                                    <th className="text-left p-2">Provider</th>
-                                    <th className="text-left p-2">Type</th>
-                                    <th className="text-left p-2">Cost</th>
-                                    <th className="text-left p-2">Accuracy</th>
-                                    <th className="text-left p-2">Free</th>
-                                    <th className="text-left p-2">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {providers.map((provider) => (
-                                    <tr key={provider.id} className="border-b hover:bg-muted/50">
-                                        <td className="p-2 font-medium">{provider.display_name}</td>
-                                        <td className="p-2">
-                                            <Badge variant="outline">{provider.provider_type.toUpperCase()}</Badge>
-                                        </td>
-                                        <td className="p-2">{provider.estimated_cost_per_1k}</td>
-                                        <td className="p-2">
-                                            <div className="flex items-center gap-1">
-                                                {renderStars(provider.accuracy_rating)}
-                                            </div>
-                                        </td>
-                                        <td className="p-2">
-                                            {provider.is_free ? (
-                                                <CheckCircle className="w-4 h-4 text-green-500" />
-                                            ) : (
-                                                <XCircle className="w-4 h-4 text-gray-400" />
-                                            )}
-                                        </td>
-                                        <td className="p-2">
-                                            {provider.is_active ? (
-                                                <Badge variant="default">Active</Badge>
-                                            ) : (
-                                                <Badge variant="secondary">Inactive</Badge>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                    <div className="min-w-[640px]">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Provider</TableHead>
+                                <TableHead>Type</TableHead>
+                                <TableHead>Cost</TableHead>
+                                <TableHead>Accuracy</TableHead>
+                                <TableHead>Free</TableHead>
+                                <TableHead>Status</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {providers.map((provider) => (
+                                <TableRow key={provider.id}>
+                                    <TableCell className="font-medium">{provider.display_name}</TableCell>
+                                    <TableCell>
+                                        <Badge variant="outline">{provider.provider_type.toUpperCase()}</Badge>
+                                    </TableCell>
+                                    <TableCell>{provider.estimated_cost_per_1k}</TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-1">
+                                            {renderStars(provider.accuracy_rating)}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        {provider.is_free ? (
+                                            <CheckCircle className="w-4 h-4 text-green-500" />
+                                        ) : (
+                                            <XCircle className="w-4 h-4 text-gray-400" />
+                                        )}
+                                    </TableCell>
+                                    <TableCell>
+                                        {provider.is_active ? (
+                                            <Badge variant="default">Active</Badge>
+                                        ) : (
+                                            <Badge variant="secondary">Inactive</Badge>
+                                        )}
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                    </div>
                     </div>
                 </CardContent>
             </Card>
