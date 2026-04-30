@@ -282,7 +282,7 @@ export default function SuperAdminSupport() {
                 <CardHeader className="pb-3">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                         <CardTitle className="text-base">All Tickets</CardTitle>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
                                 <SelectTrigger className="w-[140px] h-8">
                                     <SelectValue placeholder="Status" />

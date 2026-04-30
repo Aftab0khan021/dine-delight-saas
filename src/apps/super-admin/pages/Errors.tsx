@@ -197,7 +197,7 @@ export default function SuperAdminErrors() {
                 <CardHeader className="pb-3">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                         <CardTitle className="text-base">Error Logs</CardTitle>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                             <Select value={errorTypeFilter} onValueChange={(v) => setErrorTypeFilter(v as any)}>
                                 <SelectTrigger className="w-[140px] h-8">
                                     <SelectValue placeholder="Error Type" />

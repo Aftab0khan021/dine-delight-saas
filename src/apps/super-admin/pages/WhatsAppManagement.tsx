@@ -230,10 +230,10 @@ export default function WhatsAppManagement() {
     }
 
     return (
-        <div className="p-6 space-y-6">
+        <div className="flex flex-col gap-4 w-full">
             <div>
-                <h1 className="text-3xl font-bold">WhatsApp Management</h1>
-                <p className="text-muted-foreground">Configure WhatsApp bot credentials for all restaurants</p>
+                <h1 className="text-2xl font-semibold tracking-tight">WhatsApp Management</h1>
+                <p className="text-sm text-muted-foreground">Configure WhatsApp bot credentials for all restaurants</p>
             </div>
 
             <Tabs defaultValue="restaurants" className="space-y-4">
@@ -256,7 +256,8 @@ export default function WhatsAppManagement() {
                                 Configure credentials and enable/disable WhatsApp bot for each restaurant
                             </CardDescription>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="p-0 overflow-x-auto">
+                            <div className="min-w-[640px]">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -330,6 +331,7 @@ export default function WhatsAppManagement() {
                                     })}
                                 </TableBody>
                             </Table>
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>

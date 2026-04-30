@@ -396,7 +396,8 @@ export default function Users() {
                     ) : filteredUsers.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">No users found</div>
                     ) : (
-                        <div className="rounded-xl border">
+                        <div className="rounded-xl border overflow-x-auto">
+                          <div className="min-w-[640px]">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -491,6 +492,7 @@ export default function Users() {
                                     ))}
                                 </TableBody>
                             </Table>
+                          </div>
                         </div>
                     )}
                 </CardContent>
