@@ -10,7 +10,7 @@ export function AdminLayout() {
     <RestaurantProvider>
       <PermissionProvider>
         <SidebarProvider>
-          <div className="flex flex-col min-h-screen">
+          <div className="flex flex-col min-h-screen w-full flex-1">
             <ImpersonationBanner />
             <AdminShell>
               <Outlet />
