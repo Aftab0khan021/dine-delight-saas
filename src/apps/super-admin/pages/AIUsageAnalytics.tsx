@@ -106,15 +106,15 @@ export default function AIUsageAnalytics() {
 
     return (
         <div className="w-full space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold">AI Usage Analytics</h1>
-                    <p className="text-muted-foreground mt-2">
+                    <h1 className="text-2xl sm:text-3xl font-bold">AI Usage Analytics</h1>
+                    <p className="text-muted-foreground mt-1">
                         Monitor AI feature usage and performance
                     </p>
                 </div>
                 <Select value={timeRange} onValueChange={setTimeRange}>
-                    <SelectTrigger className="w-[180px]">
+                    <SelectTrigger className="w-full sm:w-[180px]">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

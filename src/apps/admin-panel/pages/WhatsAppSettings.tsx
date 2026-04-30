@@ -332,6 +332,8 @@ export default function WhatsAppSettings() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
+                            <div className="overflow-x-auto">
+                            <div className="min-w-[540px]">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -366,6 +368,8 @@ export default function WhatsAppSettings() {
                                     ))}
                                 </TableBody>
                             </Table>
+                            </div>
+                            </div>
                             {(!menuItems || menuItems.length === 0) && (
                                 <div className="text-center py-6 text-muted-foreground">
                                     No menu items found. Add menu items to control their WhatsApp visibility.
