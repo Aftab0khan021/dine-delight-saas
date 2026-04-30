@@ -409,8 +409,8 @@ export default function SuperAdminAbuse() {
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <CardTitle className="text-base">Abuse Alerts</CardTitle>
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-muted-foreground" />
+            <div className="flex flex-wrap items-center gap-2">
+              <Filter className="h-4 w-4 text-muted-foreground hidden sm:block" />
               <Select value={severityFilter} onValueChange={(v) => setSeverityFilter(v as any)}>
                 <SelectTrigger className="w-[140px] h-8">
                   <SelectValue placeholder="Severity" />

@@ -1,44 +1,36 @@
 import {
-  Barcode,
-  Brush,
-  CreditCard,
   LayoutDashboard,
   Salad,
   ShoppingBag,
-  Users,
   ChefHat,
-  MessageCircle,
-  BarChart3,
+  QrCode,
+  Users,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 
 const items = [
   { label: "Dashboard", to: "/admin/dashboard", icon: LayoutDashboard, end: true },
-  { label: "Orders", to: "/admin/orders", icon: ShoppingBag },
-  { label: "Kitchen", to: "/admin/kitchen", icon: ChefHat },
-  { label: "Menu", to: "/admin/menu", icon: Salad },
-  { label: "QR", to: "/admin/qr", icon: Barcode },
-  { label: "Staff", to: "/admin/staff", icon: Users },
-  { label: "Brand", to: "/admin/branding", icon: Brush },
-  { label: "Billing", to: "/admin/billing", icon: CreditCard },
-  { label: "Marketing", to: "/admin/marketing", icon: MessageCircle },
-  { label: "Insights", to: "/admin/insights", icon: BarChart3 },
+  { label: "Orders",    to: "/admin/orders",    icon: ShoppingBag },
+  { label: "Kitchen",   to: "/admin/kitchen",   icon: ChefHat },
+  { label: "Menu",      to: "/admin/menu",      icon: Salad },
+  { label: "QR",        to: "/admin/qr",        icon: QrCode },
+  { label: "Staff",     to: "/admin/staff",     icon: Users },
 ];
 
 export function AdminBottomNav() {
   return (
     <nav className="md:hidden fixed inset-x-0 bottom-0 border-t bg-background/95 backdrop-blur z-30">
-      <div className="flex items-stretch justify-around gap-0 px-0 py-1 overflow-x-auto scrollbar-none">
+      <div className="flex items-stretch justify-around gap-0 px-1 py-1">
         {items.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.end as any}
-            className="flex flex-col items-center justify-center gap-0.5 rounded-md px-1 py-2 flex-1 min-w-0 text-[10px] text-muted-foreground"
+            className="flex flex-col items-center justify-center gap-0.5 rounded-md px-2 py-2 flex-1 min-w-0 text-[10px] text-muted-foreground"
             activeClassName="bg-muted text-foreground"
           >
-            <item.icon className="h-4 w-4 shrink-0" />
-            <span className="truncate w-full text-center">{item.label}</span>
+            <item.icon className="h-5 w-5 shrink-0" />
+            <span className="truncate w-full text-center leading-tight">{item.label}</span>
           </NavLink>
         ))}
       </div>
