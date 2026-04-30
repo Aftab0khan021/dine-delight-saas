@@ -99,7 +99,19 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html, body {
+    @apply w-full min-h-screen;
+    overflow-x: hidden;
+  }
+
   body {
     @apply bg-background text-foreground;
+  }
+
+  #root {
+    width: 100%;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
   }
 }

@@ -55,7 +55,7 @@ function SuperAdminShell() {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-background">
+      <div className="flex flex-1 w-full min-h-screen bg-background">
 
         {/* Mobile sidebar backdrop */}
         {mobileSidebarOpen && (
@@ -90,7 +90,7 @@ function SuperAdminShell() {
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col w-full">
-          <header className="border-b shrink-0 sticky top-0 z-30 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <header className="border-b shrink-0 sticky top-0 z-30 w-full bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <div className="flex h-12 items-center justify-between px-3 sm:px-4">
               <div className="flex items-center gap-2">
                 {/* Mobile hamburger */}
@@ -117,7 +117,7 @@ function SuperAdminShell() {
             </div>
           </header>
 
-          <main className="flex-1 min-w-0 w-full overflow-y-auto p-4 md:p-6 lg:p-8">
+          <main className="flex-1 min-w-0 w-full p-4 md:p-6 lg:p-8">
             <Outlet />
           </main>
         </div>

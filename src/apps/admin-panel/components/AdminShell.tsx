@@ -286,7 +286,7 @@ export function AdminShell({ children }: PropsWithChildren) {
 
   // CASE 3: Normal Dashboard (Has Role & Restaurant)
   return (
-    <div className="min-h-screen w-full bg-muted/10">
+    <div className="flex-1 flex flex-col w-full min-h-screen bg-muted/10">
 
       {/* --- MOBILE SIDEBAR OVERLAY (backdrop) --- */}
       {mobileSidebarOpen && (
@@ -316,7 +316,7 @@ export function AdminShell({ children }: PropsWithChildren) {
       </div>
 
       {/* --- HEADER --- */}
-      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-30 w-full border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-14 items-center gap-2 px-3 sm:px-4 lg:px-8">
 
           {/* Mobile Hamburger */}
@@ -469,12 +469,12 @@ export function AdminShell({ children }: PropsWithChildren) {
       </header>
 
       {/* Main Content Layout */}
-      <div className="flex w-full min-h-[calc(100vh-3.5rem)]">
+      <div className="flex flex-1 w-full min-h-[calc(100vh-3.5rem)]">
         <div className="hidden md:block shrink-0">
           <AdminSidebar />
         </div>
 
-        <main className="flex-1 min-w-0 w-full p-4 sm:p-6 lg:p-8 pb-20 md:pb-8 overflow-y-auto">
+        <main className="flex-1 min-w-0 w-full p-4 sm:p-6 lg:p-8 pb-20 md:pb-8">
           {children}
         </main>
       </div>
