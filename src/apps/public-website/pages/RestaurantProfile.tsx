@@ -197,7 +197,7 @@ export default function RestaurantProfile() {
 
       {/* Footer */}
       <footer className="border-t py-8 text-center text-sm text-muted-foreground bg-muted/30">
-        &copy; {new Date().getFullYear()} {restaurant.name}. Powered by Project Blueprint.
+        &copy; {new Date().getFullYear()} {restaurant.name}. Powered by Dine Delight.
       </footer>
     </div>
   );
