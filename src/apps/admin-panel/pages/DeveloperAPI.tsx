@@ -16,7 +16,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Copy, Trash2, Key, Globe, Webhook, CheckCircle, XCircle, ExternalLink } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+// Use app's own domain for API docs — hides internal Supabase project ID
+const API_BASE = `${window.location.origin}/api/v1`;
 
 function generateApiKey(): string {
   const bytes = new Uint8Array(32);
@@ -154,8 +155,8 @@ export default function DeveloperAPI() {
     toast({ title: `${label} copied!` });
   };
 
-  const menuApiUrl = `${SUPABASE_URL}/functions/v1/api-menu`;
-  const orderApiUrl = `${SUPABASE_URL}/functions/v1/api-order`;
+  const menuApiUrl = `${API_BASE}/menu`;
+  const orderApiUrl = `${API_BASE}/order`;
 
   return (
     <div className="flex flex-col gap-6 w-full">
