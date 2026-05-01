@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, ExternalLink, Globe, Image as ImageIcon, Palette, Save, Store, X, Phone, Mail, Clock, DollarSign, Upload, Loader2 } from "lucide-react";
+import { Copy, ExternalLink, Globe, Image as ImageIcon, Palette, Save, Store, X, Phone, Mail, Clock, DollarSign, Upload, Loader2, MapPin } from "lucide-react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -34,6 +34,8 @@ const formSchema = z.object({
   description: z.string().trim().max(1000).optional().or(z.literal("")),
   contact_email: z.string().trim().email("Enter a valid email").max(255).optional().or(z.literal("")),
   contact_phone: z.string().trim().max(40).optional().or(z.literal("")),
+  address: z.string().trim().max(500).optional().or(z.literal("")),
+  google_maps_url: z.string().trim().max(2000).optional().or(z.literal("")),
   logo_url: z.string().trim().max(2000).optional().or(z.literal("")),
   cover_image_url: z.string().trim().max(2000).optional().or(z.literal("")),
   primary_color: hexSchema,
@@ -99,6 +101,8 @@ export default function AdminBranding() {
       description: "",
       contact_email: "",
       contact_phone: "",
+      address: "",
+      google_maps_url: "",
       logo_url: "",
       cover_image_url: "",
       primary_color: "#000000",
@@ -118,6 +122,8 @@ export default function AdminBranding() {
         logo_url: restaurantData.logo_url || "",
         contact_email: s.contact_email || "",
         contact_phone: s.contact_phone || "",
+        address: s.address || "",
+        google_maps_url: s.google_maps_url || "",
         cover_image_url: s.cover_image_url || "",
         primary_color: s.theme?.primary_color || "#000000",
         accent_color: s.theme?.accent_color || "#ffffff",
@@ -144,6 +150,8 @@ export default function AdminBranding() {
         ...currentSettings,
         contact_email: values.contact_email || null,
         contact_phone: values.contact_phone || null,
+        address: values.address || null,
+        google_maps_url: values.google_maps_url || null,
         cover_image_url: values.cover_image_url || null,
         theme: {
           ...(currentSettings.theme ?? {}),
@@ -289,6 +297,32 @@ export default function AdminBranding() {
                   <Label>Contact Phone</Label>
                   <Input {...form.register("contact_phone")} placeholder="+1 (555) 000-0000" />
                 </div>
+              </div>
+
+              {/* Address / Location */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  Restaurant Address
+                </Label>
+                <Textarea
+                  {...form.register("address")}
+                  placeholder="123 Main Street, City, State, ZIP Code"
+                  className="h-16 resize-none"
+                />
+                <p className="text-xs text-muted-foreground">Full address shown on your public restaurant page</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  Google Maps Link (optional)
+                </Label>
+                <Input
+                  {...form.register("google_maps_url")}
+                  placeholder="https://maps.google.com/..."
+                />
+                <p className="text-xs text-muted-foreground">Paste a Google Maps link so customers can get directions</p>
               </div>
 
               <div className="space-y-2">

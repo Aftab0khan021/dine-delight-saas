@@ -184,13 +184,26 @@ export default function RestaurantProfile() {
           </div>
 
           {/* Location */}
-          <div className="p-6 bg-card border rounded-2xl flex flex-col items-center text-center gap-3 shadow-sm">
-            <MapPin className="h-8 w-8 text-primary/60" />
-            <h3 className="font-semibold">Location</h3>
-            <p className="text-sm text-muted-foreground">
-              {settings?.address || "Address not available"}
-            </p>
-          </div>
+          {settings?.address && (
+            <div className="p-6 bg-card border rounded-2xl flex flex-col items-center text-center gap-3 shadow-sm">
+              <MapPin className="h-8 w-8 text-primary/60" />
+              <h3 className="font-semibold">Location</h3>
+              <p className="text-sm text-muted-foreground">
+                {settings.address}
+              </p>
+              {settings?.google_maps_url && (
+                <a
+                  href={settings.google_maps_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline mt-1"
+                >
+                  <MapPin className="h-3.5 w-3.5" />
+                  Get Directions
+                </a>
+              )}
+            </div>
+          )}
         </div>
 
       </div>
