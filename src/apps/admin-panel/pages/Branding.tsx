@@ -358,7 +358,9 @@ export default function AdminBranding() {
                           <X className="mr-1 h-3.5 w-3.5" /> Remove
                         </Button>
                       </div>
-                      <Input {...form.register('logo_url')} placeholder="https://..." className="text-xs h-8" />
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <ImageIcon className="h-3 w-3" /> Image uploaded
+                      </p>
                     </div>
                   </div>
                 ) : (
@@ -422,7 +424,9 @@ export default function AdminBranding() {
                         <X className="mr-1 h-3.5 w-3.5" /> Remove
                       </Button>
                     </div>
-                    <Input {...form.register('cover_image_url')} placeholder="https://..." className="text-xs h-8" />
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <ImageIcon className="h-3 w-3" /> Image uploaded
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-2">
