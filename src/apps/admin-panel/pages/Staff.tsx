@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { MoreHorizontal, RefreshCw, Shield, UserPlus, UserX, AlertCircle } from "lucide-react";
+import { MoreHorizontal, RefreshCw, Shield, UserPlus, UserX, AlertCircle, Trash2 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
@@ -277,6 +277,39 @@ export default function AdminStaff() {
     }
   });
 
+  const cancelInviteMutation = useMutation({
+    mutationFn: async ({ id, email }: { id: string; email: string }) => {
+      if (!restaurant?.id) throw new Error("Missing restaurant");
+
+      // Delete the staff_invites row
+      const { error: deleteError } = await supabase
+        .from("staff_invites")
+        .delete()
+        .eq("id", id);
+
+      if (deleteError) throw deleteError;
+
+      // Also expire any matching invitation tokens
+      await supabase
+        .from("invitation_tokens")
+        .update({ used_at: new Date().toISOString() })
+        .eq("email", email)
+        .eq("restaurant_id", restaurant.id)
+        .is("used_at", null);
+    },
+    onSuccess: (_, variables) => {
+      toast({ title: "Invitation cancelled", description: `Revoked invite for ${variables.email}` });
+      qc.invalidateQueries({ queryKey: ["admin", "staff"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to cancel invitation.",
+        variant: "destructive"
+      });
+    }
+  });
+
   // --- 3. Merging Data for the UI ---
   const tableData = useMemo(() => {
     const active = (staffQuery.data || []).map(s => ({
@@ -425,9 +458,17 @@ export default function AdminStaff() {
 
                               {/* Actions for INVITED users */}
                               {s.type === 'invited' && (
-                                <DropdownMenuItem onClick={() => resendInviteMutation.mutate({ id: s.id, email: s.contact })}>
-                                  <RefreshCw className="mr-2 h-4 w-4" /> Resend invite
-                                </DropdownMenuItem>
+                                <>
+                                  <DropdownMenuItem onClick={() => resendInviteMutation.mutate({ id: s.id, email: s.contact })}>
+                                    <RefreshCw className="mr-2 h-4 w-4" /> Resend invite
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="text-destructive"
+                                    onClick={() => cancelInviteMutation.mutate({ id: s.id, email: s.contact })}
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" /> Cancel invite
+                                  </DropdownMenuItem>
+                                </>
                               )}
                             </DropdownMenuContent>
                           </DropdownMenu>

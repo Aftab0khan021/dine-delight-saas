@@ -152,13 +152,37 @@ serve(async (req) => {
     }
 
     if (existingUser) {
+      // If this is a resend/new invite for someone who already has an account,
+      // they should just log in instead.
       return new Response(
-        JSON.stringify({ error: "User with this email already exists" }),
+        JSON.stringify({ error: "A user with this email already exists. They can log in directly." }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 400,
         },
       );
+    }
+
+    // ── RESEND FLOW ──
+    // If action === "resend", expire the old token and continue to create a new one.
+    if (action === "resend") {
+      // Mark all old tokens for this email+restaurant as expired
+      await supabase
+        .from("invitation_tokens")
+        .update({ used_at: new Date().toISOString() })
+        .eq("email", email)
+        .eq("restaurant_id", targetRestaurantId)
+        .is("used_at", null);
+
+      // Update existing staff_invites to 'expired'
+      await supabase
+        .from("staff_invites")
+        .update({ status: "expired" })
+        .eq("email", email)
+        .eq("restaurant_id", targetRestaurantId)
+        .eq("status", "pending");
+
+      console.log("🔁 Resend: old tokens expired, creating new ones");
     }
 
     // Enforce staff limit on the backend as well
@@ -267,7 +291,7 @@ serve(async (req) => {
 
     // Generate secure invitation token
     const invitationToken = crypto.randomUUID();
-    const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes from now
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     console.log("🔑 Generated token:", invitationToken);
     console.log("⏰ Expires at:", expiresAt.toISOString());
@@ -375,7 +399,7 @@ serve(async (req) => {
     
     <a href="${invitationLink}" class="button">Accept Invitation</a>
     
-    <p class="expiry">⏰ This invitation expires in 30 minutes.</p>
+    <p class="expiry">⏰ This invitation expires in 24 hours.</p>
     
     <p class="footer">
       If you didn't expect this invitation, you can safely ignore this email.
@@ -470,6 +494,7 @@ serve(async (req) => {
           email,
           restaurant_id: targetRestaurantId,
           invited_by: user.id,
+          role: effectiveRole,
           status: 'pending',
           token_hash: tokenHash,
           expires_at: expiresAt.toISOString(),
