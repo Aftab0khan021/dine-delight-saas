@@ -82,6 +82,12 @@ export default function PublicMenu() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerName, setCustomerName] = useState("");
 
+  // Stable callback for Turnstile — avoids re-render loops inside Drawer portal
+  const handleTurnstileSuccess = useCallback((token: string) => {
+    setTurnstileToken(token);
+    setCheckoutError(null);
+  }, []);
+
   // Smart menu ranking
   const [rankedIds, setRankedIds] = useState<string[] | null>(null);
   const [popularIds, setPopularIds] = useState<string[]>([]);
@@ -581,18 +587,34 @@ export default function PublicMenu() {
                   </div>
                 </div>
 
-                <Turnstile key="order-turnstile"
-                  onSuccess={(token) => { setTurnstileToken(token); setCheckoutError(null); }}
-                  className="mt-2"
-                />
+                {/* Security check */}
+                {!turnstileToken ? (
+                  <div className="space-y-1">
+                    <Turnstile
+                      onSuccess={handleTurnstileSuccess}
+                      action="place_order"
+                      className="mt-2 flex justify-center"
+                    />
+                    <p className="text-xs text-center text-muted-foreground">Complete security check to place order</p>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-xs text-green-600 justify-center py-1">
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Security verified
+                  </div>
+                )}
 
                 <Button
                   disabled={activeCart.items.length === 0 || placingOrder || !restaurantQuery.data?.id
+                    || !turnstileToken
                     || (useCollabCart && !collabCart.isLeader)}
                   onClick={placeOrder}
                 >
-                  {placingOrder ? "Placing…" :
-                    useCollabCart && !collabCart.isLeader ? "Waiting for table leader…" :
+                  {placingOrder ? "Placing\u2026" :
+                    useCollabCart && !collabCart.isLeader ? "Waiting for table leader\u2026" :
+                    !turnstileToken ? "Verifying\u2026" :
                     "Place order"}
                 </Button>
                 {checkoutError ? (
