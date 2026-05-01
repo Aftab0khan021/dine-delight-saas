@@ -288,7 +288,7 @@ export default function AdminAuth() {
                             onChange={(e) => setForgotEmail(e.target.value)}
                             required
                             className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                            placeholder="pafshan940@gmail.com"
+                            placeholder="you@example.com"
                           />
                         </div>
                         <div className="flex gap-2">

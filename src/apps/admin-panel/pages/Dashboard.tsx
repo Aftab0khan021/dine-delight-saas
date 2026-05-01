@@ -76,15 +76,18 @@ export default function AdminDashboard() {
   const analyticsEnabled = isFeatureEnabled('analytics');
 
   // --- 1. Data Fetching (From Repo B) ---
+  // Use today's date string as key so memos refresh at midnight
+  const todayKey = new Date().toDateString();
+
   const { startISO, endISO } = useMemo(() => {
     const start = startOfDay(new Date());
     const end = addDays(start, 1);
     return { startISO: start.toISOString(), endISO: end.toISOString() };
-  }, []);
+  }, [todayKey]);
 
   // Fetch Today's Orders for KPIs
   const todayOrdersQuery = useQuery({
-    queryKey: ["admin", "dashboard", restaurant?.id, "todayOrders"],
+    queryKey: ["admin", "dashboard", restaurant?.id, "todayOrders", todayKey],
     enabled: !!restaurant?.id,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -99,7 +102,7 @@ export default function AdminDashboard() {
   });
 
   // Fetch Latest 5 Orders from Last 24 Hours for the List
-  const last24hStart = useMemo(() => subHours(new Date(), 24).toISOString(), []);
+  const last24hStart = useMemo(() => subHours(new Date(), 24).toISOString(), [todayKey]);
 
   const latestOrdersQuery = useQuery({
     queryKey: ["admin", "dashboard", restaurant?.id, "latestOrders"],

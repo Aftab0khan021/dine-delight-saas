@@ -11,7 +11,7 @@ export default function Home() {
             <Link to="/admin/auth">
               <Button variant="outline" size="sm">Restaurant Login</Button>
             </Link>
-            <Link to="/super-admin/auth">
+            <Link to="/superadmin/auth">
               <Button variant="ghost" size="sm">Super-Admin</Button>
             </Link>
           </nav>
@@ -30,11 +30,11 @@ export default function Home() {
             <Link to="/admin/auth">
               <Button size="lg" className="w-full sm:w-auto">Get Started</Button>
             </Link>
-            <Button size="lg" variant="outline" className="w-full sm:w-auto">Learn More</Button>
+            <Button size="lg" variant="outline" className="w-full sm:w-auto" onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}>Learn More</Button>
           </div>
         </section>
 
-        <section className="bg-muted py-12 sm:py-20">
+        <section id="features" className="bg-muted py-12 sm:py-20">
           <div className="container mx-auto px-4">
             <h3 className="text-2xl sm:text-3xl font-bold text-center mb-8 sm:mb-12">Features</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 sm:gap-8">
@@ -63,7 +63,7 @@ export default function Home() {
 
       <footer className="border-t py-6 sm:py-8">
         <div className="container mx-auto px-4 text-center text-muted-foreground text-sm">
-          <p>&copy; 2024 Restaurant SaaS. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} Dine Delight. All rights reserved.</p>
         </div>
       </footer>
     </div>

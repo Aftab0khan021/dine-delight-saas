@@ -10,6 +10,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 export function SentryTest() {
     const [count, setCount] = useState(0);
 
+    // Only render in development mode
+    if (!import.meta.env.DEV) return null;
+
     const throwError = () => {
         throw new Error("Test error from Sentry Test Component");
     };

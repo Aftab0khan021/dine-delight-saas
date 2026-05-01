@@ -25,7 +25,7 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
     const [loading, setLoading] = useState(true);
 
     const isAdmin = useMemo(() => {
-        return role === "restaurant_admin" || role === "owner";
+        return role === "restaurant_admin" || role === "super_admin";
     }, [role]);
 
     const loadPermissions = useCallback(async () => {

@@ -54,7 +54,7 @@ export default function RestaurantProfile() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("restaurants")
-        .select("*")
+        .select("id, name, slug, logo_url, description, settings, is_holiday_mode, holiday_mode_message, operating_hours")
         .eq("slug", slug)
         .maybeSingle();
 

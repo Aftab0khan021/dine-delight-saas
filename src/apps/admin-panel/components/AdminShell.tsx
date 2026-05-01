@@ -164,6 +164,18 @@ export function AdminShell({ children }: PropsWithChildren) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No user");
 
+      // Check slug uniqueness before creating
+      const { data: existingSlug } = await supabase
+        .from("restaurants")
+        .select("id")
+        .eq("slug", newRestSlug)
+        .maybeSingle();
+
+      if (existingSlug) {
+        toast({ title: "Slug already taken", description: "Please choose a different URL slug.", variant: "destructive" });
+        return;
+      }
+
       const { data: restData, error: restError } = await supabase
         .from("restaurants")
         .insert({
@@ -421,9 +433,9 @@ export function AdminShell({ children }: PropsWithChildren) {
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-xs justify-center text-primary font-medium"
-                onClick={() => navigate("/admin/activity" as any)}
+                onClick={() => navigate("/admin/orders")}
               >
-                View Activity Log
+                View All Orders
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

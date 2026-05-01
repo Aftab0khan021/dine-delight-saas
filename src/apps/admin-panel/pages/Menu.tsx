@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import {
@@ -380,8 +380,8 @@ export default function AdminMenu() {
           <p className="mt-1 text-sm text-muted-foreground">Manage your food and drink offerings.</p>
           {menuItemsLimit !== undefined && (
             <p className="mt-2 text-sm font-medium">
-              Menu Items: {currentMenuItems} / {isUnlimited ? 'âˆž' : menuItemsLimit}
-              {isMenuAtLimit && <span className="text-destructive ml-2">â€¢ Limit reached</span>}
+              Menu Items: {currentMenuItems} / {isUnlimited ? '\u221E' : menuItemsLimit}
+              {isMenuAtLimit && <span className="text-destructive ml-2">\u2022 Limit reached</span>}
             </p>
           )}
         </div>
@@ -526,6 +526,7 @@ export default function AdminMenu() {
         data={editItem}
         categories={categories}
         restaurantId={restaurant?.id || ""}
+        currencyCode={currencyCode}
         onSave={(vals: any) => saveItem.mutate(vals)}
         onDelete={(id: string) => deleteItem.mutate(id)}
       />
@@ -537,7 +538,7 @@ export default function AdminMenu() {
 function CategorySheet({ open, onOpenChange, data, onSave, onDelete }: any) {
   const form = useForm();
 
-  useMemo(() => {
+  useEffect(() => {
     if (open) {
       form.reset({
         name: data?.name || "",
@@ -579,30 +580,27 @@ function CategorySheet({ open, onOpenChange, data, onSave, onDelete }: any) {
 }
 
 // --- Subcomponent: Item Sheet ---
-function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave, onDelete }: any) {
+function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currencyCode, onSave, onDelete }: any) {
   const form = useForm();
   const [uploading, setUploading] = useState(false);
 
-  // Fetch restaurant currency
-  const { data: restaurantData } = useQuery({
-    queryKey: ['restaurant', restaurantId],
-    enabled: !!restaurantId,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('restaurants')
-        .select('currency_code')
-        .eq('id', restaurantId)
-        .single();
-      return data;
-    }
-  });
-
-  const currencyCode = restaurantData?.currency_code || 'INR';
-
-  const handleReplaceImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, upsert = false) => {
     if (!e.target.files?.length) return;
 
     const file = e.target.files[0];
+
+    // Validate file type
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    const maxSizeBytes = 5 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      return;
+    }
+
     const fileExt = file.name.split(".").pop();
     const fileName = `${crypto.randomUUID()}.${fileExt}`;
 
@@ -610,31 +608,7 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
     try {
       const { error } = await supabase.storage
         .from("menu-items")
-        .upload(fileName, file, { upsert: true });
-
-      if (error) throw error;
-
-      const { data } = supabase.storage
-        .from("menu-items")
-        .getPublicUrl(fileName);
-
-      form.setValue("image_url", data.publicUrl, { shouldDirty: true });
-    } finally {
-      setUploading(false);
-    }
-  };
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files?.length) return;
-
-    const file = e.target.files[0];
-    const fileExt = file.name.split(".").pop();
-    const fileName = `${crypto.randomUUID()}.${fileExt}`;
-
-    setUploading(true);
-    try {
-      const { error } = await supabase.storage
-        .from("menu-items")
-        .upload(fileName, file);
+        .upload(fileName, file, { upsert });
 
       if (error) throw error;
 
@@ -648,7 +622,7 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
     }
   };
 
-  useMemo(() => {
+  useEffect(() => {
     if (open) {
       form.reset({
         name: data?.name || "",
@@ -714,7 +688,7 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
             <Input
               type="file"
               accept="image/png, image/jpeg, image/webp"
-              onChange={handleImageUpload}
+              onChange={(e) => handleImageUpload(e, false)}
               disabled={uploading}
             />
 
@@ -736,7 +710,7 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
                 <Input
                   type="file"
                   accept="image/png, image/jpeg, image/webp"
-                  onChange={handleReplaceImage}
+                  onChange={(e) => handleImageUpload(e, true)}
                   disabled={uploading}
                 />
               </div>
@@ -764,7 +738,6 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
           </SheetFooter>
         </form>
 
-        {/* Variants & Add-ons */}
         {/* Variants & Add-ons */}
         <div className="space-y-4 mt-6 pt-6 border-t">
           <h3 className="font-medium">Variants & Add-ons</h3>

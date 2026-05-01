@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,8 +44,7 @@ export default function TrackOrder() {
   const [items, setItems] = useState<OrderItem[]>([]);
 
   // 1. Fetch Order (Secure)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const fetchOrder = async (tToken?: string) => {
+  const fetchOrder = useCallback(async (tToken?: string) => {
     if (!token) return;
     // Don't set loading on updates, only initial
     if (!order) setLoading(true);
@@ -79,17 +78,13 @@ export default function TrackOrder() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token, order, toast]);
 
   useEffect(() => {
     if (!token) {
       setError("No order token provided.");
       return;
     }
-    // Initial fetch if we have a turnstile token OR if we decide to skip turnstile for polling.
-    // For initial load, we might still want Turnstile if we want to prevent scraping?
-    // But since we removed mandatory check in backend, we can just fetch.
-    // Let's TRY to fetch immediately. If backend allows it, great.
     fetchOrder();
 
     // Setup Polling (every 15 seconds)
@@ -98,7 +93,7 @@ export default function TrackOrder() {
     }, 15000);
 
     return () => clearInterval(interval);
-  }, [token]);
+  }, [token, fetchOrder]);
 
   // Handle Turnstile Success (Optional Enhancement: If we want to enforce it later)
   useEffect(() => {
@@ -125,7 +120,6 @@ export default function TrackOrder() {
       </div>
     );
   }
-  if (error) return <div className="h-screen flex flex-col items-center justify-center gap-4 text-red-500"><p>{error}</p><Button asChild variant="outline"><Link to="/">Return Home</Link></Button></div>;
   if (!order) return null;
 
   // Status Logic

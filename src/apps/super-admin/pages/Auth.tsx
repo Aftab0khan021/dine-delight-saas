@@ -43,13 +43,31 @@ export default function SuperAdminAuth() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data: signInData, error } = await supabase.auth.signInWithPassword({
         email,
         password,
         options: { captchaToken: turnstileToken }
       });
 
       if (error) throw error;
+
+      // Verify user has super_admin role
+      const { data: roleData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", signInData.user.id)
+        .eq("role", "super_admin")
+        .maybeSingle();
+
+      if (!roleData) {
+        await supabase.auth.signOut();
+        toast({
+          title: "Access Denied",
+          description: "You do not have super admin privileges.",
+          variant: "destructive",
+        });
+        return;
+      }
 
       toast({
         title: "Success",
