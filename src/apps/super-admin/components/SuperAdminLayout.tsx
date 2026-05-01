@@ -84,12 +84,12 @@ function SuperAdminShell() {
           </div>
         </div>
 
-        {/* Desktop sidebar */}
-        <div className="hidden md:block">
+        {/* Desktop sidebar — sticky, never scrolls with page */}
+        <div className="hidden md:block shrink-0 sticky top-0 h-screen self-start">
           <SuperAdminSidebar />
         </div>
 
-        <div className="flex min-w-0 flex-1 flex-col w-full">
+        <div className="flex min-w-0 flex-1 flex-col w-full overflow-hidden">
           <header className="border-b shrink-0 sticky top-0 z-30 w-full bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <div className="flex h-12 items-center justify-between px-3 sm:px-4">
               <div className="flex items-center gap-2">
@@ -117,7 +117,7 @@ function SuperAdminShell() {
             </div>
           </header>
 
-          <main className="flex-1 min-w-0 w-full p-4 md:p-6 lg:p-8">
+          <main className="flex-1 min-w-0 w-full p-4 md:p-6 lg:p-8 overflow-y-auto">
             <Outlet />
           </main>
         </div>
