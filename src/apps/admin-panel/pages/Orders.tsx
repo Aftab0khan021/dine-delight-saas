@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addDays, startOfDay, subHours, subDays, subMonths, subQuarters, subYears } from "date-fns";
 import { Search, Lock, Bell, BellOff, Printer, ChevronLeft, ChevronRight } from "lucide-react";
@@ -10,7 +10,7 @@ import { useFeatureAccess } from "../hooks/useFeatureAccess";
 import { orderNotificationService } from "../services/OrderNotificationService";
 import { ManualDiscountDialog } from "../components/orders/ManualDiscountDialog";
 import { generateKOTHtml } from "../components/orders/KOTTemplate";
-import { shortId } from "@/lib/formatting";
+import { shortId, formatMoney } from "@/lib/formatting";
 
 // UI Components
 import { Badge } from "@/components/ui/badge";
@@ -111,7 +111,7 @@ function OrderCard({
         )}
         {order.discount_cents > 0 && (
           <Badge variant="destructive" className="text-[10px] h-5 px-1.5">
-            -${(order.discount_cents / 100).toFixed(2)}
+            -${formatMoney(order.discount_cents, 'USD')}
             {/* {order.discount_reason && ` (${order.discount_reason})`} */}
           </Badge>
         )}
@@ -229,7 +229,18 @@ export default function AdminOrders() {
     return { startISO: start.toISOString(), endISO: now.toISOString() };
   }, [timeFilter]);
 
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(0);
+  }, [statusFilter, timeFilter, search]);
+
   // --- 1. Realtime Subscription ---
+  // Use a ref for notificationsEnabled to avoid tearing down the channel on toggle
+  const notificationsEnabledRef = useRef(notificationsEnabled);
+  useEffect(() => {
+    notificationsEnabledRef.current = notificationsEnabled;
+  }, [notificationsEnabled]);
+
   useEffect(() => {
     if (!restaurant?.id) return;
 
@@ -243,12 +254,12 @@ export default function AdminOrders() {
 
             // Show toast notification
             toast({
-              title: "🔔 New Order!",
+              title: "\uD83D\uDD14 New Order!",
               description: `Order ${shortId(newOrder.id)} received.${newOrder.table_label ? ` Table ${newOrder.table_label}` : ''}`
             });
 
             // Trigger sound and desktop notification if enabled
-            if (notificationsEnabled) {
+            if (notificationsEnabledRef.current) {
               // Fetch order items count for better notification
               const { data: items } = await supabase
                 .from("order_items")
@@ -269,7 +280,7 @@ export default function AdminOrders() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [restaurant?.id, notificationsEnabled, toast, qc]);
+  }, [restaurant?.id, toast, qc]);
 
   // --- 2. Data Fetching ---
   const ordersQuery = useQuery({

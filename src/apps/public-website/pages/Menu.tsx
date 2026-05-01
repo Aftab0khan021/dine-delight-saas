@@ -118,6 +118,7 @@ export default function PublicMenu() {
         .select("*")
         .eq("restaurant_id", restaurantId)
         .eq("is_active", true)
+        .is("deleted_at", null)
         .order("sort_order", { ascending: true });
 
       if (error) throw error;
@@ -203,14 +204,12 @@ export default function PublicMenu() {
     if (placingOrder) return;
     const restaurantId = restaurantQuery.data?.id;
     if (!restaurantId) return;
-    if (cart.items.length === 0) return;
+    if (activeCart.items.length === 0) return;
 
-    // TEMPORARY: Disable Turnstile requirement for testing
-    // TODO: Re-enable after fixing Turnstile loading issue
-    // if (!turnstileToken) {
-    //   setCheckoutError("Please complete the security check before placing your order.");
-    //   return;
-    // }
+    if (!turnstileToken) {
+      setCheckoutError("Please complete the security check before placing your order.");
+      return;
+    }
 
     setPlacingOrder(true);
     setCheckoutError(null);
@@ -270,11 +269,6 @@ export default function PublicMenu() {
   useEffect(() => {
     const restaurantId = restaurantQuery.data?.id;
     if (!restaurantId) return;
-    supabase.functions.invoke("smart-menu-rank", {
-      body: null,
-      headers: {},
-    }).catch(() => {});
-    // Use GET via fetch directly
     fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/smart-menu-rank?restaurant_id=${restaurantId}`, {
       headers: { "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
     })
@@ -587,12 +581,10 @@ export default function PublicMenu() {
                   </div>
                 </div>
 
-                {false && (
-                  <Turnstile key="order-turnstile"
-                    onSuccess={(token) => { setTurnstileToken(token); setCheckoutError(null); }}
-                    className="mt-2"
-                  />
-                )}
+                <Turnstile key="order-turnstile"
+                  onSuccess={(token) => { setTurnstileToken(token); setCheckoutError(null); }}
+                  className="mt-2"
+                />
 
                 <Button
                   disabled={activeCart.items.length === 0 || placingOrder || !restaurantQuery.data?.id
