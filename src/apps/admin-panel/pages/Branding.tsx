@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, ExternalLink, Globe, Image as ImageIcon, Palette, Save, Store, X, Phone, Mail, Clock, DollarSign, Upload, Loader2, MapPin } from "lucide-react";
+import { Copy, ExternalLink, Globe, Image as ImageIcon, Palette, Save, Store, X, Phone, Mail, Clock, DollarSign, Upload, Loader2, MapPin, Instagram, Facebook, Twitter, Youtube, MessageCircle, Star, Plus, Trash2, CalendarDays, Filter, Users } from "lucide-react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -80,6 +80,16 @@ export default function AdminBranding() {
   const [uploadingCover, setUploadingCover] = useState(false);
   const [maxVariants, setMaxVariants] = useState(5);
 
+  // --- NEW: Enhancement settings (stored in settings JSONB) ---
+  const [socialLinks, setSocialLinks] = useState({ instagram: "", facebook: "", twitter: "", youtube: "" });
+  const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [testimonials, setTestimonials] = useState<{ name: string; text: string; rating: number }[]>([]);
+  const [whatsappNumber, setWhatsappNumber] = useState("");
+  const [reservationEnabled, setReservationEnabled] = useState(false);
+  const [totalTables, setTotalTables] = useState(10);
+  const [dietaryFiltersEnabled, setDietaryFiltersEnabled] = useState(false);
+  const [uploadingGallery, setUploadingGallery] = useState(false);
+
   // --- Data Fetching ---
   const { data: restaurantData, isLoading } = useQuery({
     queryKey: ["admin", "restaurant", restaurant?.id],
@@ -137,6 +147,15 @@ export default function AdminBranding() {
       setIsHolidayMode(restaurantData.is_holiday_mode || false);
       setHolidayMessage(restaurantData.holiday_mode_message || "");
       setMaxVariants(restaurantData.max_variants_per_item || 5);
+
+      // Sync enhancement settings
+      setSocialLinks(s.social_links || { instagram: "", facebook: "", twitter: "", youtube: "" });
+      setGalleryImages(Array.isArray(s.gallery_images) ? s.gallery_images : []);
+      setTestimonials(Array.isArray(s.testimonials) ? s.testimonials : []);
+      setWhatsappNumber(s.whatsapp_number || "");
+      setReservationEnabled(!!s.reservation_enabled);
+      setTotalTables(s.total_tables || 10);
+      setDietaryFiltersEnabled(!!s.dietary_filters_enabled);
     }
   }, [restaurantData]);
 
@@ -158,6 +177,14 @@ export default function AdminBranding() {
           primary_color: values.primary_color || null,
           accent_color: values.accent_color || null,
         },
+        // Enhancement settings
+        social_links: socialLinks,
+        gallery_images: galleryImages,
+        testimonials,
+        whatsapp_number: whatsappNumber || null,
+        reservation_enabled: reservationEnabled,
+        total_tables: totalTables,
+        dietary_filters_enabled: dietaryFiltersEnabled,
       };
 
       const { error } = await supabase.from("restaurants").update({
@@ -574,6 +601,183 @@ export default function AdminBranding() {
                 maxVariantsPerItem={maxVariants}
                 onMaxVariantsChange={setMaxVariants}
               />
+            </CardContent>
+          </Card>
+
+          {/* Card 5: Social Media Links */}
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Instagram className="h-4 w-4 text-muted-foreground" />
+                Social Media Links
+              </CardTitle>
+              <CardDescription>Add your social media profiles. They'll appear on your public page.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5 text-xs"><Instagram className="h-3.5 w-3.5" /> Instagram</Label>
+                  <Input value={socialLinks.instagram} onChange={e => setSocialLinks(p => ({ ...p, instagram: e.target.value }))} placeholder="https://instagram.com/..." />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5 text-xs"><Facebook className="h-3.5 w-3.5" /> Facebook</Label>
+                  <Input value={socialLinks.facebook} onChange={e => setSocialLinks(p => ({ ...p, facebook: e.target.value }))} placeholder="https://facebook.com/..." />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5 text-xs"><Twitter className="h-3.5 w-3.5" /> Twitter / X</Label>
+                  <Input value={socialLinks.twitter} onChange={e => setSocialLinks(p => ({ ...p, twitter: e.target.value }))} placeholder="https://x.com/..." />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5 text-xs"><Youtube className="h-3.5 w-3.5" /> YouTube</Label>
+                  <Input value={socialLinks.youtube} onChange={e => setSocialLinks(p => ({ ...p, youtube: e.target.value }))} placeholder="https://youtube.com/..." />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card 6: Photo Gallery */}
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                Photo Gallery
+              </CardTitle>
+              <CardDescription>Upload up to 8 photos of your food, ambiance, etc.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {galleryImages.map((url, i) => (
+                  <div key={i} className="relative group aspect-square rounded-lg overflow-hidden border bg-muted">
+                    <img src={url} alt={`Gallery ${i + 1}`} className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => setGalleryImages(prev => prev.filter((_, idx) => idx !== i))}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+                {galleryImages.length < 8 && (
+                  <label className="aspect-square rounded-lg border-2 border-dashed border-muted-foreground/25 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors">
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      disabled={uploadingGallery}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file || !restaurant?.id) return;
+                        if (file.size > 5 * 1024 * 1024) { toast({ title: "File too large", description: "Max 5MB", variant: "destructive" }); return; }
+                        setUploadingGallery(true);
+                        const ext = file.name.split('.').pop();
+                        const path = `gallery-${restaurant.id}-${Date.now()}.${ext}`;
+                        const { error: upErr } = await supabase.storage.from('menu-items').upload(path, file);
+                        if (upErr) { toast({ title: "Upload failed", variant: "destructive" }); setUploadingGallery(false); return; }
+                        const { data: urlData } = supabase.storage.from('menu-items').getPublicUrl(path);
+                        setGalleryImages(prev => [...prev, urlData.publicUrl]);
+                        setUploadingGallery(false);
+                        e.target.value = '';
+                      }}
+                    />
+                    {uploadingGallery ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : <Plus className="h-5 w-5 text-muted-foreground" />}
+                    <span className="text-[10px] text-muted-foreground">Add Photo</span>
+                  </label>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card 7: Customer Testimonials */}
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Star className="h-4 w-4 text-muted-foreground" />
+                Customer Testimonials
+              </CardTitle>
+              <CardDescription>Add up to 5 customer reviews to display on your public page.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {testimonials.map((t, i) => (
+                <div key={i} className="flex gap-2 items-start p-3 rounded-lg border bg-muted/20">
+                  <div className="flex-1 space-y-2">
+                    <Input value={t.name} placeholder="Customer name" onChange={e => setTestimonials(prev => prev.map((item, idx) => idx === i ? { ...item, name: e.target.value } : item))} />
+                    <Textarea value={t.text} placeholder="What did they say?" className="h-16 resize-none" onChange={e => setTestimonials(prev => prev.map((item, idx) => idx === i ? { ...item, text: e.target.value } : item))} />
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map(s => (
+                        <button key={s} type="button" onClick={() => setTestimonials(prev => prev.map((item, idx) => idx === i ? { ...item, rating: s } : item))}>
+                          <Star className={`h-4 w-4 ${s <= t.rating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'}`} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={() => setTestimonials(prev => prev.filter((_, idx) => idx !== i))}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              ))}
+              {testimonials.length < 5 && (
+                <Button type="button" variant="outline" size="sm" onClick={() => setTestimonials(prev => [...prev, { name: "", text: "", rating: 5 }])}>
+                  <Plus className="mr-1 h-3.5 w-3.5" /> Add Testimonial
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Card 8: WhatsApp & Reservations */}
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <MessageCircle className="h-4 w-4 text-muted-foreground" />
+                WhatsApp & Reservations
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <MessageCircle className="h-4 w-4 text-green-500" />
+                  WhatsApp Number
+                </Label>
+                <Input value={whatsappNumber} onChange={e => setWhatsappNumber(e.target.value)} placeholder="+91 9876543210" />
+                <p className="text-xs text-muted-foreground">A floating WhatsApp button will appear on your public pages</p>
+              </div>
+
+              <Separator />
+
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="space-y-0.5">
+                  <Label className="text-base flex items-center gap-2"><CalendarDays className="h-4 w-4" /> Table Reservations</Label>
+                  <p className="text-sm text-muted-foreground">Allow customers to book tables from your public page</p>
+                </div>
+                <Switch checked={reservationEnabled} onCheckedChange={setReservationEnabled} />
+              </div>
+
+              {reservationEnabled && (
+                <div className="space-y-2">
+                  <Label>Total Tables</Label>
+                  <Input type="number" min={1} max={100} value={totalTables} onChange={e => setTotalTables(Number(e.target.value))} />
+                  <p className="text-xs text-muted-foreground">Manage reservations from the Reservations page in the sidebar</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Card 9: Menu Filters */}
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Filter className="h-4 w-4 text-muted-foreground" />
+                Menu Features
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="space-y-0.5">
+                  <Label className="text-base">Dietary Filters</Label>
+                  <p className="text-sm text-muted-foreground">Show Veg/Non-Veg/Spicy filter buttons on your public menu</p>
+                </div>
+                <Switch checked={dietaryFiltersEnabled} onCheckedChange={setDietaryFiltersEnabled} />
+              </div>
             </CardContent>
           </Card>
 

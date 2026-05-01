@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/drawer";
 import { useToast } from "@/hooks/use-toast";
 import { CopyButton } from "@/apps/admin-panel/components/qr/CopyButton";
-import { Minus, Plus, ShoppingBag, Flame, Users } from "lucide-react";
+import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick } from "lucide-react";
 import { useRestaurantCart } from "../hooks/useRestaurantCart";
 import { useCollaborativeCart } from "../hooks/useCollaborativeCart";
 import { MenuItemDialog } from "../components/MenuItemDialog";
@@ -96,6 +96,9 @@ export default function PublicMenu() {
   const [upsellItems, setUpsellItems] = useState<any[]>([]);
   const [upsellOpen, setUpsellOpen] = useState(false);
   const [upsellForItem, setUpsellForItem] = useState<string | null>(null);
+
+  // Dietary filter state
+  const [dietaryFilter, setDietaryFilter] = useState<'all' | 'veg' | 'nonveg'>('all');
 
   const fetchUpsell = useCallback(async (itemId: string, restaurantId: string) => {
     const currencyCode = restaurantQuery.data?.currency_code || "USD";
@@ -353,8 +356,33 @@ export default function PublicMenu() {
             </p>
           </Card>
         ) : (
-          <div className="space-y-10">
-            {categoriesWithItems.map((category) => (
+          <div className="space-y-6">
+            {/* Dietary Filters */}
+            {(() => {
+              const s = restaurantQuery.data?.settings as any;
+              const enabled = s && typeof s === 'object' && s.dietary_filters_enabled;
+              if (!enabled) return null;
+              return (
+                <div className="flex gap-2 flex-wrap">
+                  <Button size="sm" variant={dietaryFilter === 'all' ? 'default' : 'outline'} className="rounded-full" onClick={() => setDietaryFilter('all')}>All</Button>
+                  <Button size="sm" variant={dietaryFilter === 'veg' ? 'default' : 'outline'} className="rounded-full text-green-600 border-green-200" onClick={() => setDietaryFilter('veg')}><Leaf className="mr-1 h-3.5 w-3.5" />Veg</Button>
+                  <Button size="sm" variant={dietaryFilter === 'nonveg' ? 'default' : 'outline'} className="rounded-full text-red-600 border-red-200" onClick={() => setDietaryFilter('nonveg')}><Drumstick className="mr-1 h-3.5 w-3.5" />Non-Veg</Button>
+                </div>
+              );
+            })()}
+
+            {categoriesWithItems.map((category) => {
+              // Apply dietary filter
+              const filteredItems = dietaryFilter === 'all' ? category.items : category.items.filter((item: any) => {
+                const name = (item.name || '').toLowerCase();
+                const desc = (item.description || '').toLowerCase();
+                const text = name + ' ' + desc;
+                if (dietaryFilter === 'veg') return text.includes('veg') && !text.includes('non-veg') && !text.includes('nonveg') || text.includes('paneer') || text.includes('dal') || text.includes('salad');
+                if (dietaryFilter === 'nonveg') return text.includes('chicken') || text.includes('mutton') || text.includes('fish') || text.includes('egg') || text.includes('prawn') || text.includes('meat') || text.includes('non-veg') || text.includes('nonveg');
+                return true;
+              });
+              if (filteredItems.length === 0) return null;
+              return (
               <section key={category.id} aria-labelledby={`cat-${category.id}`}>
                 <div className="flex items-baseline justify-between gap-3">
                   <div className="min-w-0">
@@ -373,7 +401,7 @@ export default function PublicMenu() {
                 </div>
 
                 <div className="mt-4 grid gap-3">
-                  {category.items.map((item) => (
+                  {filteredItems.map((item) => (
                     <Card key={item.id} className="p-4">
                       <div className="flex gap-4">
                         {item.image_url ? (
@@ -433,7 +461,8 @@ export default function PublicMenu() {
                   ))}
                 </div>
               </section>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -708,6 +737,17 @@ export default function PublicMenu() {
           </div>
         </div>
       )}
+      {/* WhatsApp Floating Button */}
+      {(() => {
+        const s = restaurantQuery.data?.settings as any;
+        const waNum = s && typeof s === 'object' ? s.whatsapp_number : null;
+        if (!waNum) return null;
+        return (
+          <a href={`https://wa.me/${waNum.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi! I'd like to place an order from ${restaurantQuery.data?.name || 'your restaurant'}`)}`} target="_blank" rel="noopener noreferrer" className="fixed bottom-24 right-4 z-40 h-14 w-14 rounded-full bg-green-500 text-white shadow-lg flex items-center justify-center hover:bg-green-600 hover:scale-110 transition-all" aria-label="Order via WhatsApp">
+            <MessageCircle className="h-7 w-7" />
+          </a>
+        );
+      })()}
     </main>
   );
 }

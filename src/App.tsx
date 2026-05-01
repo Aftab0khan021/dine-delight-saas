@@ -32,6 +32,7 @@ import AdminMarketing from "./apps/admin-panel/pages/Marketing";
 import AdminMenuInsights from "./apps/admin-panel/pages/MenuInsights";
 import AdminDeveloperAPI from "./apps/admin-panel/pages/DeveloperAPI";
 import AdminKitchenDashboard from "./apps/admin-panel/pages/KitchenDashboard";
+import AdminReservations from "./apps/admin-panel/pages/Reservations";
 
 // Super Admin
 import SuperAdminAuth from "./apps/super-admin/pages/Auth";
@@ -133,6 +134,7 @@ const App = () => (
             <Route path="insights" element={<AdminMenuInsights />} />
             <Route path="developer" element={<AdminDeveloperAPI />} />
             <Route path="kitchen" element={<AdminKitchenDashboard />} />
+            <Route path="reservations" element={<AdminReservations />} />
             {/* WhatsApp bot settings (from dev merge) */}
             <Route path="whatsapp" element={<AdminWhatsAppSettings />} />
           </Route>
