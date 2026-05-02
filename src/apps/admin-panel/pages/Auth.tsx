@@ -110,7 +110,7 @@ export default function AdminAuth() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -124,6 +124,24 @@ export default function AdminAuth() {
 
       if (error) throw error;
 
+      // Defensive: ensure profile exists even if trigger fails
+      if (data.user) {
+        const { data: existingProfile } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("id", data.user.id)
+          .maybeSingle();
+
+        if (!existingProfile) {
+          await supabase.from("profiles").insert({
+            id: data.user.id,
+            email,
+            full_name: fullName,
+            account_status: "pending",
+          }).then(() => {});
+        }
+      }
+
       toast({
         title: "Success",
         description: "Account created successfully! You can now sign in.",
@@ -134,7 +152,6 @@ export default function AdminAuth() {
         description: error.message,
         variant: "destructive",
       });
-      // Reset token on error
       setTurnstileToken("");
       if (window.turnstile && turnstileWidgetId) {
         window.turnstile.reset(turnstileWidgetId);
@@ -164,14 +181,31 @@ export default function AdminAuth() {
       });
 
       if (error) throw error;
+      if (!data.user) throw new Error("Failed to create account");
 
-      // 2. Create restaurant admin request
+      // 2. Ensure profile exists (trigger may fail due to CHECK constraints)
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", data.user.id)
+        .maybeSingle();
+
+      if (!existingProfile) {
+        await supabase.from("profiles").insert({
+          id: data.user.id,
+          email: email,
+          full_name: fullName,
+          account_status: "pending",
+        });
+      }
+
+      // 3. Create restaurant admin request
       const { error: requestError } = await supabase
         .from("restaurant_admin_requests")
         .insert({
-          user_id: data.user?.id,
+          user_id: data.user.id,
           restaurant_name: restaurantName,
-          restaurant_slug: restaurantName.toLowerCase().replace(/\s+/g, '-'),
+          restaurant_slug: restaurantName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
           business_type: businessType,
           phone: phone || null,
           status: 'pending'
@@ -184,9 +218,9 @@ export default function AdminAuth() {
         description: "Your application is pending approval. We'll email you once reviewed.",
       });
 
-      // Navigate to show pending screen
       navigate("/admin");
     } catch (error: any) {
+      console.error("Restaurant signup error:", error);
       toast({ title: "Error", description: error.message, variant: "destructive" });
       setTurnstileToken("");
       if (window.turnstile && turnstileWidgetId) {
