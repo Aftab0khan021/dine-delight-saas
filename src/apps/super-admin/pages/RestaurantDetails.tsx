@@ -471,7 +471,7 @@ export default function RestaurantDetails() {
                 <div className="flex gap-2">
                     <Button
                         variant="outline"
-                        onClick={() => navigate(`/superadmin/restaurants/${id}/ai-config`)}
+                        onClick={() => navigate(`/superadmin/restaurants/${id}/ai`)}
                     >
                         <Zap className="h-4 w-4 mr-2" />
                         AI Configuration
