@@ -142,11 +142,12 @@ export default function Restaurants() {
       // Combine
       const restaurants: Restaurant[] = data.map(r => {
         const sub = subs?.find(s => s.restaurant_id === r.id);
+        const planData = sub ? (sub as Record<string, any>).subscription_plans : undefined;
         return {
           ...r,
           subscription: sub ? {
             status: sub.status,
-            plan: (sub as any).subscription_plans ?? undefined,
+            plan: planData ?? undefined,
           } : undefined,
           user_roles: ownerEmails[r.id]
             ? [{ user: { email: ownerEmails[r.id] } }]
@@ -154,9 +155,17 @@ export default function Restaurants() {
         };
       });
 
+      // Apply plan filter (JS-side since plan comes from joined subscription data)
+      const filtered = planFilter !== 'all'
+        ? restaurants.filter(r => {
+            const planName = r.subscription?.plan?.name;
+            return planName && planName.toLowerCase().replace(/\s+/g, '-') === planFilter;
+          })
+        : restaurants;
+
       return {
-        restaurants,
-        total: count || 0,
+        restaurants: filtered,
+        total: planFilter !== 'all' ? filtered.length : (count || 0),
       };
     },
   });
@@ -229,16 +238,17 @@ export default function Restaurants() {
   const handleExportCSV = () => {
     if (!restaurantsData?.restaurants) return;
 
+    const escapeCSV = (val: string) => `"${val.replace(/"/g, '""')}"`;
     const csv = [
       ['Name', 'Slug', 'Status', 'Plan', 'Created', 'Last Active', 'Owner Email'].join(','),
       ...restaurantsData.restaurants.map(r => [
-        r.name,
-        r.slug,
-        r.status,
-        r.subscription?.plan?.name || 'None',
-        new Date(r.created_at).toLocaleDateString(),
-        r.last_active_at ? new Date(r.last_active_at).toLocaleDateString() : 'Never',
-        r.user_roles[0]?.user?.email || 'N/A',
+        escapeCSV(r.name),
+        escapeCSV(r.slug),
+        escapeCSV(r.status),
+        escapeCSV(r.subscription?.plan?.name || 'None'),
+        escapeCSV(new Date(r.created_at).toLocaleDateString()),
+        escapeCSV(r.last_active_at ? new Date(r.last_active_at).toLocaleDateString() : 'Never'),
+        escapeCSV(r.user_roles[0]?.user?.email || 'N/A'),
       ].join(',')),
     ].join('\n');
 
@@ -516,7 +526,7 @@ export default function Restaurants() {
             <Select value={linkParentId} onValueChange={setLinkParentId}>
               <SelectTrigger><SelectValue placeholder="Select parent kitchen" /></SelectTrigger>
               <SelectContent>
-                {(restaurantsData?.restaurants ?? []).filter((r: any) => r.id !== linkTargetId).map((r: any) => (
+                {(restaurantsData?.restaurants ?? []).filter(r => r.id !== linkTargetId).map(r => (
                   <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                 ))}
               </SelectContent>

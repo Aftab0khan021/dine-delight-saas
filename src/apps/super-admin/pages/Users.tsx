@@ -63,6 +63,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { format } from "date-fns";
 
 // Types
 type UserRow = {
@@ -71,7 +72,6 @@ type UserRow = {
     full_name: string | null;
     avatar_url: string | null;
     created_at: string;
-    last_sign_in_at: string | null;
     account_status: string;
     disabled_reason: string | null;
     roles: Array<{
@@ -130,10 +130,12 @@ export default function Users() {
         userEmail: string;
     }>({ open: false, action: "", userId: "", userEmail: "" });
     const [disableReason, setDisableReason] = useState("");
+    const [page, setPage] = useState(1);
+    const pageSize = 50;
 
     // Fetch all users with their roles
     const { data: users, isLoading } = useQuery({
-        queryKey: ["super-admin", "users"],
+        queryKey: ["super-admin", "users", page],
         queryFn: async () => {
             // Get all profiles with user roles
             const { data: profiles, error: profilesError } = await supabase
@@ -147,7 +149,8 @@ export default function Users() {
           account_status,
           disabled_reason
         `)
-                .order("created_at", { ascending: false });
+                .order("created_at", { ascending: false })
+                .range((page - 1) * pageSize, page * pageSize - 1);
 
             if (profilesError) throw profilesError;
 
@@ -178,7 +181,6 @@ export default function Users() {
                 return {
                     ...profile,
                     roles,
-                    last_sign_in_at: null, // Will be populated via RPC later
                 };
             });
 
@@ -374,7 +376,26 @@ export default function Users() {
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" size="icon">
+                    <Button variant="outline" size="icon" onClick={() => {
+                        if (!filteredUsers.length) return;
+                        const escapeCSV = (val: string) => `"${val.replace(/"/g, '""')}"`;
+                        const headers = ['Name', 'Email', 'Roles', 'Status', 'Created'];
+                        const rows = filteredUsers.map(u => [
+                            escapeCSV(u.full_name || 'No name'),
+                            escapeCSV(u.email),
+                            escapeCSV(u.roles.map(r => r.role === 'super_admin' ? 'Super Admin' : `${r.role} @ ${r.restaurant_name}`).join('; ') || 'No roles'),
+                            escapeCSV(u.account_status || 'active'),
+                            escapeCSV(u.created_at ? format(new Date(u.created_at), 'yyyy-MM-dd') : ''),
+                        ]);
+                        const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+                        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `users-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    }}>
                         <Download className="h-4 w-4" />
                     </Button>
                 </div>

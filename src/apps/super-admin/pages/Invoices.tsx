@@ -52,29 +52,18 @@ export default function SuperAdminInvoices() {
 
       const rows = (invoices ?? []) as InvoiceRow[];
       const restaurantIds = Array.from(new Set(rows.map((i) => i.restaurant_id)));
-      const subscriptionIds = Array.from(
-        new Set(rows.map((i) => i.subscription_id).filter(Boolean) as string[]),
-      );
 
-      const [{ data: restaurants, error: restaurantsError }, { data: subscriptions, error: subsError }] =
-        await Promise.all([
-          supabase.from("restaurants").select("id,name").in("id", restaurantIds),
-          // Included per requirements; used for future detail views, but still RLS-safe and read-only.
-          subscriptionIds.length
-            ? supabase.from("subscriptions").select("id").in("id", subscriptionIds)
-            : Promise.resolve({ data: [], error: null } as any),
-        ]);
+      const { data: restaurants, error: restaurantsError } = await supabase
+        .from("restaurants")
+        .select("id,name")
+        .in("id", restaurantIds);
 
       if (restaurantsError) throw restaurantsError;
-      if (subsError) throw subsError;
 
       const restaurantNameById = new Map<string, string>();
       for (const r of restaurants ?? []) restaurantNameById.set(r.id, r.name);
 
-      const subscriptionIdSet = new Set<string>();
-      for (const s of subscriptions ?? []) subscriptionIdSet.add(s.id);
-
-      return { invoices: rows, restaurantNameById, subscriptionIdSet };
+      return { invoices: rows, restaurantNameById };
     },
   });
 

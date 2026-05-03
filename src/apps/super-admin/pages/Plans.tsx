@@ -33,7 +33,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, GripVertical, Check, X, Code } from "lucide-react";
+import { Plus, Edit, Check, X, Code } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { SubscriptionPlan, PlanFeatures } from "../types/super-admin";
@@ -57,6 +57,7 @@ export default function Plans() {
         is_active: true,
     });
     const [showJsonEditor, setShowJsonEditor] = useState(false);
+    const [jsonError, setJsonError] = useState<string | null>(null);
 
     // Fetch plans
     const { data: plans, isLoading } = useQuery({
@@ -167,9 +168,9 @@ export default function Plans() {
     };
 
     const formatCurrency = (cents: number) => {
-        return new Intl.NumberFormat('en-US', {
+        return new Intl.NumberFormat('en-IN', {
             style: 'currency',
-            currency: 'USD',
+            currency: 'INR',
             minimumFractionDigits: 0,
         }).format(cents / 100);
     };
@@ -236,7 +237,7 @@ export default function Plans() {
 
                             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                                 <div className="space-y-2">
-                                    <Label htmlFor="price">Price (USD)</Label>
+                                    <Label htmlFor="price">Price (INR)</Label>
                                     <Input
                                         id="price"
                                         type="number"
@@ -305,13 +306,17 @@ export default function Plans() {
                                                 try {
                                                     const parsed = JSON.parse(e.target.value);
                                                     setFormData({ ...formData, features: parsed });
+                                                    setJsonError(null);
                                                 } catch (err) {
-                                                    // Invalid JSON, don't update
+                                                    setJsonError("Invalid JSON syntax");
                                                 }
                                             }}
                                             rows={12}
-                                            className="font-mono text-sm"
+                                            className={`font-mono text-sm ${jsonError ? 'border-destructive' : ''}`}
                                         />
+                                        {jsonError && (
+                                            <p className="text-xs text-destructive">{jsonError}</p>
+                                        )}
                                         <p className="text-xs text-muted-foreground">
                                             Advanced: Edit features as JSON. Use -1 for unlimited limits.
                                         </p>
@@ -404,7 +409,6 @@ export default function Plans() {
                         <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="w-[50px]"></TableHead>
                                 <TableHead>Plan Name</TableHead>
                                 <TableHead>Price</TableHead>
                                 <TableHead>Billing</TableHead>
@@ -417,22 +421,19 @@ export default function Plans() {
                         <TableBody>
                             {isLoading ? (
                                 <TableRow>
-                                    <TableCell colSpan={8} className="text-center py-8">
+                                    <TableCell colSpan={7} className="text-center py-8">
                                         Loading plans...
                                     </TableCell>
                                 </TableRow>
                             ) : plans?.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                                         No plans created yet
                                     </TableCell>
                                 </TableRow>
                             ) : (
                                 plans?.map((plan) => (
                                     <TableRow key={plan.id}>
-                                        <TableCell>
-                                            <GripVertical className="h-4 w-4 text-muted-foreground cursor-move" />
-                                        </TableCell>
                                         <TableCell>
                                             <div>
                                                 <div className="font-medium">{plan.name}</div>

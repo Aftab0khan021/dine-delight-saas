@@ -69,10 +69,10 @@ export default function SuperAdminDashboard() {
 
   // Format currency
   const formatCurrency = (cents: number | undefined) => {
-    if (!cents) return '$0';
-    return new Intl.NumberFormat('en-US', {
+    if (!cents) return '₹0';
+    return new Intl.NumberFormat('en-IN', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'INR',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(cents / 100);

@@ -108,9 +108,28 @@ export default function Subscriptions() {
 
       if (error) throw error;
 
+      let subscriptions = data as unknown as Subscription[];
+
+      // Apply plan filter (JS-side, since plan comes from joined data)
+      if (planFilter !== 'all') {
+        subscriptions = subscriptions.filter(s => {
+          const planSlug = s.subscription_plans?.name?.toLowerCase().replace(/\s+/g, '-');
+          return planSlug === planFilter;
+        });
+      }
+
+      // Apply search filter (JS-side, filter by restaurant name)
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        subscriptions = subscriptions.filter(s =>
+          s.restaurant?.name?.toLowerCase().includes(q) ||
+          s.restaurant?.slug?.toLowerCase().includes(q)
+        );
+      }
+
       return {
-        subscriptions: data as unknown as Subscription[],
-        total: count || 0,
+        subscriptions,
+        total: (planFilter !== 'all' || searchQuery) ? subscriptions.length : (count || 0),
       };
     },
   });
@@ -145,9 +164,9 @@ export default function Subscriptions() {
   };
 
   const formatCurrency = (cents: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-IN', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'INR',
       minimumFractionDigits: 0,
     }).format(cents / 100);
   };
