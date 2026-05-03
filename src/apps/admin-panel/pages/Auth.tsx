@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,9 @@ export default function AdminAuth() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Ref to suppress onAuthStateChange navigation during signup flows
+  const isSigningUpRef = useRef(false);
+
   useEffect(() => {
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -40,6 +43,8 @@ export default function AdminAuth() {
     checkUser();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Don't navigate during signup — we need to finish DB operations first
+      if (isSigningUpRef.current) return;
       if (session) {
         navigate("/admin");
       }
@@ -108,6 +113,7 @@ export default function AdminAuth() {
       return;
     }
     setLoading(true);
+    isSigningUpRef.current = true;
 
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -158,6 +164,7 @@ export default function AdminAuth() {
       }
     } finally {
       setLoading(false);
+      isSigningUpRef.current = false;
     }
   };
 
@@ -168,6 +175,7 @@ export default function AdminAuth() {
       return;
     }
     setLoading(true);
+    isSigningUpRef.current = true;
 
     try {
       // 1. Create auth account
@@ -245,6 +253,7 @@ export default function AdminAuth() {
       }
     } finally {
       setLoading(false);
+      isSigningUpRef.current = false;
     }
   };
 
