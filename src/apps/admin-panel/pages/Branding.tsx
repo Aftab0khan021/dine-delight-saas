@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, ExternalLink, Globe, Image as ImageIcon, Palette, Save, Store, X, Phone, Mail, Clock, DollarSign, Upload, Loader2, MapPin, Instagram, Facebook, Twitter, Youtube, MessageCircle, Star, Plus, Trash2, CalendarDays, Filter, Users } from "lucide-react";
+import { Copy, ExternalLink, Globe, Image as ImageIcon, Palette, Save, Store, X, Phone, Mail, Clock, DollarSign, Upload, Loader2, MapPin, Instagram, Facebook, Twitter, Youtube, MessageCircle, Star, Plus, Trash2, CalendarDays, Filter, Users, Link2, RefreshCw, CheckCircle, AlertTriangle } from "lucide-react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -29,8 +29,16 @@ const hexSchema = z
   .optional()
   .or(z.literal(""));
 
+const slugSchema = z
+  .string()
+  .trim()
+  .min(2, "Slug must be at least 2 characters")
+  .max(80, "Slug must be at most 80 characters")
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Only lowercase letters, numbers, and hyphens (no leading/trailing hyphens)");
+
 const formSchema = z.object({
   name: z.string().trim().min(1, "Restaurant name is required").max(120),
+  slug: slugSchema,
   description: z.string().trim().max(1000).optional().or(z.literal("")),
   contact_email: z.string().trim().email("Enter a valid email").max(255).optional().or(z.literal("")),
   contact_phone: z.string().trim().max(40).optional().or(z.literal("")),
@@ -108,6 +116,7 @@ export default function AdminBranding() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
+      slug: "",
       description: "",
       contact_email: "",
       contact_phone: "",
@@ -128,6 +137,7 @@ export default function AdminBranding() {
       const s = normalizeSettings(restaurantData.settings);
       form.reset({
         name: restaurantData.name || "",
+        slug: restaurantData.slug || "",
         description: restaurantData.description || "",
         logo_url: restaurantData.logo_url || "",
         contact_email: s.contact_email || "",
@@ -159,9 +169,64 @@ export default function AdminBranding() {
     }
   }, [restaurantData]);
 
+  // --- Slug helpers ---
+  const [slugStatus, setSlugStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+
+  function nameToSlug(name: string) {
+    return name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '')   // remove special chars
+      .replace(/\s+/g, '-')            // spaces → hyphens
+      .replace(/-+/g, '-')             // collapse multiple hyphens
+      .replace(/^-|-$/g, '');           // trim leading/trailing hyphens
+  }
+
+  const checkSlugAvailability = useCallback(async (slug: string) => {
+    if (!slug || slug.length < 2 || !restaurant?.id) return;
+    // If slug hasn't changed from the current one, it's "available" (it's ours)
+    if (slug === restaurantData?.slug) {
+      setSlugStatus('available');
+      return;
+    }
+    setSlugStatus('checking');
+    const { data } = await supabase
+      .from('restaurants')
+      .select('id')
+      .eq('slug', slug)
+      .neq('id', restaurant.id)
+      .maybeSingle();
+    setSlugStatus(data ? 'taken' : 'available');
+  }, [restaurant?.id, restaurantData?.slug]);
+
+  const handleGenerateSlug = () => {
+    const name = form.getValues('name');
+    if (!name) return;
+    const generated = nameToSlug(name);
+    if (generated) {
+      form.setValue('slug', generated, { shouldDirty: true, shouldValidate: true });
+      setSlugManuallyEdited(false);
+      checkSlugAvailability(generated);
+    }
+  };
+
   // --- Mutations ---
   const saveMutation = useMutation({
     mutationFn: async (values: BrandingFormValues) => {
+      // Check slug uniqueness before saving
+      if (values.slug !== restaurantData?.slug) {
+        const { data: existing } = await supabase
+          .from('restaurants')
+          .select('id')
+          .eq('slug', values.slug)
+          .neq('id', restaurant!.id)
+          .maybeSingle();
+        if (existing) {
+          throw new Error(`The URL slug "${values.slug}" is already taken by another restaurant. Please choose a different one.`);
+        }
+      }
+
       // Preserve existing settings while updating specific fields
       const currentSettings = normalizeSettings(restaurantData?.settings);
 
@@ -189,6 +254,7 @@ export default function AdminBranding() {
 
       const { error } = await supabase.from("restaurants").update({
         name: values.name,
+        slug: values.slug,
         description: values.description || null,
         logo_url: values.logo_url || null,
         currency_code: values.currency_code,
@@ -204,6 +270,7 @@ export default function AdminBranding() {
     onSuccess: () => {
       toast({ title: "Saved", description: "Branding updated successfully." });
       qc.invalidateQueries({ queryKey: ["admin", "restaurant"] });
+      setSlugStatus('idle');
     },
     onError: (err: any) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -212,8 +279,9 @@ export default function AdminBranding() {
 
   // --- Handlers ---
   const handleCopyLink = () => {
-    if (!restaurantData?.slug) return;
-    const url = getPublicUrl(restaurantData.slug);
+    const currentSlug = form.getValues('slug') || restaurantData?.slug;
+    if (!currentSlug) return;
+    const url = getPublicUrl(currentSlug);
     navigator.clipboard.writeText(url);
     toast({ title: "Copied", description: "Website URL copied to clipboard." });
   };
@@ -305,8 +373,68 @@ export default function AdminBranding() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2 sm:col-span-2">
                   <Label>Restaurant Name *</Label>
-                  <Input {...form.register("name")} placeholder="e.g. The Burger Joint" />
+                  <Input
+                    {...form.register("name", {
+                      onChange: (e) => {
+                        // Auto-generate slug from name if user hasn't manually edited slug
+                        if (!slugManuallyEdited) {
+                          const generated = nameToSlug(e.target.value);
+                          if (generated) {
+                            form.setValue('slug', generated, { shouldValidate: true });
+                            checkSlugAvailability(generated);
+                          }
+                        }
+                      }
+                    })}
+                    placeholder="e.g. The Burger Joint"
+                  />
                   {form.formState.errors.name && <p className="text-xs text-destructive">{form.formState.errors.name.message}</p>}
+                </div>
+
+                {/* Restaurant URL Slug */}
+                <div className="space-y-2 sm:col-span-2">
+                  <Label className="flex items-center gap-2">
+                    <Link2 className="h-4 w-4 text-muted-foreground" />
+                    Restaurant URL Slug *
+                  </Label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Input
+                        {...form.register("slug", {
+                          onChange: (e) => {
+                            setSlugManuallyEdited(true);
+                            checkSlugAvailability(e.target.value);
+                          }
+                        })}
+                        placeholder="my-restaurant"
+                        className="pr-8"
+                      />
+                      {/* Status indicator */}
+                      <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                        {slugStatus === 'checking' && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                        {slugStatus === 'available' && <CheckCircle className="h-4 w-4 text-green-500" />}
+                        {slugStatus === 'taken' && <AlertTriangle className="h-4 w-4 text-destructive" />}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={handleGenerateSlug}
+                      title="Auto-generate from restaurant name"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {form.formState.errors.slug && <p className="text-xs text-destructive">{form.formState.errors.slug.message}</p>}
+                  {slugStatus === 'taken' && <p className="text-xs text-destructive">This slug is already taken. Please choose a different one.</p>}
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-md px-2.5 py-1.5">
+                    <Globe className="h-3 w-3 shrink-0" />
+                    <span className="truncate">
+                      {window.location.origin}/r/<strong className="text-foreground">{w.slug || '...'}</strong>
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">This is the URL customers use to find your restaurant. Changing it will break old links.</p>
                 </div>
 
                 <div className="space-y-2 sm:col-span-2">
@@ -799,13 +927,22 @@ export default function AdminBranding() {
                 <div className="text-xs font-medium text-muted-foreground mb-1">Public URL</div>
                 <div className="flex items-center gap-2">
                   <code className="flex-1 truncate text-xs font-mono bg-muted/50 p-1 rounded">
-                    {restaurantData?.slug ? getPublicUrl(restaurantData.slug) : "..."}
+                    {w.slug ? getPublicUrl(w.slug) : "..."}
                   </code>
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCopyLink}>
                     <Copy className="h-3 w-3" />
                   </Button>
                 </div>
               </div>
+              {/* Show warning if slug changed from saved value */}
+              {restaurantData?.slug && w.slug && w.slug !== restaurantData.slug && (
+                <Alert variant="destructive" className="py-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="text-xs">
+                    Changing slug will break the old URL: <code className="font-mono">/r/{restaurantData.slug}</code>
+                  </AlertDescription>
+                </Alert>
+              )}
               <Button className="w-full" variant="outline" asChild>
                 <a
                   href={restaurantData?.slug ? getPublicUrl(restaurantData.slug) : "#"}
