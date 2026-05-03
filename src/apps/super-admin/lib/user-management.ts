@@ -84,3 +84,22 @@ export async function enableUserAccount(userId: string): Promise<UserManagementR
 
     return data as UserManagementResponse;
 }
+
+/**
+ * Delete user permanently - removes from auth.users, cascading to:
+ * profiles → user_roles → restaurant (if last admin) → all restaurant data
+ */
+export async function deleteUser(userId: string, reason?: string): Promise<UserManagementResponse> {
+    const { data, error } = await supabase.functions.invoke("manage-user-account", {
+        body: {
+            action: "delete_user",
+            user_id: userId,
+            reason,
+        },
+    });
+
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+
+    return data as UserManagementResponse;
+}
