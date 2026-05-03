@@ -115,3 +115,12 @@ All colors MUST be HSL.
     flex-direction: column;
   }
 }
+
+/* Utility: hide scrollbar on horizontal scroll containers */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

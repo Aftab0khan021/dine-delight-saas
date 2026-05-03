@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, CheckCircle2, Clock, ChefHat, ShoppingBag, ArrowLeft } from "lucide-react";
+import { Loader2, CheckCircle2, Clock, ChefHat, ShoppingBag, ArrowLeft, Download, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatMoney } from "@/lib/formatting";
 
@@ -232,6 +232,48 @@ export default function TrackOrder() {
             </div>
             <div className="text-xs text-muted-foreground text-center pt-2">
               Placed at {new Date(order.placed_at).toLocaleString()}
+            </div>
+
+            {/* Download Receipt Button */}
+            <div className="pt-3 flex gap-2 justify-center">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const receiptHtml = `
+<!DOCTYPE html><html><head><title>Receipt - ${order.restaurant?.name || 'Restaurant'}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 400px; margin: 0 auto; padding: 24px; color: #1a1a1a; }
+  .header { text-align: center; border-bottom: 2px dashed #ddd; padding-bottom: 16px; margin-bottom: 16px; }
+  .header h1 { font-size: 20px; margin-bottom: 4px; }
+  .header p { color: #666; font-size: 12px; }
+  .order-id { background: #f5f5f5; padding: 8px 12px; border-radius: 6px; font-size: 12px; text-align: center; margin-bottom: 16px; }
+  .items { margin-bottom: 16px; }
+  .item { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; border-bottom: 1px solid #f0f0f0; }
+  .item-name { display: flex; gap: 8px; }
+  .qty { background: #f0f0f0; border-radius: 4px; padding: 1px 6px; font-weight: 700; font-size: 12px; }
+  .total-row { display: flex; justify-content: space-between; font-weight: 700; font-size: 18px; padding-top: 12px; border-top: 2px solid #1a1a1a; }
+  .footer { text-align: center; margin-top: 20px; font-size: 11px; color: #999; border-top: 2px dashed #ddd; padding-top: 16px; }
+  @media print { body { padding: 0; } }
+</style></head><body>
+  <div class="header">
+    <h1>${order.restaurant?.name || 'Restaurant'}</h1>
+    <p>Order Receipt</p>
+  </div>
+  <div class="order-id">Order #${order.id.slice(0, 8).toUpperCase()} · ${new Date(order.placed_at).toLocaleString()}</div>
+  <div class="items">
+    ${items.map(i => `<div class="item"><div class="item-name"><span class="qty">${i.quantity}x</span><span>${i.name_snapshot}</span></div><span>${formatMoney(i.line_total_cents, order.currency_code)}</span></div>`).join('')}
+  </div>
+  <div class="total-row"><span>Total</span><span>${formatMoney(order.total_cents, order.currency_code)}</span></div>
+  <div class="footer"><p>Thank you for your order!</p><p style="margin-top:4px">Powered by Dine Delight</p></div>
+</body></html>`;
+                  const w = window.open('', '_blank');
+                  if (w) { w.document.write(receiptHtml); w.document.close(); w.focus(); w.print(); }
+                }}
+              >
+                <Printer className="h-3.5 w-3.5 mr-1.5" /> Print Receipt
+              </Button>
             </div>
           </CardContent>
         </Card>
