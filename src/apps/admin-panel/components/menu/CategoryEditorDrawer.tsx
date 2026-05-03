@@ -41,7 +41,7 @@ export function CategoryEditorDrawer({
     resolver: zodResolver(schema),
     defaultValues: {
       name: defaultValues?.name ?? "",
-      description: (defaultValues?.description ?? "") as any,
+      description: (defaultValues?.description ?? ""),
       is_active: defaultValues?.is_active ?? true,
     },
     mode: "onChange",
@@ -53,7 +53,7 @@ export function CategoryEditorDrawer({
     if (!open) {
       form.reset({
         name: defaultValues?.name ?? "",
-        description: (defaultValues?.description ?? "") as any,
+        description: (defaultValues?.description ?? ""),
         is_active: defaultValues?.is_active ?? true,
       });
       setSubmitted(false);

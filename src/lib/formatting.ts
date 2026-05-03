@@ -1,9 +1,9 @@
 export function formatMoney(
   cents: number,
-  currency: string = "USD",
+  currency: string = "INR",
   options?: Intl.NumberFormatOptions,
 ) {
-  const safeCurrency = (currency || "USD").toUpperCase();
+  const safeCurrency = (currency || "INR").toUpperCase();
   try {
     return new Intl.NumberFormat(undefined, {
       style: "currency",

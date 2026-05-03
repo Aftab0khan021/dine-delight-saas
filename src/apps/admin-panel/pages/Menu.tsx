@@ -69,43 +69,14 @@ type MenuItemRow = {
   is_active: boolean;
 };
 
-function getCurrencyExample(currencyCode: string = 'INR') {
-  const examples: Record<string, { amount: number; symbol: string }> = {
-    'INR': { amount: 10000, symbol: '₹' },
-    'USD': { amount: 1000, symbol: '$' },
-    'EUR': { amount: 1000, symbol: '€' },
-    'GBP': { amount: 1000, symbol: '£' },
-    'AUD': { amount: 1000, symbol: 'A$' },
-    'CAD': { amount: 1000, symbol: 'C$' },
-    'SGD': { amount: 1000, symbol: 'S$' },
-    'AED': { amount: 1000, symbol: 'د.إ' },
-    'JPY': { amount: 1000, symbol: '¥' },
-    'CNY': { amount: 1000, symbol: '¥' },
-  };
-  const ex = examples[currencyCode] || examples['INR'];
-  return `${ex.amount} = ${ex.symbol}${(ex.amount / 100).toFixed(2)}`;
-}
+import { getCurrencyExample } from "@/lib/currency-utils";
 
 export default function AdminMenu() {
   const { restaurant } = useRestaurantContext();
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  // Fetch currency for list view
-  const { data: restaurantSettings } = useQuery({
-    queryKey: ["restaurant_currency", restaurant?.id],
-    enabled: !!restaurant?.id,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("restaurants")
-        .select("currency_code")
-        .eq("id", restaurant!.id)
-        .single();
-      return data;
-    }
-  });
-
-  const currencyCode = restaurantSettings?.currency_code || "INR";
+  const currencyCode = restaurant?.currency_code || "INR";
 
   // --- State ---
   const [search, setSearch] = useState("");

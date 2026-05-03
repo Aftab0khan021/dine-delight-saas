@@ -18,6 +18,7 @@ import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/formatting";
+import { getCurrencySymbol } from "@/lib/currency-utils";
 
 // UI Components
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +32,16 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -77,23 +88,12 @@ export default function AdminCoupons() {
     const { toast } = useToast();
 
     // Fetch restaurant currency
-    const { data: restaurantSettings } = useQuery({
-        queryKey: ["restaurant_currency_coupons", restaurant?.id],
-        enabled: !!restaurant?.id,
-        queryFn: async () => {
-            const { data } = await supabase
-                .from("restaurants")
-                .select("currency_code")
-                .eq("id", restaurant!.id)
-                .single();
-            return data;
-        }
-    });
-    const currencyCode = restaurantSettings?.currency_code || "INR";
-    const currencySymbol = currencyCode === 'USD' ? '$' : currencyCode === 'EUR' ? '€' : currencyCode === 'GBP' ? '£' : '₹';
+    const currencyCode = restaurant?.currency_code || "INR";
+    const currencySymbol = getCurrencySymbol(currencyCode);
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [deleteId, setDeleteId] = useState<string | null>(null);
 
     const form = useForm<CouponForm>({
         resolver: zodResolver(couponSchema),
@@ -307,11 +307,7 @@ export default function AdminCoupons() {
                                                         <DropdownMenuSeparator />
                                                         <DropdownMenuItem
                                                             className="text-destructive"
-                                                            onClick={() => {
-                                                                if (confirm("Are you sure you want to delete this coupon?")) {
-                                                                    deleteMutation.mutate(coupon.id);
-                                                                }
-                                                            }}
+                                                            onClick={() => setDeleteId(coupon.id)}
                                                         >
                                                             <Trash className="mr-2 h-4 w-4" /> Delete
                                                         </DropdownMenuItem>
@@ -429,6 +425,27 @@ export default function AdminCoupons() {
                     </form>
                 </DialogContent>
             </Dialog>
+
+            {/* Delete Confirmation */}
+            <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Coupon</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete this coupon? This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => { if (deleteId) { deleteMutation.mutate(deleteId); setDeleteId(null); } }}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
