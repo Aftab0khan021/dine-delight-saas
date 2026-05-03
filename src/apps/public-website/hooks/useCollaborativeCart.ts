@@ -150,6 +150,56 @@ export function useCollaborativeCart(restaurantId: string, tableLabel: string) {
 
   const clear = useCallback(() => syncCart([]), [syncCart]);
 
+  // ── Split Bill Methods ──────────────────────────────────────
+  const claimItem = useCallback((cart_id: string) => {
+    if (!session) return;
+    syncCart(session.items.map(i => i.cart_id === cart_id ? { ...i, claimedBy: deviceToken } : i));
+  }, [session, syncCart, deviceToken]);
+
+  const unclaimItem = useCallback((cart_id: string) => {
+    if (!session) return;
+    syncCart(session.items.map(i => i.cart_id === cart_id ? { ...i, claimedBy: undefined } : i));
+  }, [session, syncCart]);
+
+  const splitEvenly = useCallback(() => {
+    if (!session || session.participants.length === 0) return;
+    const tokens = session.participants.map(p => p.token);
+    let idx = 0;
+    const newItems = session.items.map(item => {
+      if (!item.claimedBy) {
+        const assignee = tokens[idx % tokens.length];
+        idx++;
+        return { ...item, claimedBy: assignee };
+      }
+      return item;
+    });
+    syncCart(newItems);
+  }, [session, syncCart]);
+
+  const getMyBill = useCallback(() => {
+    const myItems = (session?.items ?? []).filter(i => i.claimedBy === deviceToken);
+    const total = myItems.reduce((s, i) => s + i.price_cents * i.quantity, 0);
+    return { items: myItems, totalCents: total };
+  }, [session, deviceToken]);
+
+  const getBillByParticipant = useCallback(() => {
+    const bills: Record<string, { items: CartItem[]; totalCents: number; name?: string }> = {};
+    const unclaimed: CartItem[] = [];
+    for (const item of session?.items ?? []) {
+      if (item.claimedBy) {
+        if (!bills[item.claimedBy]) {
+          const p = session?.participants.find(pp => pp.token === item.claimedBy);
+          bills[item.claimedBy] = { items: [], totalCents: 0, name: p?.name };
+        }
+        bills[item.claimedBy].items.push(item);
+        bills[item.claimedBy].totalCents += item.price_cents * item.quantity;
+      } else {
+        unclaimed.push(item);
+      }
+    }
+    return { bills, unclaimed };
+  }, [session]);
+
   const itemCount = session?.items.reduce((s, i) => s + i.quantity, 0) ?? 0;
   const subtotalCents = session?.items.reduce((s, i) => s + i.price_cents * i.quantity, 0) ?? 0;
 
@@ -159,11 +209,17 @@ export function useCollaborativeCart(restaurantId: string, tableLabel: string) {
     items: session?.items ?? [],
     isLeader: session?.isLeader ?? false,
     participants: session?.participants ?? [],
+    deviceToken,
     addItem,
     removeItem,
     increment,
     decrement,
     clear,
+    claimItem,
+    unclaimItem,
+    splitEvenly,
+    getMyBill,
+    getBillByParticipant,
     itemCount,
     subtotalCents,
     tableLabel,

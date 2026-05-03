@@ -25,6 +25,7 @@ import { useRestaurantCart } from "../hooks/useRestaurantCart";
 import { useCollaborativeCart } from "../hooks/useCollaborativeCart";
 import { MenuItemDialog } from "../components/MenuItemDialog";
 import { TablePresence } from "../components/TablePresence";
+import { SplitBillView } from "../components/SplitBillView";
 import { Turnstile } from "@/components/security/Turnstile";
 import { formatMoney } from "@/lib/formatting";
 
@@ -575,6 +576,23 @@ export default function PublicMenu() {
               </div>
             )}
           </div>
+
+          {/* Split Bill — only in collaborative mode with 2+ participants */}
+          {useCollabCart && collabCart.participants.length > 1 && activeCart.items.length > 0 && (
+            <div className="px-4 pb-2 border-t pt-3">
+              <SplitBillView
+                items={activeCart.items}
+                participants={collabCart.participants}
+                deviceToken={collabCart.deviceToken}
+                currencyCode={currencyCode}
+                onClaim={collabCart.claimItem}
+                onUnclaim={collabCart.unclaimItem}
+                onSplitEvenly={collabCart.splitEvenly}
+                getMyBill={collabCart.getMyBill}
+                getBillByParticipant={collabCart.getBillByParticipant}
+              />
+            </div>
+          )}
 
           <DrawerFooter>
             {activeCart.items.length > 0 ? (

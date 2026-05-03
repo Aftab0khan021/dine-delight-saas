@@ -342,6 +342,24 @@ serve(async (req) => {
 
     console.log(`Order created successfully: ${order.id}, Total: ${totalCents / 100} ${restaurantCurrency}`);
 
+    // Deduct stock (non-blocking, best-effort — don't fail the order if inventory isn't set up)
+    try {
+      const stockItems = items.map((i: any) => ({ menu_item_id: i.menu_item_id, quantity: Number(i.quantity) }));
+      const { data: stockResult } = await supabase.rpc('deduct_stock_for_order', {
+        p_order_id: order.id,
+        p_restaurant_id: restaurant_id,
+        p_items: stockItems,
+      });
+      if (stockResult?.low_stock_alerts?.length > 0) {
+        console.warn(`Low stock alerts for ${restaurant_id}:`, stockResult.low_stock_alerts);
+      }
+      if (stockResult?.disabled_items?.length > 0) {
+        console.warn(`Auto-disabled items for ${restaurant_id}:`, stockResult.disabled_items);
+      }
+    } catch (stockErr) {
+      console.warn('Stock deduction skipped (non-critical):', stockErr);
+    }
+
     // Fire WhatsApp receipt asynchronously (non-blocking)
     if (customer_phone) {
       const itemsSummary = orderItemsData.slice(0, 3).map(i => `${i.quantity}x ${i.name_snapshot}`).join(', ');
