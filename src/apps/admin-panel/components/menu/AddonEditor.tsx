@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { getCurrencySymbol } from "@/lib/currency-utils";
 
 interface Addon {
     id?: string;
@@ -52,23 +53,6 @@ export function AddonEditor({ menuItemId, restaurantId }: AddonEditorProps) {
     });
 
     const currencyCode = restaurantData?.currency_code || 'INR';
-
-    // Currency symbol mapping
-    const getCurrencySymbol = (code: string) => {
-        const symbols: Record<string, string> = {
-            'INR': '₹',
-            'USD': '$',
-            'EUR': '€',
-            'GBP': '£',
-            'AUD': 'A$',
-            'CAD': 'C$',
-            'SGD': 'S$',
-            'AED': 'د.إ',
-            'JPY': '¥',
-            'CNY': '¥',
-        };
-        return symbols[code] || code;
-    };
 
     // Fetch existing add-ons
     const { data: addons = [], isLoading } = useQuery({
@@ -194,7 +178,7 @@ export function AddonEditor({ menuItemId, restaurantId }: AddonEditorProps) {
                                             )}
                                         </div>
                                         <div className="text-xs text-muted-foreground">
-                                            +${(addon.price_cents / 100).toFixed(2)}
+                                        +{getCurrencySymbol(currencyCode)}{(addon.price_cents / 100).toFixed(2)}
                                             {addon.max_quantity > 0 && ` • Max ${addon.max_quantity}`}
                                             {addon.max_quantity === 0 && ` • Unlimited`}
                                         </div>

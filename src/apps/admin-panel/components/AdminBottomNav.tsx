@@ -25,7 +25,7 @@ export function AdminBottomNav() {
           <NavLink
             key={item.to}
             to={item.to}
-            end={item.end as any}
+            end={!!item.end}
             className="flex flex-col items-center justify-center gap-0.5 rounded-md px-2 py-2 flex-1 min-w-0 text-[10px] text-muted-foreground"
             activeClassName="bg-muted text-foreground"
           >

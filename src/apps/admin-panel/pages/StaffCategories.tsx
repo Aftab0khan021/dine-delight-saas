@@ -9,6 +9,16 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Settings, Users, Loader2 } from "lucide-react";
 import { CategoryDialog } from "../components/staff/CategoryDialog";
 import { CategoryCard } from "../components/staff/CategoryCard";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type StaffCategory = {
     id: string;
@@ -121,9 +131,16 @@ export default function StaffCategories() {
         setDialogOpen(true);
     };
 
-    const handleDelete = async (categoryId: string) => {
-        if (confirm("Are you sure you want to delete this category? This action cannot be undone.")) {
-            deleteMutation.mutate(categoryId);
+    const [deleteId, setDeleteId] = useState<string | null>(null);
+
+    const handleDelete = (categoryId: string) => {
+        setDeleteId(categoryId);
+    };
+
+    const confirmDelete = () => {
+        if (deleteId) {
+            deleteMutation.mutate(deleteId);
+            setDeleteId(null);
         }
     };
 
@@ -240,6 +257,24 @@ export default function StaffCategories() {
                 permissions={permissionsQuery.data || []}
                 restaurantId={restaurant.id}
             />
+
+            {/* Delete Confirmation */}
+            <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Category</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete this category? This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

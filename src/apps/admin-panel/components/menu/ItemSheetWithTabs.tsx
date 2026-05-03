@@ -1,20 +1,4 @@
-// Helper function for currency examples
-function getCurrencyExample(currencyCode: string = 'INR') {
-    const examples: Record<string, { amount: number; symbol: string }> = {
-        'INR': { amount: 10000, symbol: '₹' },
-        'USD': { amount: 1000, symbol: '$' },
-        'EUR': { amount: 1000, symbol: '€' },
-        'GBP': { amount: 1000, symbol: '£' },
-        'AUD': { amount: 1000, symbol: 'A$' },
-        'CAD': { amount: 1000, symbol: 'C$' },
-        'SGD': { amount: 1000, symbol: 'S$' },
-        'AED': { amount: 1000, symbol: 'د.إ' },
-        'JPY': { amount: 1000, symbol: '¥' },
-        'CNY': { amount: 1000, symbol: '¥' },
-    };
-    const ex = examples[currencyCode] || examples['INR'];
-    return `${ex.amount} = ${ex.symbol}${(ex.amount / 100).toFixed(2)}`;
-}
+import { getCurrencySymbol, getCurrencyExample } from "@/lib/currency-utils";
 
 // --- Subcomponent: Item Sheet with Tabs ---
 function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave, onDelete }: any) {
@@ -36,23 +20,6 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
     });
 
     const currencyCode = restaurantData?.currency_code || 'INR';
-
-    // Currency symbol mapping
-    const getCurrencySymbol = (code: string) => {
-        const symbols: Record<string, string> = {
-            'INR': '₹',
-            'USD': '$',
-            'EUR': '€',
-            'GBP': '£',
-            'AUD': 'A$',
-            'CAD': 'C$',
-            'SGD': 'S$',
-            'AED': 'د.إ',
-            'JPY': '¥',
-            'CNY': '¥',
-        };
-        return symbols[code] || code;
-    };
 
     const handleReplaceImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files?.length) return;

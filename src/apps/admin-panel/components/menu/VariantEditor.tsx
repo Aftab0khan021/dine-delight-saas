@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, GripVertical, Star } from "lucide-react";
+import { Plus, Trash2, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { getCurrencySymbol } from "@/lib/currency-utils";
 
 interface Variant {
     id?: string;
@@ -50,23 +51,6 @@ export function VariantEditor({ menuItemId, restaurantId, maxVariants = 5 }: Var
     });
 
     const currencyCode = restaurantData?.currency_code || 'INR';
-
-    // Currency symbol mapping
-    const getCurrencySymbol = (code: string) => {
-        const symbols: Record<string, string> = {
-            'INR': '₹',
-            'USD': '$',
-            'EUR': '€',
-            'GBP': '£',
-            'AUD': 'A$',
-            'CAD': 'C$',
-            'SGD': 'S$',
-            'AED': 'د.إ',
-            'JPY': '¥',
-            'CNY': '¥',
-        };
-        return symbols[code] || code;
-    };
 
     // Fetch existing variants
     const { data: variants = [], isLoading } = useQuery({
@@ -199,13 +183,11 @@ export function VariantEditor({ menuItemId, restaurantId, maxVariants = 5 }: Var
                                 !variant.is_active && "opacity-50"
                             )}
                         >
-                            <GripVertical className="h-4 w-4 text-muted-foreground cursor-move" />
-
                             <div className="flex-1 grid grid-cols-2 gap-2">
                                 <div>
                                     <div className="text-sm font-medium">{variant.name}</div>
                                     <div className="text-xs text-muted-foreground">
-                                        ${(variant.price_cents / 100).toFixed(2)}
+                                        {getCurrencySymbol(currencyCode)}{(variant.price_cents / 100).toFixed(2)}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2 justify-end">
