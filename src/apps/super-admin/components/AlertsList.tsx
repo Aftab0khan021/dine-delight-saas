@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +16,8 @@ interface SystemAlert {
     timestamp: string;
     action?: {
         label: string;
-        onClick: () => void;
+        onClick?: () => void;
+        path?: string;
     };
 }
 
@@ -25,6 +27,7 @@ interface AlertsListProps {
 }
 
 export function AlertsList({ alerts, onDismiss }: AlertsListProps) {
+    const navigate = useNavigate();
     const getAlertIcon = (severity: AlertSeverity) => {
         switch (severity) {
             case 'critical':
@@ -93,7 +96,10 @@ export function AlertsList({ alerts, onDismiss }: AlertsListProps) {
                                                     <Button
                                                         size="sm"
                                                         variant="outline"
-                                                        onClick={alert.action.onClick}
+                                                        onClick={() => {
+                                                            if (alert.action?.path) navigate(alert.action.path);
+                                                            else if (alert.action?.onClick) alert.action.onClick();
+                                                        }}
                                                     >
                                                         {alert.action.label}
                                                     </Button>

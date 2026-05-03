@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -32,6 +33,7 @@ import { FeatureFlag } from "../types/super-admin";
 
 export default function FeatureFlags() {
     const { toast } = useToast();
+    const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingFlag, setEditingFlag] = useState<FeatureFlag | null>(null);
@@ -196,7 +198,7 @@ export default function FeatureFlags() {
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => window.location.href = '/superadmin/features/access'}>
+                    <Button variant="outline" onClick={() => navigate('/superadmin/features/access')}>
                         View Access Matrix
                     </Button>
                     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

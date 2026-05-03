@@ -136,7 +136,7 @@ export async function getSystemAlerts() {
             timestamp: new Date().toISOString(),
             action: {
                 label: 'View Invoices',
-                onClick: () => window.location.href = '/superadmin/invoices',
+                path: '/superadmin/invoices',
             },
         });
     }
@@ -156,7 +156,7 @@ export async function getSystemAlerts() {
             timestamp: new Date().toISOString(),
             action: {
                 label: 'View Restaurants',
-                onClick: () => window.location.href = '/superadmin/restaurants',
+                path: '/superadmin/restaurants',
             },
         });
     }
@@ -176,7 +176,7 @@ export async function getSystemAlerts() {
             timestamp: new Date().toISOString(),
             action: {
                 label: 'View Details',
-                onClick: () => window.location.href = '/superadmin/restaurants',
+                path: '/superadmin/restaurants',
             },
         });
     }
@@ -197,7 +197,7 @@ export async function getSystemAlerts() {
             timestamp: new Date().toISOString(),
             action: {
                 label: 'View Subscriptions',
-                onClick: () => window.location.href = '/superadmin/subscriptions',
+                path: '/superadmin/subscriptions',
             },
         });
     }
