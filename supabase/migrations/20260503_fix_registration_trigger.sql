@@ -1,9 +1,11 @@
 -- =============================================================
 -- Fix: "Database error saving new user" + Staff Invite Flow
+-- Applied: 2026-05-03
 -- =============================================================
 
 -- 1. Fix CHECK constraint on profiles.account_status
---    Allow 'pending' and 'denied' which are used by the approval flow
+--    The original constraint only allowed ('active', 'disabled', 'suspended')
+--    but the approval flow needs 'pending' and 'denied'
 ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_account_status_check;
 ALTER TABLE public.profiles ADD CONSTRAINT profiles_account_status_check
   CHECK (account_status IN ('active', 'disabled', 'suspended', 'pending', 'denied'));
@@ -12,7 +14,20 @@ ALTER TABLE public.profiles ADD CONSTRAINT profiles_account_status_check
 DROP TRIGGER IF EXISTS on_auth_user_created_handle_invite ON auth.users;
 DROP FUNCTION IF EXISTS public.handle_invited_user();
 
--- 3. Rewrite handle_new_user with proper type cast and defensive inserts
+-- 3. Ensure RLS allows authenticated users to upsert their own profile
+--    (needed for the frontend defensive profile creation)
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
+CREATE POLICY "Users can insert own profile"
+  ON public.profiles FOR INSERT
+  WITH CHECK (id = auth.uid());
+
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+CREATE POLICY "Users can update own profile"
+  ON public.profiles FOR UPDATE
+  USING (id = auth.uid())
+  WITH CHECK (id = auth.uid());
+
+-- 4. Rewrite handle_new_user with proper type cast and defensive inserts
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql

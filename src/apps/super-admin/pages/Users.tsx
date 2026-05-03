@@ -109,6 +109,8 @@ const roleBadgeVariant = (role: string) => {
 const accountStatusBadge = (status: string) => {
     if (status === "disabled") return { variant: "destructive" as const, label: "Disabled" };
     if (status === "suspended") return { variant: "secondary" as const, label: "Suspended" };
+    if (status === "pending") return { variant: "outline" as const, label: "Pending" };
+    if (status === "denied") return { variant: "destructive" as const, label: "Denied" };
     return { variant: "default" as const, label: "Active" };
 };
 
@@ -375,6 +377,8 @@ export default function Users() {
                             <SelectContent>
                                 <SelectItem value="all">All Status</SelectItem>
                                 <SelectItem value="active">Active</SelectItem>
+                                <SelectItem value="pending">Pending</SelectItem>
+                                <SelectItem value="denied">Denied</SelectItem>
                                 <SelectItem value="disabled">Disabled</SelectItem>
                                 <SelectItem value="suspended">Suspended</SelectItem>
                             </SelectContent>

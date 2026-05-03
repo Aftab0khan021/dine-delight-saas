@@ -183,35 +183,52 @@ export default function AdminAuth() {
       if (error) throw error;
       if (!data.user) throw new Error("Failed to create account");
 
-      // 2. Ensure profile exists (trigger may fail due to CHECK constraints)
-      const { data: existingProfile } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("id", data.user.id)
-        .maybeSingle();
+      const userId = data.user.id;
 
-      if (!existingProfile) {
-        await supabase.from("profiles").insert({
-          id: data.user.id,
+      // 2. Ensure profile exists (trigger may fail due to CHECK constraints)
+      //    Use upsert to handle both cases: profile created by trigger, or not
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .upsert({
+          id: userId,
           email: email,
           full_name: fullName,
           account_status: "pending",
-        });
+        }, { onConflict: "id" });
+
+      if (profileError) {
+        console.error("Profile creation failed:", profileError);
+        // Profile may already exist from trigger — try updating status
+        await supabase
+          .from("profiles")
+          .update({ account_status: "pending", full_name: fullName })
+          .eq("id", userId);
       }
 
       // 3. Create restaurant admin request
+      const slug = restaurantName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '');
       const { error: requestError } = await supabase
         .from("restaurant_admin_requests")
         .insert({
-          user_id: data.user.id,
+          user_id: userId,
           restaurant_name: restaurantName,
-          restaurant_slug: restaurantName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
-          business_type: businessType,
+          restaurant_slug: slug || 'my-restaurant',
+          business_type: businessType || null,
           phone: phone || null,
           status: 'pending'
         });
 
-      if (requestError) throw requestError;
+      if (requestError) {
+        console.error("Admin request creation failed:", requestError);
+        // Don't throw — the account is created, show a helpful message
+        toast({
+          title: "Account Created",
+          description: "Your account was created but the request submission had an issue. Please contact support.",
+          variant: "destructive",
+        });
+        navigate("/admin");
+        return;
+      }
 
       toast({
         title: "Request Submitted!",
