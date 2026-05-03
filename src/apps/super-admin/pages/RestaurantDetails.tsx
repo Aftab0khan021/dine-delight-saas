@@ -62,36 +62,57 @@ export default function RestaurantDetails() {
     const [overrideValue, setOverrideValue] = useState<boolean | number>(false);
     const [overrideReason, setOverrideReason] = useState("");
 
-    // Fetch restaurant details
+    // Fetch restaurant details — split queries to avoid RLS join issues
     const { data: restaurant, isLoading, refetch } = useQuery({
         queryKey: ['restaurant-details', id],
         queryFn: async () => {
+            // Step 1: Fetch restaurant (no joins)
             const { data, error } = await supabase
                 .from('restaurants')
-                .select(`
-          *,
-          subscriptions (
-            *,
-            subscription_plans (
-              name,
-              price_cents,
-              billing_period
-            )
-          ),
-          user_roles (
-            role,
-            created_at,
-            profiles (
-              email,
-              full_name
-            )
-          )
-        `)
+                .select('*')
                 .eq('id', id)
                 .single();
 
             if (error) throw error;
-            return data;
+            if (!data) return null;
+
+            // Step 2: Fetch subscriptions
+            const { data: subs } = await supabase
+                .from('subscriptions')
+                .select('*, subscription_plans(name, price_cents, billing_period)')
+                .eq('restaurant_id', id);
+
+            // Step 3: Fetch user_roles
+            const { data: roles } = await supabase
+                .from('user_roles')
+                .select('role, created_at, user_id')
+                .eq('restaurant_id', id);
+
+            // Step 4: Fetch profiles for those users
+            let profilesMap: Record<string, { email: string; full_name: string | null }> = {};
+            if (roles && roles.length > 0) {
+                const userIds = roles.map(r => r.user_id);
+                const { data: profiles } = await supabase
+                    .from('profiles')
+                    .select('id, email, full_name')
+                    .in('id', userIds);
+
+                if (profiles) {
+                    for (const p of profiles) {
+                        profilesMap[p.id] = { email: p.email, full_name: p.full_name };
+                    }
+                }
+            }
+
+            // Combine
+            return {
+                ...data,
+                subscriptions: subs || [],
+                user_roles: (roles || []).map(r => ({
+                    ...r,
+                    profiles: profilesMap[r.user_id] || null,
+                })),
+            };
         },
         enabled: !!id,
     });
