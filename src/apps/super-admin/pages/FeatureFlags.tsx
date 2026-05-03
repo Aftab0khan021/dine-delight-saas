@@ -48,7 +48,7 @@ export default function FeatureFlags() {
     const { data: flags, isLoading } = useQuery({
         queryKey: ['feature-flags'],
         queryFn: async () => {
-            const { data, error } = await (supabase as any)
+            const { data, error } = await supabase
                 .from('feature_flags')
                 .select('*')
                 .order('created_at', { ascending: false });
@@ -62,7 +62,7 @@ export default function FeatureFlags() {
     const { data: overrides } = useQuery({
         queryKey: ['restaurant-features'],
         queryFn: async () => {
-            const { data, error } = await (supabase as any)
+            const { data, error } = await supabase
                 .from('restaurant_features')
                 .select(`
           *,
@@ -82,7 +82,7 @@ export default function FeatureFlags() {
     // Toggle global feature flag
     const toggleFlagMutation = useMutation({
         mutationFn: async ({ id, is_enabled }: { id: string; is_enabled: boolean }) => {
-            const { error } = await (supabase as any)
+            const { error } = await supabase
                 .from('feature_flags')
                 .update({ is_enabled })
                 .eq('id', id);
@@ -124,13 +124,13 @@ export default function FeatureFlags() {
             };
 
             if (editingFlag) {
-                const { error } = await (supabase as any)
+                const { error } = await supabase
                     .from('feature_flags')
                     .update(flagData)
                     .eq('id', editingFlag.id);
                 if (error) throw error;
             } else {
-                const { error } = await (supabase as any)
+                const { error } = await supabase
                     .from('feature_flags')
                     .insert(flagData);
                 if (error) throw error;

@@ -10,8 +10,7 @@ import {
     Trash,
     Plus,
     Calendar,
-    Percent,
-    DollarSign
+    Percent
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -19,6 +18,7 @@ import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/formatting";
+import { useRestaurantContext } from "../state/restaurant-context";
 
 // UI Components
 import { Badge } from "@/components/ui/badge";
@@ -77,6 +77,22 @@ export default function AdminCoupons() {
     const qc = useQueryClient();
     const { toast } = useToast();
 
+    // Fetch restaurant currency
+    const { data: restaurantSettings } = useQuery({
+        queryKey: ["restaurant_currency_coupons", restaurant?.id],
+        enabled: !!restaurant?.id,
+        queryFn: async () => {
+            const { data } = await supabase
+                .from("restaurants")
+                .select("currency_code")
+                .eq("id", restaurant!.id)
+                .single();
+            return data;
+        }
+    });
+    const currencyCode = restaurantSettings?.currency_code || "INR";
+    const currencySymbol = currencyCode === 'USD' ? '$' : currencyCode === 'EUR' ? '€' : currencyCode === 'GBP' ? '£' : '₹';
+
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -122,7 +138,7 @@ export default function AdminCoupons() {
                 description: values.description,
                 discount_type: values.discount_type,
                 discount_value: values.discount_type === 'fixed'
-                    ? Math.round(values.discount_value * 100) // dollars to cents
+                    ? Math.round(values.discount_value * 100) // Convert major units to minor units (e.g. rupees to paise, dollars to cents)
                     : values.discount_value, // percentage as is
                 min_order_cents: Math.round(values.min_order_value * 100),
                 usage_limit: values.usage_limit || null,
@@ -261,12 +277,12 @@ export default function AdminCoupons() {
                                                 <Badge variant="outline">
                                                     {coupon.discount_type === 'percentage'
                                                         ? `${coupon.discount_value}% OFF`
-                                                        : formatMoney(coupon.discount_value, (couponsQuery.data?.[0] as any)?.currency ?? 'USD')  + ' OFF'}
+                                                        : formatMoney(coupon.discount_value, currencyCode) + ' OFF'}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell>
                                                 {coupon.min_order_cents > 0
-                                                    ? `$${(coupon.min_order_cents / 100).toFixed(2)}`
+                                                    ? formatMoney(coupon.min_order_cents, currencyCode)
                                                     : "None"}
                                             </TableCell>
                                             <TableCell>
@@ -354,7 +370,7 @@ export default function AdminCoupons() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="percentage">Percentage (%)</SelectItem>
-                                        <SelectItem value="fixed">Fixed Amount ($)</SelectItem>
+                                        <SelectItem value="fixed">Fixed Amount ({currencySymbol})</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -368,7 +384,7 @@ export default function AdminCoupons() {
                                         className="pl-8"
                                     />
                                     <div className="absolute left-2.5 top-2.5 text-muted-foreground">
-                                        {form.watch("discount_type") === 'percentage' ? <Percent className="h-4 w-4" /> : <DollarSign className="h-4 w-4" />}
+                                        {form.watch("discount_type") === 'percentage' ? <Percent className="h-4 w-4" /> : <span className="text-sm font-medium">{currencySymbol}</span>}
                                     </div>
                                 </div>
                                 {form.formState.errors.discount_value && (
@@ -379,7 +395,7 @@ export default function AdminCoupons() {
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label>Min Order ($)</Label>
+                                <Label>Min Order ({currencySymbol})</Label>
                                 <Input type="number" step="0.01" {...form.register("min_order_value")} />
                             </div>
                             <div className="space-y-2">

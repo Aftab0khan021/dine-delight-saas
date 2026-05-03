@@ -119,7 +119,7 @@ export default function Subscriptions() {
   const { data: plans } = useQuery({
     queryKey: ['subscription-plans'],
     queryFn: async () => {
-      const { data } = await (supabase as any)
+      const { data } = await supabase
         .from('subscription_plans')
         .select('id, name, slug')
         .eq('is_active', true)

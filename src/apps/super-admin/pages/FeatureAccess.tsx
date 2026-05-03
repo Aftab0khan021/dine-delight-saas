@@ -42,7 +42,7 @@ export default function FeatureAccess() {
     const { data: accessData, isLoading } = useQuery({
         queryKey: ['restaurant-feature-access'],
         queryFn: async () => {
-            const { data, error } = await (supabase as any)
+            const { data, error } = await supabase
                 .from('restaurant_feature_access')
                 .select('*')
                 .order('restaurant_name')

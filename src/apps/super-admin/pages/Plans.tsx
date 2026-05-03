@@ -62,7 +62,7 @@ export default function Plans() {
     const { data: plans, isLoading } = useQuery({
         queryKey: ['subscription-plans'],
         queryFn: async () => {
-            const { data, error } = await (supabase as any)
+            const { data, error } = await supabase
                 .from('subscription_plans')
                 .select('*')
                 .order('sort_order');
@@ -87,13 +87,13 @@ export default function Plans() {
             };
 
             if (editingPlan) {
-                const { error } = await (supabase as any)
+                const { error } = await supabase
                     .from('subscription_plans')
                     .update(planData)
                     .eq('id', editingPlan.id);
                 if (error) throw error;
             } else {
-                const { error } = await (supabase as any)
+                const { error } = await supabase
                     .from('subscription_plans')
                     .insert(planData);
                 if (error) throw error;

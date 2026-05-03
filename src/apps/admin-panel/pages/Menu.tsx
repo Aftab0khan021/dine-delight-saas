@@ -241,7 +241,7 @@ export default function AdminMenu() {
 
   const deleteCategory = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("categories").update({ deleted_at: new Date().toISOString() } as any).eq("id", id);
+      const { error } = await supabase.from("categories").update({ deleted_at: new Date().toISOString() }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -329,7 +329,7 @@ export default function AdminMenu() {
       const item = items.find(i => i.id === id);
       const { data, error } = await supabase
         .from("menu_items")
-        .update({ deleted_at: new Date().toISOString() } as any)
+        .update({ deleted_at: new Date().toISOString() })
         .eq("id", id)
         .eq("restaurant_id", restaurant!.id)
         .select()

@@ -155,7 +155,7 @@ export default function RestaurantDetails() {
     const { data: featureOverrides } = useQuery({
         queryKey: ['restaurant-feature-overrides', id],
         queryFn: async () => {
-            const { data, error } = await (supabase as any)
+            const { data, error } = await supabase
                 .from('restaurant_features')
                 .select('*')
                 .eq('restaurant_id', id);
@@ -352,7 +352,7 @@ export default function RestaurantDetails() {
             const featureDef = getFeatureDefinition(selectedFeature);
             const config = featureDef?.type === 'limit' ? { limit: overrideValue } : {};
 
-            const { error } = await (supabase as any)
+            const { error } = await supabase
                 .from('restaurant_features')
                 .upsert({
                     restaurant_id: id,
@@ -387,7 +387,7 @@ export default function RestaurantDetails() {
         mutationFn: async () => {
             if (!id || !selectedFeature) return;
 
-            const { error } = await (supabase as any)
+            const { error } = await supabase
                 .from('restaurant_features')
                 .delete()
                 .eq('restaurant_id', id)

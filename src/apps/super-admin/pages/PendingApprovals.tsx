@@ -62,8 +62,6 @@ export default function PendingApprovals() {
                 if (!retryRestaurant) throw new Error("Failed to create restaurant");
                 
                 // Use the retry result
-                (newRestaurant as any) ?? null;
-                // Assign using retryRestaurant
                 await assignRoleAndFinalize(request, retryRestaurant.id, user?.id);
                 return;
             }

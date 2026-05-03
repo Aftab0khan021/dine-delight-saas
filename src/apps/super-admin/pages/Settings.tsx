@@ -24,7 +24,7 @@ export default function SuperAdminSettings() {
   const { data: settings, isLoading } = useQuery({
     queryKey: ['platform-settings'],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('platform_settings')
         .select('*');
 
@@ -43,7 +43,7 @@ export default function SuperAdminSettings() {
   // Update setting mutation
   const updateSettingMutation = useMutation({
     mutationFn: async ({ key, value }: { key: string; value: any }) => {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('platform_settings')
         .upsert({
           key,
