@@ -18,10 +18,18 @@ export type CartItem = {
   notes?: string;
 };
 
+type CouponData = {
+  code: string;
+  discount_type: 'percentage' | 'fixed';
+  discount_value: number;
+  min_order_cents?: number;
+  max_discount_cents?: number;
+};
+
 type CartState = {
   items: CartItem[];
   tableLabel?: string | null;
-  couponCode?: string | null; // Placeholder for future
+  couponCode?: string | null;
 };
 
 function storageKey(slug: string) {
@@ -149,9 +157,9 @@ export function useRestaurantCart(restaurantSlug: string) {
   );
 
   // Coupon Logic
-  const [coupon, setCoupon] = useState<any | null>(null);
+  const [coupon, setCoupon] = useState<CouponData | null>(null);
 
-  const applyCoupon = useCallback((couponData: any) => {
+  const applyCoupon = useCallback((couponData: CouponData) => {
     setCoupon(couponData);
     setCouponCode(couponData.code);
   }, []);
