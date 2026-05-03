@@ -93,7 +93,8 @@ export default function PublicMenu() {
   const [popularIds, setPopularIds] = useState<string[]>([]);
 
   // Upsell suggestions
-  const [upsellItems, setUpsellItems] = useState<any[]>([]);
+  type UpsellSuggestion = { id: string; name: string; price_cents: number; image_url?: string; co_order_count?: number };
+  const [upsellItems, setUpsellItems] = useState<UpsellSuggestion[]>([]);
   const [upsellOpen, setUpsellOpen] = useState(false);
   const [upsellForItem, setUpsellForItem] = useState<string | null>(null);
 
@@ -101,7 +102,6 @@ export default function PublicMenu() {
   const [dietaryFilter, setDietaryFilter] = useState<'all' | 'veg' | 'nonveg'>('all');
 
   const fetchUpsell = useCallback(async (itemId: string, restaurantId: string) => {
-    const currencyCode = restaurantQuery.data?.currency_code || "USD";
     try {
       const resp = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/menu-upsell?item_id=${itemId}&restaurant_id=${restaurantId}`,
@@ -710,7 +710,7 @@ export default function PublicMenu() {
                       name: suggestion.name,
                       price_cents: suggestion.price_cents,
                       quantity: 1,
-                      variant_id: null,
+                      variant_id: undefined,
                       addons: [],
                       notes: "",
                     });

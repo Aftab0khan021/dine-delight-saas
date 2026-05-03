@@ -18,7 +18,7 @@ function json(body: unknown, status: number) {
 const MAX_ITEMS_PER_ORDER = 50;
 const MAX_QUANTITY_PER_ITEM = 100;
 const MIN_QUANTITY_PER_ITEM = 1;
-const MAX_ORDER_VALUE_CENTS = 1000000; // $10,000
+const MAX_ORDER_VALUE_CENTS = 1000000; // 10,000 in major currency units
 const MAX_TOTAL_ITEMS = 500; // Sum of all quantities
 
 serve(async (req) => {
@@ -340,7 +340,7 @@ serve(async (req) => {
       throw new Error("Failed to create order items");
     }
 
-    console.log(`Order created successfully: ${order.id}, Total: $${totalCents / 100}`);
+    console.log(`Order created successfully: ${order.id}, Total: ${totalCents / 100} ${restaurantCurrency}`);
 
     // Fire WhatsApp receipt asynchronously (non-blocking)
     if (customer_phone) {
@@ -353,7 +353,7 @@ serve(async (req) => {
           customer_name: customer_name || null,
           items_summary: itemsSummary + (orderItemsData.length > 3 ? ` +${orderItemsData.length - 3} more` : ''),
           total: finalTotal,
-          currency: 'USD',
+          currency: restaurantCurrency,
         }
       }).catch(err => console.warn('WhatsApp send failed (non-critical):', err));
     }

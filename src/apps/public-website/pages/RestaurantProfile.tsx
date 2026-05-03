@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { formatMoney } from "@/lib/formatting";
 
 function normalizeSettings(settings: any | null) {
   return settings && typeof settings === "object" && !Array.isArray(settings) ? settings : {};
@@ -65,7 +66,7 @@ export default function RestaurantProfile() {
     queryKey: ["public", "restaurant-profile", slug],
     enabled: !!slug,
     queryFn: async () => {
-      const { data, error } = await supabase.from("restaurants").select("id, name, slug, logo_url, description, settings, is_holiday_mode, holiday_mode_message, operating_hours").eq("slug", slug).maybeSingle();
+      const { data, error } = await supabase.from("restaurants").select("id, name, slug, logo_url, description, settings, is_holiday_mode, holiday_mode_message, operating_hours, currency_code").eq("slug", slug).maybeSingle();
       if (error) throw error;
       if (!data) throw new Error("Restaurant not found");
       return data;
@@ -77,7 +78,7 @@ export default function RestaurantProfile() {
     queryKey: ["public", "featured-items", restaurant?.id],
     enabled: !!restaurant?.id,
     queryFn: async () => {
-      const { data } = await supabase.from("menu_items").select("id, name, price, image_url, description").eq("restaurant_id", restaurant!.id).eq("available", true).limit(4);
+      const { data } = await supabase.from("menu_items").select("id, name, price_cents, image_url, description").eq("restaurant_id", restaurant!.id).eq("is_active", true).is("deleted_at", null).limit(4);
       return data || [];
     },
   });
@@ -109,7 +110,7 @@ export default function RestaurantProfile() {
   const reservationEnabled = !!settings?.reservation_enabled;
   const openStatus = isOpenNow(restaurant.operating_hours);
   const hasSocial = Object.values(socialLinks).some((v: any) => !!v);
-  const currencyCode = (restaurant as any)?.currency_code || "INR";
+  const currencyCode = restaurant?.currency_code || "INR";
 
   const handleReservation = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,7 +148,7 @@ export default function RestaurantProfile() {
           </div>
           <div className="space-y-2 max-w-2xl text-white drop-shadow-md">
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight">{restaurant.name}</h1>
-            <p className="text-base sm:text-lg md:text-xl opacity-90 font-light">Experience the best flavors in town.</p>
+            <p className="text-base sm:text-lg md:text-xl opacity-90 font-light">{restaurant.description || "Welcome to our restaurant — explore our menu and order online."}</p>
           </div>
           {/* Open/Closed Badge */}
           <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${openStatus.open ? 'bg-green-500/90 text-white' : 'bg-red-500/80 text-white'}`}>
@@ -212,7 +213,7 @@ export default function RestaurantProfile() {
                     </div>
                     <div className="p-3">
                       <h4 className="font-semibold text-sm line-clamp-1">{item.name}</h4>
-                      <p className="text-xs text-primary font-bold mt-1">{currencyCode} {Number(item.price).toFixed(2)}</p>
+                      <p className="text-xs text-primary font-bold mt-1">{formatMoney(item.price_cents, currencyCode)}</p>
                     </div>
                   </div>
                 </Link>

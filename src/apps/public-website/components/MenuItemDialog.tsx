@@ -101,8 +101,17 @@ export function MenuItemDialog({ item, open, onOpenChange, onAddToCart, restaura
     const handleAddToCart = () => {
         if (!item) return;
 
-        // Validation?
-        // TODO: Validate mandatory addons if implemented
+        // Validate mandatory addons
+        const mandatoryAddons = addons.filter((a: any) => a.is_mandatory);
+        const missingMandatory = mandatoryAddons.filter((a: any) => !selectedAddons.has(a.id));
+        if (missingMandatory.length > 0) {
+            toast({
+                title: "Required add-ons missing",
+                description: `Please select: ${missingMandatory.map((a: any) => a.name).join(", ")}`,
+                variant: "destructive",
+            });
+            return;
+        }
 
         // Prepare payload
         let finalPrice = item.price_cents;
@@ -189,7 +198,10 @@ export function MenuItemDialog({ item, open, onOpenChange, onAddToCart, restaura
                                         <div key={addon.id} className="flex items-center justify-between space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-muted/50" onClick={() => toggleAddon(addon.id)}>
                                             <div className="flex items-center space-x-2">
                                                 <Checkbox checked={selectedAddons.has(addon.id)} id={addon.id} />
-                                                <Label htmlFor={addon.id} className="font-medium cursor-pointer">{addon.name}</Label>
+                                                <Label htmlFor={addon.id} className="font-medium cursor-pointer">
+                                                    {addon.name}
+                                                    {addon.is_mandatory && <span className="ml-1.5 text-[10px] font-semibold text-destructive">Required</span>}
+                                                </Label>
                                             </div>
                                             <span className="text-sm">+{formatMoney(addon.price_cents, currencyCode)}</span>
                                         </div>

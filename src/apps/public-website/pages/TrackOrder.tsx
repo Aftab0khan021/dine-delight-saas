@@ -138,19 +138,19 @@ export default function TrackOrder() {
   const backLink = order.restaurant?.slug ? `/r/${order.restaurant.slug}/menu` : "/";
 
   return (
-    <div className="min-h-screen w-full bg-gray-50 py-8 px-4">
+    <div className="min-h-screen w-full bg-background py-8 px-4">
       <div className="w-full max-w-md mx-auto space-y-6">
 
         {/* Header */}
         <div className="flex items-center justify-between">
           <Button variant="ghost" size="sm" asChild>
-            <Link to={backLink} className="flex items-center gap-2 text-gray-600">
+            <Link to={backLink} className="flex items-center gap-2 text-muted-foreground">
               <ArrowLeft className="h-4 w-4" />
               {order.restaurant?.slug ? "Back to Menu" : "Back to Home"}
             </Link>
           </Button>
           {order.restaurant?.name && (
-            <span className="font-semibold text-sm text-gray-500">{order.restaurant.name}</span>
+            <span className="font-semibold text-sm text-muted-foreground">{order.restaurant.name}</span>
           )}
         </div>
 
@@ -161,7 +161,7 @@ export default function TrackOrder() {
             <CardTitle className="text-2xl">
               {isCancelled ? "Order Cancelled" : "Order Status"}
             </CardTitle>
-            <p className="text-sm text-gray-500">#{order.id.slice(0, 8).toUpperCase()}</p>
+            <p className="text-sm text-muted-foreground">#{order.id.slice(0, 8).toUpperCase()}</p>
           </CardHeader>
           <CardContent className="space-y-8 pt-6">
 
@@ -180,11 +180,11 @@ export default function TrackOrder() {
                   const isActive = idx <= currentStepIndex;
                   const Icon = step.icon;
                   return (
-                    <div key={step.id} className="flex flex-col items-center gap-2 bg-white px-2">
-                      <div className={`h-8 w-8 rounded-full flex items-center justify-center border-2 transition-colors ${isActive ? 'border-green-500 bg-green-50 text-green-600' : 'border-gray-200 text-gray-300'}`}>
+                    <div key={step.id} className="flex flex-col items-center gap-2 bg-background px-2">
+                      <div className={`h-8 w-8 rounded-full flex items-center justify-center border-2 transition-colors ${isActive ? 'border-green-500 bg-green-50 dark:bg-green-950 text-green-600' : 'border-muted text-muted-foreground/40'}`}>
                         <Icon className="h-4 w-4" />
                       </div>
-                      <span className={`text-xs font-medium ${isActive ? 'text-gray-900' : 'text-gray-400'}`}>{step.label}</span>
+                      <span className={`text-xs font-medium ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}>{step.label}</span>
                     </div>
                   );
                 })}
@@ -219,7 +219,7 @@ export default function TrackOrder() {
                     <span className="font-bold w-6 text-center bg-gray-100 rounded text-gray-600">{item.quantity}x</span>
                     <span>{item.name_snapshot}</span>
                   </div>
-                  <span className="text-gray-600">{formatMoney(item.line_total_cents, order.currency_code)}</span>
+                  <span className="text-muted-foreground">{formatMoney(item.line_total_cents, order.currency_code)}</span>
                 </div>
               ))}
             </div>
@@ -230,7 +230,7 @@ export default function TrackOrder() {
               <span>Total</span>
               <span>{formatMoney(order.total_cents, order.currency_code)}</span>
             </div>
-            <div className="text-xs text-gray-400 text-center pt-2">
+            <div className="text-xs text-muted-foreground text-center pt-2">
               Placed at {new Date(order.placed_at).toLocaleString()}
             </div>
           </CardContent>
