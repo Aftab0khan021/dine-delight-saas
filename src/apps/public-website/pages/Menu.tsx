@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/drawer";
 import { useToast } from "@/hooks/use-toast";
 import { CopyButton } from "@/apps/admin-panel/components/qr/CopyButton";
-import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick } from "lucide-react";
+import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X } from "lucide-react";
 import { useRestaurantCart } from "../hooks/useRestaurantCart";
 import { useCollaborativeCart } from "../hooks/useCollaborativeCart";
 import { MenuItemDialog } from "../components/MenuItemDialog";
@@ -74,6 +74,12 @@ export default function PublicMenu() {
   const [cartOpen, setCartOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MenuItemRow | null>(null);
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
+
+  // Search + Category Jump
+  const [menuSearch, setMenuSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const categoryBarRef = useRef<HTMLDivElement>(null);
 
   const [placingOrder, setPlacingOrder] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
@@ -309,6 +315,24 @@ export default function PublicMenu() {
     );
   }
 
+  // IntersectionObserver for active category tracking
+  useEffect(() => {
+    const sections = document.querySelectorAll("[data-category-id]");
+    if (sections.length === 0) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            setActiveCategory(entry.target.getAttribute("data-category-id"));
+          }
+        }
+      },
+      { rootMargin: "-120px 0px -60% 0px", threshold: 0 }
+    );
+    sections.forEach(s => observer.observe(s));
+    return () => observer.disconnect();
+  }, [categoriesWithItems]);
+
   return (
     <main className="min-h-screen w-full bg-background">
       <header className="border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
@@ -340,6 +364,54 @@ export default function PublicMenu() {
           </div>
         </div>
       </header>
+
+      {/* Category Jump Bar + Search */}
+      {categoriesWithItems.length > 0 && (
+        <div className="sticky top-[73px] z-[9] border-b bg-background/95 backdrop-blur">
+          <div className="w-full max-w-3xl mx-auto px-4">
+            {/* Search toggle */}
+            {searchOpen ? (
+              <div className="flex items-center gap-2 py-2">
+                <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                <input
+                  autoFocus
+                  value={menuSearch}
+                  onChange={e => setMenuSearch(e.target.value)}
+                  placeholder="Search menu items..."
+                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                />
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setSearchOpen(false); setMenuSearch(""); }}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 py-2" ref={categoryBarRef}>
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setSearchOpen(true)}>
+                  <Search className="h-4 w-4" />
+                </Button>
+                <div className="flex gap-1.5 overflow-x-auto scrollbar-hide py-0.5">
+                  {categoriesWithItems.map(cat => (
+                    <button
+                      key={cat.id}
+                      onClick={() => {
+                        const el = document.getElementById(`section-${cat.id}`);
+                        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }}
+                      className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                        activeCategory === cat.id
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "bg-muted text-muted-foreground hover:bg-accent"
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="w-full max-w-3xl mx-auto px-4 py-8 pb-28">
         {loading ? (
@@ -373,8 +445,18 @@ export default function PublicMenu() {
             })()}
 
             {categoriesWithItems.map((category) => {
+              // Apply search filter
+              let filteredItems = category.items;
+              if (menuSearch.trim()) {
+                const q = menuSearch.toLowerCase();
+                filteredItems = filteredItems.filter((item: any) =>
+                  (item.name || '').toLowerCase().includes(q) ||
+                  (item.description || '').toLowerCase().includes(q)
+                );
+              }
               // Apply dietary filter
-              const filteredItems = dietaryFilter === 'all' ? category.items : category.items.filter((item: any) => {
+              if (dietaryFilter !== 'all') {
+                filteredItems = filteredItems.filter((item: any) => {
                 const name = (item.name || '').toLowerCase();
                 const desc = (item.description || '').toLowerCase();
                 const text = name + ' ' + desc;
@@ -382,9 +464,11 @@ export default function PublicMenu() {
                 if (dietaryFilter === 'nonveg') return text.includes('chicken') || text.includes('mutton') || text.includes('fish') || text.includes('egg') || text.includes('prawn') || text.includes('meat') || text.includes('non-veg') || text.includes('nonveg');
                 return true;
               });
+              });
+              }
               if (filteredItems.length === 0) return null;
               return (
-              <section key={category.id} aria-labelledby={`cat-${category.id}`}>
+              <section key={category.id} id={`section-${category.id}`} data-category-id={category.id} aria-labelledby={`cat-${category.id}`}>
                 <div className="flex items-baseline justify-between gap-3">
                   <div className="min-w-0">
                     <h2
