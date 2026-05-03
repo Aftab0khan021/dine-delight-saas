@@ -79,31 +79,14 @@ export default function Restaurants() {
   const [linkParentId, setLinkParentId] = useState<string>("");
   const pageSize = 20;
 
-  // Fetch restaurants with filters
+  // Fetch restaurants with filters — uses simple query to avoid RLS join issues
   const { data: restaurantsData, isLoading, refetch } = useQuery({
     queryKey: ['restaurants', searchQuery, statusFilter, planFilter, page],
     queryFn: async () => {
+      // Step 1: Fetch restaurants (simple, no joins — avoids RLS issues)
       let query = supabase
         .from('restaurants')
-        .select(`
-          id,
-          name,
-          slug,
-          status,
-          created_at,
-          last_active_at,
-          subscriptions (
-            status,
-            subscription_plans (
-              name
-            )
-          ),
-          user_roles (
-            user:profiles (
-              email
-            )
-          )
-        `, { count: 'exact' })
+        .select('id, name, slug, status, created_at, last_active_at', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range((page - 1) * pageSize, page * pageSize - 1);
 
@@ -120,9 +103,59 @@ export default function Restaurants() {
       const { data, error, count } = await query;
 
       if (error) throw error;
+      if (!data || data.length === 0) return { restaurants: [] as Restaurant[], total: count || 0 };
+
+      const restaurantIds = data.map(r => r.id);
+
+      // Step 2: Fetch subscriptions for these restaurants
+      const { data: subs } = await supabase
+        .from('subscriptions')
+        .select('restaurant_id, status, subscription_plans(name)')
+        .in('restaurant_id', restaurantIds);
+
+      // Step 3: Fetch owner emails (user_roles → profiles)
+      const { data: roles } = await supabase
+        .from('user_roles')
+        .select('restaurant_id, user_id, role')
+        .in('restaurant_id', restaurantIds)
+        .eq('role', 'restaurant_admin');
+
+      // Fetch profile emails for admin users
+      let ownerEmails: Record<string, string> = {};
+      if (roles && roles.length > 0) {
+        const userIds = [...new Set(roles.map(r => r.user_id))];
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, email')
+          .in('id', userIds);
+
+        if (profiles) {
+          const profileMap = new Map(profiles.map(p => [p.id, p.email]));
+          for (const role of roles) {
+            if (role.restaurant_id && profileMap.has(role.user_id)) {
+              ownerEmails[role.restaurant_id] = profileMap.get(role.user_id)!;
+            }
+          }
+        }
+      }
+
+      // Combine
+      const restaurants: Restaurant[] = data.map(r => {
+        const sub = subs?.find(s => s.restaurant_id === r.id);
+        return {
+          ...r,
+          subscription: sub ? {
+            status: sub.status,
+            plan: (sub as any).subscription_plans ?? undefined,
+          } : undefined,
+          user_roles: ownerEmails[r.id]
+            ? [{ user: { email: ownerEmails[r.id] } }]
+            : [],
+        };
+      });
 
       return {
-        restaurants: data as unknown as Restaurant[],
+        restaurants,
         total: count || 0,
       };
     },
