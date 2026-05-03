@@ -136,7 +136,7 @@ export default function Users() {
         queryKey: ["super-admin", "users"],
         queryFn: async () => {
             // Get all profiles with user roles
-            const { data: profiles, error: profilesError } = await (supabase as any)
+            const { data: profiles, error: profilesError } = await supabase
                 .from("profiles")
                 .select(`
           id,
@@ -152,7 +152,7 @@ export default function Users() {
             if (profilesError) throw profilesError;
 
             // Get user roles for each user
-            const { data: userRoles, error: rolesError } = await (supabase as any)
+            const { data: userRoles, error: rolesError } = await supabase
                 .from("user_roles")
                 .select(`
           user_id,

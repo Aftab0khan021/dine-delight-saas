@@ -146,7 +146,7 @@ serve(async (req) => {
     // Validate Restaurant
     const { data: restaurant, error: restaurantError } = await supabase
       .from('restaurants')
-      .select('is_accepting_orders')
+      .select('is_accepting_orders, currency_code')
       .eq('id', restaurant_id)
       .single();
 
@@ -260,8 +260,9 @@ serve(async (req) => {
     }
 
     // Validate maximum order value
+    const restaurantCurrency = restaurant.currency_code || 'INR';
     if (totalCents > MAX_ORDER_VALUE_CENTS) {
-      return json({ error: `Order value cannot exceed $${MAX_ORDER_VALUE_CENTS / 100}` }, 400);
+      return json({ error: `Order value cannot exceed ${MAX_ORDER_VALUE_CENTS / 100} ${restaurantCurrency}` }, 400);
     }
 
     // Coupon Logic (RPC Atomic Check-and-Increment)
@@ -312,7 +313,7 @@ serve(async (req) => {
         coupon_id: couponId,
         coupon_code: couponCode,
         discount_type: discountType,
-        currency_code: 'USD',
+        currency_code: restaurantCurrency,
         ip_address: clientIp,
         table_label: table_label || null,
         order_token: order_token,

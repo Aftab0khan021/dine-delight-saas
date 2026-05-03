@@ -21,7 +21,7 @@ export function useFeatureAccess(restaurantId: string | undefined) {
         queryFn: async () => {
             if (!restaurantId) return [];
 
-            const { data, error } = await (supabase as any)
+            const { data, error } = await supabase
                 .from('restaurant_feature_access')
                 .select('*')
                 .eq('restaurant_id', restaurantId);

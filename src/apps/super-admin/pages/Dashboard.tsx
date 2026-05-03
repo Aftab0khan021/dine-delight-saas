@@ -174,8 +174,8 @@ export default function SuperAdminDashboard() {
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
         <MetricCard
           title="Average Health Score"
-          value={metricsLoading ? "..." : "85"}
-          description="Platform-wide average"
+          value={metricsLoading ? "..." : "—"}
+          description="Coming soon"
           icon={Activity}
         />
         <MetricCard
@@ -186,8 +186,8 @@ export default function SuperAdminDashboard() {
         />
         <MetricCard
           title="Churn Rate"
-          value={metricsLoading ? "..." : "2.5%"}
-          description="Last 30 days"
+          value={metricsLoading ? "..." : "—"}
+          description="Coming soon"
           icon={TrendingUp}
         />
       </div>

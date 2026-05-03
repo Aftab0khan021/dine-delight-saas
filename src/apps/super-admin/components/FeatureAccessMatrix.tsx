@@ -33,7 +33,7 @@ export function FeatureAccessMatrix({ restaurantId, onOverride }: FeatureAccessM
     const { data: features, isLoading } = useQuery({
         queryKey: ['restaurant-feature-access', restaurantId],
         queryFn: async () => {
-            const { data, error } = await (supabase as any)
+            const { data, error } = await supabase
                 .from('restaurant_feature_access')
                 .select('*')
                 .eq('restaurant_id', restaurantId)
