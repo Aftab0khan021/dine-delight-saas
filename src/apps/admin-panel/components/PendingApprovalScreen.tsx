@@ -1,16 +1,23 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Clock, Info, XCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Clock, Info, XCircle, AlertTriangle, Send } from "lucide-react";
 
 interface PendingApprovalScreenProps {
     userEmail: string;
 }
 
 export function PendingApprovalScreen({ userEmail }: PendingApprovalScreenProps) {
-    const { data: request } = useQuery({
+    const [restaurantName, setRestaurantName] = useState("");
+    const [submitting, setSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState("");
+
+    const { data: request, refetch } = useQuery({
         queryKey: ['admin-request'],
         queryFn: async () => {
             const { data: { user } } = await supabase.auth.getUser();
@@ -29,6 +36,44 @@ export function PendingApprovalScreen({ userEmail }: PendingApprovalScreenProps)
     const handleSignOut = async () => {
         await supabase.auth.signOut();
         window.location.href = '/admin/auth';
+    };
+
+    // Submit a missing request (self-healing for users whose request INSERT failed)
+    const handleSubmitRequest = async () => {
+        if (!restaurantName.trim()) return;
+        setSubmitting(true);
+        setSubmitError("");
+
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error("Not authenticated");
+
+            const slug = restaurantName
+                .toLowerCase()
+                .trim()
+                .replace(/[^a-z0-9\s-]/g, '')
+                .replace(/\s+/g, '-')
+                .replace(/-+/g, '-')
+                .replace(/^-|-$/g, '');
+
+            const { error } = await supabase
+                .from('restaurant_admin_requests')
+                .insert({
+                    user_id: user.id,
+                    restaurant_name: restaurantName.trim(),
+                    restaurant_slug: slug || 'my-restaurant',
+                    status: 'pending'
+                });
+
+            if (error) throw error;
+
+            refetch();
+        } catch (err: any) {
+            console.error("Submit request error:", err);
+            setSubmitError(err.message || "Failed to submit request");
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     // Denied state
@@ -81,7 +126,59 @@ export function PendingApprovalScreen({ userEmail }: PendingApprovalScreenProps)
         );
     }
 
-    // Pending state
+    // No request exists — let the user submit one (self-healing)
+    if (!request) {
+        return (
+            <div className="min-h-screen flex items-center justify-center p-6 bg-muted/50">
+                <Card className="max-w-md w-full">
+                    <CardHeader>
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                                <AlertTriangle className="h-6 w-6 text-orange-600" />
+                            </div>
+                        </div>
+                        <CardTitle>Complete Your Application</CardTitle>
+                        <CardDescription>
+                            Your account was created but the application wasn't fully submitted. Please enter your restaurant details below.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="rest-name">Restaurant Name *</Label>
+                            <Input
+                                id="rest-name"
+                                placeholder="e.g., The Golden Spoon"
+                                value={restaurantName}
+                                onChange={(e) => setRestaurantName(e.target.value)}
+                                required
+                            />
+                        </div>
+
+                        {submitError && (
+                            <Alert variant="destructive">
+                                <AlertDescription>{submitError}</AlertDescription>
+                            </Alert>
+                        )}
+
+                        <Button
+                            className="w-full"
+                            onClick={handleSubmitRequest}
+                            disabled={submitting || !restaurantName.trim()}
+                        >
+                            <Send className="mr-2 h-4 w-4" />
+                            {submitting ? "Submitting..." : "Submit Application"}
+                        </Button>
+
+                        <Button variant="outline" className="w-full" onClick={handleSignOut}>
+                            Sign Out
+                        </Button>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
+    // Pending state (request exists)
     return (
         <div className="min-h-screen flex items-center justify-center p-6 bg-muted/50">
             <Card className="max-w-md w-full">
@@ -103,24 +200,22 @@ export function PendingApprovalScreen({ userEmail }: PendingApprovalScreenProps)
                         <p className="text-sm text-muted-foreground pl-4">{userEmail}</p>
                     </div>
 
-                    {request && (
-                        <div className="space-y-2 text-sm border-t pt-4">
-                            <div className="flex justify-between">
-                                <span className="text-muted-foreground">Restaurant Name:</span>
-                                <span className="font-medium">{request.restaurant_name}</span>
-                            </div>
-                            {request.business_type && (
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Business Type:</span>
-                                    <span className="font-medium capitalize">{request.business_type}</span>
-                                </div>
-                            )}
-                            <div className="flex justify-between">
-                                <span className="text-muted-foreground">Submitted:</span>
-                                <span className="font-medium">{new Date(request.created_at).toLocaleDateString()}</span>
-                            </div>
+                    <div className="space-y-2 text-sm border-t pt-4">
+                        <div className="flex justify-between">
+                            <span className="text-muted-foreground">Restaurant Name:</span>
+                            <span className="font-medium">{request.restaurant_name}</span>
                         </div>
-                    )}
+                        {request.business_type && (
+                            <div className="flex justify-between">
+                                <span className="text-muted-foreground">Business Type:</span>
+                                <span className="font-medium capitalize">{request.business_type}</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between">
+                            <span className="text-muted-foreground">Submitted:</span>
+                            <span className="font-medium">{new Date(request.created_at).toLocaleDateString()}</span>
+                        </div>
+                    </div>
 
                     <Alert>
                         <Info className="h-4 w-4" />
