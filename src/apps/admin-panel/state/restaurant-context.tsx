@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import type { StaffCategory, StaffRole } from "../components/staff/staff-utils";
 
-export type CurrentRestaurant = Pick<Tables<"restaurants">, "id" | "name" | "slug">;
+export type CurrentRestaurant = Pick<Tables<"restaurants">, "id" | "name" | "slug" | "currency_code">;
 
 type RestaurantContextValue = {
   loading: boolean;
@@ -73,7 +73,7 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
     if (userRoleRow.restaurant_id) {
       const { data: restaurantRow, error: restaurantError } = await supabase
         .from("restaurants")
-        .select("id, name, slug")
+        .select("id, name, slug, currency_code")
         .eq("id", userRoleRow.restaurant_id)
         .maybeSingle();
 
@@ -86,6 +86,7 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
           id: userRoleRow.restaurant_id,
           name: "My Restaurant",
           slug: "",
+          currency_code: "INR",
         };
       }
     }

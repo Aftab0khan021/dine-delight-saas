@@ -73,7 +73,7 @@ export default function MenuInsights() {
   const popular = popularQuery.data ?? [];
   const totalRevenue = popular.reduce((s, i) => s + (i.revenue_cents_7d ?? 0), 0);
   const totalOrders = popular.reduce((s, i) => s + (i.order_count_7d ?? 0), 0);
-  const currency = restaurant?.currency_code || "USD";
+  const currency = restaurant?.currency_code || "INR";
 
   return (
     <div className="flex flex-col gap-4 w-full">

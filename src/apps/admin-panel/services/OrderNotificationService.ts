@@ -2,6 +2,7 @@
  * Order Notification Service
  * Handles browser notifications and audio alerts for new orders
  */
+import { formatMoney } from "@/lib/formatting";
 
 class OrderNotificationService {
     private audioContext: AudioContext | null = null;
@@ -129,6 +130,7 @@ class OrderNotificationService {
         table_label?: string;
         total_cents: number;
         items_count?: number;
+        currency_code?: string;
     }) {
         // Play sound
         this.playSound();
@@ -138,7 +140,7 @@ class OrderNotificationService {
         const itemsInfo = order.items_count ? ` (${order.items_count} items)` : '';
 
         this.showNotification('🔔 New Order Received!', {
-            body: `Order #${order.id.slice(0, 8)}${tableInfo}${itemsInfo}\nTotal: $${(order.total_cents / 100).toFixed(2)}`,
+            body: `Order #${order.id.slice(0, 8)}${tableInfo}${itemsInfo}\nTotal: ${formatMoney(order.total_cents, order.currency_code || 'INR')}`,
             tag: `order-${order.id}`,
             data: { orderId: order.id },
         });

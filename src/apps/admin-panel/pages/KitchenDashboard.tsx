@@ -61,7 +61,7 @@ export default function KitchenDashboard() {
 
   const allRestaurantIds = [
     restaurant?.id,
-    ...(brandsQuery.data?.map((b: any) => b.id) ?? [])
+    ...(brandsQuery.data?.map((b) => b.id) ?? [])
   ].filter(Boolean) as string[];
 
   const ordersQuery = useQuery({
@@ -110,11 +110,11 @@ export default function KitchenDashboard() {
 
   const orders = ordersQuery.data ?? [];
   const brands = brandsQuery.data ?? [];
-  const currency = restaurant?.currency_code || "USD";
+  const currency = restaurant?.currency_code || "INR";
 
   const brandMap: Record<string, { name: string; brand_color: string }> = {};
-  for (const b of brands as any[]) {
-    brandMap[b.id] = { name: b.name, brand_color: b.brand_color || "#6366f1" };
+  for (const b of brands) {
+    brandMap[(b as any).id] = { name: (b as any).name, brand_color: (b as any).brand_color || "#6366f1" };
   }
 
   const activeStatuses = ["pending", "accepted", "in_progress", "ready"];
@@ -144,7 +144,7 @@ export default function KitchenDashboard() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Brands</SelectItem>
-                {brands.map((b: any) => (
+                  {brands.map((b: any) => (
                   <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                 ))}
               </SelectContent>
@@ -216,7 +216,12 @@ export default function KitchenDashboard() {
   );
 }
 
-function OrderKOTCard({ order, brandMap, currency, qc }: any) {
+function OrderKOTCard({ order, brandMap, currency, qc }: {
+  order: any;
+  brandMap: Record<string, { name: string; brand_color: string }>;
+  currency: string;
+  qc: any;
+}) {
   const brand = brandMap[order.restaurant_id];
   const minutesAgo = Math.floor((Date.now() - new Date(order.placed_at).getTime()) / 60_000);
   const isUrgent = minutesAgo > 15 && ["pending", "accepted"].includes(order.status);
