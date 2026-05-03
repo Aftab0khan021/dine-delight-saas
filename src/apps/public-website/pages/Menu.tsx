@@ -464,7 +464,6 @@ export default function PublicMenu() {
                 if (dietaryFilter === 'nonveg') return text.includes('chicken') || text.includes('mutton') || text.includes('fish') || text.includes('egg') || text.includes('prawn') || text.includes('meat') || text.includes('non-veg') || text.includes('nonveg');
                 return true;
               });
-              });
               }
               if (filteredItems.length === 0) return null;
               return (
