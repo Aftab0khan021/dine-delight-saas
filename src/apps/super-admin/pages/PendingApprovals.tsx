@@ -34,37 +34,44 @@ export default function PendingApprovals() {
             setApprovingId(request.id);
             const { data: { user } } = await supabase.auth.getUser();
 
-            // 1. Update profile status to active
-            const { error: profileError } = await supabase
-                .from('profiles')
-                .update({ account_status: 'active' })
-                .eq('id', request.user_id);
-
-            if (profileError) throw profileError;
-
-            // 2. Update request status to approved
-            const { error: requestError } = await supabase
-                .from('restaurant_admin_requests')
-                .update({
-                    status: 'approved',
-                    reviewed_by: user?.id,
-                    reviewed_at: new Date().toISOString()
+            // 1. Create the restaurant for the applicant
+            const { data: newRestaurant, error: restaurantError } = await supabase
+                .from('restaurants')
+                .insert({
+                    name: request.restaurant_name,
+                    slug: request.restaurant_slug,
+                    is_accepting_orders: true
                 })
-                .eq('id', request.id);
+                .select('id')
+                .single();
 
-            if (requestError) throw requestError;
+            if (restaurantError) {
+                // Slug might conflict — try with a numeric suffix
+                const fallbackSlug = `${request.restaurant_slug}-${Date.now().toString(36)}`;
+                const { data: retryRestaurant, error: retryError } = await supabase
+                    .from('restaurants')
+                    .insert({
+                        name: request.restaurant_name,
+                        slug: fallbackSlug,
+                        is_accepting_orders: true
+                    })
+                    .select('id')
+                    .single();
 
-            // 3. TODO: Send approval email (via Edge Function)
-            // await supabase.functions.invoke('send-approval-email', {
-            //   body: { userId: request.user_id, approved: true }
-            // });
+                if (retryError) throw retryError;
+                if (!retryRestaurant) throw new Error("Failed to create restaurant");
+                
+                // Use the retry result
+                (newRestaurant as any) ?? null;
+                // Assign using retryRestaurant
+                await assignRoleAndFinalize(request, retryRestaurant.id, user?.id);
+                return;
+            }
 
-            toast({
-                title: "Request Approved",
-                description: `${request.profiles.email} can now create their restaurant.`,
-            });
+            if (!newRestaurant) throw new Error("Failed to create restaurant");
 
-            refetch();
+            await assignRoleAndFinalize(request, newRestaurant.id, user?.id);
+
         } catch (error: any) {
             toast({
                 title: "Error",
@@ -74,6 +81,54 @@ export default function PendingApprovals() {
         } finally {
             setApprovingId(null);
         }
+    };
+
+    const assignRoleAndFinalize = async (request: any, restaurantId: string, reviewerId?: string) => {
+        // 2. Create/update user_roles with restaurant_admin role
+        const { error: roleError } = await supabase
+            .from('user_roles')
+            .upsert({
+                user_id: request.user_id,
+                restaurant_id: restaurantId,
+                role: 'restaurant_admin',
+            }, { onConflict: 'user_id,restaurant_id' });
+
+        if (roleError) {
+            console.error("Role assignment error:", roleError);
+            // Try insert if upsert fails (some schemas have different unique constraints)
+            await supabase.from('user_roles').insert({
+                user_id: request.user_id,
+                restaurant_id: restaurantId,
+                role: 'restaurant_admin',
+            });
+        }
+
+        // 3. Update profile status to active
+        const { error: profileError } = await supabase
+            .from('profiles')
+            .update({ account_status: 'active' })
+            .eq('id', request.user_id);
+
+        if (profileError) throw profileError;
+
+        // 4. Update request status to approved
+        const { error: requestError } = await supabase
+            .from('restaurant_admin_requests')
+            .update({
+                status: 'approved',
+                reviewed_by: reviewerId,
+                reviewed_at: new Date().toISOString()
+            })
+            .eq('id', request.id);
+
+        if (requestError) throw requestError;
+
+        toast({
+            title: "Request Approved",
+            description: `${request.restaurant_name} has been created and ${request.profiles?.email || 'the user'} is now a restaurant admin.`,
+        });
+
+        refetch();
     };
 
     const handleDeny = async (request: any, reason: string) => {
