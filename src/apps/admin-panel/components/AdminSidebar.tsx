@@ -20,6 +20,7 @@ import {
   Flame,
   Bot,
   CalendarDays,
+  Package,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ const coreNavItems: NavItem[] = [
   { to: "/admin/billing",          label: "Billing",          icon: CreditCard,     adminOnly: true },
   { to: "/admin/coupons",          label: "Coupons",          icon: Ticket,         permission: PERMISSIONS.VIEW_COUPONS },
   { to: "/admin/reservations",     label: "Reservations",     icon: CalendarDays,   permission: PERMISSIONS.MANAGE_SETTINGS },
+  { to: "/admin/inventory",        label: "Inventory",        icon: Package,        permission: PERMISSIONS.VIEW_MENU },
 ];
 
 // Growth pillar pages — shown under "Growth" separator, admin-only unless noted

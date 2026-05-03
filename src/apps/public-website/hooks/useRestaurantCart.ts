@@ -16,6 +16,7 @@ export type CartItem = {
   variant_name?: string;
   addons: CartAddon[];
   notes?: string;
+  claimedBy?: string; // Device token of diner who claimed this item (split bill)
 };
 
 type CouponData = {
