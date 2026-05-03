@@ -20,7 +20,8 @@ import {
     resetUserPassword,
     forceLogoutUser,
     disableUserAccount,
-    enableUserAccount
+    enableUserAccount,
+    deleteUser
 } from "../lib/user-management";
 
 // UI Components
@@ -297,6 +298,28 @@ export default function Users() {
             });
         },
     });
+    // Delete user mutation
+    const deleteUserMutation = useMutation({
+        mutationFn: async ({ userId, reason }: { userId: string; reason: string }) => {
+            return await deleteUser(userId, reason);
+        },
+        onSuccess: (data) => {
+            toast({
+                title: "User Deleted",
+                description: data.message,
+            });
+            queryClient.invalidateQueries({ queryKey: ["super-admin", "users"] });
+            setConfirmDialog({ open: false, action: "", userId: "", userEmail: "" });
+            setDisableReason("");
+        },
+        onError: (error: any) => {
+            toast({
+                title: "Failed to delete user",
+                description: error.message,
+                variant: "destructive",
+            });
+        },
+    });
 
     // Handle user actions
     const handleAction = (action: string, userId: string, userEmail: string) => {
@@ -326,6 +349,17 @@ export default function Users() {
                 break;
             case "logout":
                 forceLogoutMutation.mutate(userId);
+                break;
+            case "delete":
+                if (!disableReason.trim()) {
+                    toast({
+                        title: "Reason required",
+                        description: "Please provide a reason for deleting the account",
+                        variant: "destructive",
+                    });
+                    return;
+                }
+                deleteUserMutation.mutate({ userId, reason: disableReason });
                 break;
         }
     };
@@ -489,6 +523,18 @@ export default function Users() {
                                                                 Disable Account
                                                             </DropdownMenuItem>
                                                         )}
+                                                        {!user.roles.some((r) => r.role === "super_admin") && (
+                                                            <>
+                                                                <DropdownMenuSeparator />
+                                                                <DropdownMenuItem
+                                                                    onClick={() => handleAction("delete", user.id, user.email)}
+                                                                    className="text-destructive focus:text-destructive"
+                                                                >
+                                                                    <Trash2 className="mr-2 h-4 w-4" />
+                                                                    Delete User
+                                                                </DropdownMenuItem>
+                                                            </>
+                                                        )}
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </TableCell>
@@ -511,6 +557,7 @@ export default function Users() {
                             {confirmDialog.action === "disable" && "Disable Account"}
                             {confirmDialog.action === "enable" && "Enable Account"}
                             {confirmDialog.action === "logout" && "Force Logout"}
+                            {confirmDialog.action === "delete" && "⚠️ Permanently Delete User"}
                         </DialogTitle>
                         <DialogDescription>
                             {confirmDialog.action === "reset_password" &&
@@ -521,15 +568,21 @@ export default function Users() {
                                 `Re-enable access for ${confirmDialog.userEmail}? They will be able to sign in again.`}
                             {confirmDialog.action === "logout" &&
                                 `Force logout ${confirmDialog.userEmail}? All their active sessions will be terminated.`}
+                            {confirmDialog.action === "delete" &&
+                                `This will PERMANENTLY delete ${confirmDialog.userEmail}, their restaurant, and ALL restaurant data (menu, orders, staff, etc.). This action CANNOT be undone.`}
                         </DialogDescription>
                     </DialogHeader>
 
-                    {confirmDialog.action === "disable" && (
+                    {(confirmDialog.action === "disable" || confirmDialog.action === "delete") && (
                         <div className="space-y-2">
-                            <Label htmlFor="disable-reason">Reason for disabling (required)</Label>
+                            <Label htmlFor="disable-reason">
+                                {confirmDialog.action === "delete" ? "Reason for deletion (required)" : "Reason for disabling (required)"}
+                            </Label>
                             <Textarea
                                 id="disable-reason"
-                                placeholder="Enter reason for disabling this account..."
+                                placeholder={confirmDialog.action === "delete"
+                                    ? "Enter reason for permanently deleting this user..."
+                                    : "Enter reason for disabling this account..."}
                                 value={disableReason}
                                 onChange={(e) => setDisableReason(e.target.value)}
                                 rows={3}
@@ -548,21 +601,23 @@ export default function Users() {
                             Cancel
                         </Button>
                         <Button
-                            variant={confirmDialog.action === "disable" ? "destructive" : "default"}
+                            variant={(confirmDialog.action === "disable" || confirmDialog.action === "delete") ? "destructive" : "default"}
                             onClick={confirmAction}
                             disabled={
                                 resetPasswordMutation.isPending ||
                                 forceLogoutMutation.isPending ||
                                 disableAccountMutation.isPending ||
-                                enableAccountMutation.isPending
+                                enableAccountMutation.isPending ||
+                                deleteUserMutation.isPending
                             }
                         >
                             {resetPasswordMutation.isPending ||
                                 forceLogoutMutation.isPending ||
                                 disableAccountMutation.isPending ||
-                                enableAccountMutation.isPending
+                                enableAccountMutation.isPending ||
+                                deleteUserMutation.isPending
                                 ? "Processing..."
-                                : "Confirm"}
+                                : confirmDialog.action === "delete" ? "Delete Permanently" : "Confirm"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

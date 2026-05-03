@@ -201,6 +201,35 @@ serve(async (req) => {
                 break;
             }
 
+            case "delete_user": {
+                // Safety: prevent self-deletion
+                if (user_id === user.id) {
+                    return json({ error: "Cannot delete your own account" }, 400);
+                }
+
+                // Delete user from auth.users
+                // This cascades: auth.users → profiles → user_roles → (trigger) restaurant → all child tables
+                const { error: deleteError } = await supabase.auth.admin.deleteUser(user_id);
+
+                if (deleteError) {
+                    console.error("Delete user error:", deleteError);
+                    throw new Error("Failed to delete user account");
+                }
+
+                auditAction = "user_account_deleted";
+                auditMetadata = {
+                    target_user_email: targetUser.email,
+                    target_user_name: targetUser.full_name,
+                    reason: reason || "Account permanently deleted by super admin"
+                };
+
+                result = {
+                    success: true,
+                    message: `User ${targetUser.email} and all associated data have been permanently deleted`
+                };
+                break;
+            }
+
             default:
                 return json({ error: `Unknown action: ${action}` }, 400);
         }
