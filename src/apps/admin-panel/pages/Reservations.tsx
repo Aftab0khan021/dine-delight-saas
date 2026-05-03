@@ -27,16 +27,18 @@ export default function AdminReservations() {
   const { toast } = useToast();
   const [dateFilter, setDateFilter] = useState(() => new Date().toISOString().split("T")[0]);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(0);
+  const ITEMS_PER_PAGE = 20;
 
   const { data: reservations, isLoading } = useQuery({
     queryKey: ["admin", "reservations", restaurant?.id, dateFilter],
     enabled: !!restaurant?.id,
     queryFn: async () => {
-      let q = supabase.from("reservations").select("*").eq("restaurant_id", restaurant!.id).order("reservation_time", { ascending: true });
+      let q = supabase.from("reservations").select("*", { count: "exact" }).eq("restaurant_id", restaurant!.id).order("reservation_time", { ascending: true });
       if (dateFilter) q = q.eq("reservation_date", dateFilter);
-      const { data, error } = await q;
+      const { data, error, count } = await q;
       if (error) throw error;
-      return data || [];
+      return { items: data || [], totalCount: count || 0 };
     },
   });
 
@@ -49,21 +51,27 @@ export default function AdminReservations() {
     onError: (e: Error) => { toast({ title: "Error", description: e.message, variant: "destructive" }); },
   });
 
+  const allItems = reservations?.items ?? [];
+
   const filtered = useMemo(() => {
-    if (!reservations) return [];
-    if (statusFilter === "all") return reservations;
-    return reservations.filter(r => r.status === statusFilter);
-  }, [reservations, statusFilter]);
+    if (!allItems.length) return [];
+    if (statusFilter === "all") return allItems;
+    return allItems.filter(r => r.status === statusFilter);
+  }, [allItems, statusFilter]);
+
+  // Reset page on filter change
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paginatedItems = filtered.slice(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE);
 
   const stats = useMemo(() => {
-    if (!reservations) return { total: 0, pending: 0, confirmed: 0, seated: 0 };
+    if (!allItems.length) return { total: 0, pending: 0, confirmed: 0, seated: 0 };
     return {
-      total: reservations.length,
-      pending: reservations.filter(r => r.status === "pending").length,
-      confirmed: reservations.filter(r => r.status === "confirmed").length,
-      seated: reservations.filter(r => r.status === "seated").length,
+      total: allItems.length,
+      pending: allItems.filter(r => r.status === "pending").length,
+      confirmed: allItems.filter(r => r.status === "confirmed").length,
+      seated: allItems.filter(r => r.status === "seated").length,
     };
-  }, [reservations]);
+  }, [allItems]);
 
   return (
     <div className="space-y-6">
@@ -84,9 +92,9 @@ export default function AdminReservations() {
       <div className="flex flex-wrap gap-3 items-center">
         <Input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="w-auto" />
         <div className="flex gap-1 flex-wrap">
-          <Button size="sm" variant={statusFilter === "all" ? "default" : "outline"} onClick={() => setStatusFilter("all")}>All</Button>
+          <Button size="sm" variant={statusFilter === "all" ? "default" : "outline"} onClick={() => { setStatusFilter("all"); setPage(0); }}>All</Button>
           {STATUSES.map(s => (
-            <Button key={s} size="sm" variant={statusFilter === s ? "default" : "outline"} onClick={() => setStatusFilter(s)} className="capitalize">{s.replace("_", " ")}</Button>
+            <Button key={s} size="sm" variant={statusFilter === s ? "default" : "outline"} onClick={() => { setStatusFilter(s); setPage(0); }} className="capitalize">{s.replace("_", " ")}</Button>
           ))}
         </div>
       </div>
@@ -94,14 +102,14 @@ export default function AdminReservations() {
       {/* Reservations List */}
       {isLoading ? (
         <Card className="p-6"><p className="text-sm text-muted-foreground">Loading...</p></Card>
-      ) : filtered.length === 0 ? (
+      ) : paginatedItems.length === 0 ? (
         <Card className="p-8 text-center">
           <CalendarDays className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
           <p className="text-muted-foreground">No reservations for this date</p>
         </Card>
       ) : (
         <div className="space-y-3">
-          {filtered.map((r: any) => (
+          {paginatedItems.map((r: any) => (
             <Card key={r.id} className="shadow-sm">
               <CardContent className="p-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -143,6 +151,15 @@ export default function AdminReservations() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+          <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}>Previous</Button>
+          <span className="text-sm text-muted-foreground">Page {page + 1} of {totalPages} ({filtered.length} reservations)</span>
+          <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}>Next</Button>
         </div>
       )}
     </div>

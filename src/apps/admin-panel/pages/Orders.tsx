@@ -55,15 +55,32 @@ const statusVariant = (s: string) => {
   }
 };
 
+// --- Types for Order Data ---
+type OrderData = {
+  id: string;
+  status: string;
+  placed_at: string;
+  table_label: string | null;
+  discount_cents: number;
+  discount_type: string | null;
+  discount_reason: string | null;
+  payment_method: string | null;
+  total_cents: number;
+  items_summary: string;
+  item_details: any[];
+};
+
 // --- Subcomponent: Order Card (Repo A Style) ---
 function OrderCard({
   order,
   onAdvance,
-  loadingId
+  loadingId,
+  currencyCode,
 }: {
-  order: any;
+  order: OrderData;
   onAdvance: (id: string, currentStatus: OrderStatus) => void;
   loadingId: string | null;
+  currencyCode: string;
 }) {
   const uiStatus = STATUS_MAP[order.status as OrderStatus];
   const isLoading = loadingId === order.id;
@@ -111,8 +128,7 @@ function OrderCard({
         )}
         {order.discount_cents > 0 && (
           <Badge variant="destructive" className="text-[10px] h-5 px-1.5">
-            -${formatMoney(order.discount_cents, 'USD')}
-            {/* {order.discount_reason && ` (${order.discount_reason})`} */}
+            -{formatMoney(order.discount_cents, currencyCode)}
           </Badge>
         )}
       </div>
@@ -272,7 +288,8 @@ export default function AdminOrders() {
                 id: newOrder.id,
                 table_label: newOrder.table_label,
                 total_cents: newOrder.total_cents || 0,
-                items_count: itemsCount
+                items_count: itemsCount,
+                currency_code: restaurant?.currency_code || "INR",
               });
             }
           }
@@ -554,6 +571,7 @@ export default function AdminOrders() {
                     order={o}
                     onAdvance={(id, status) => advanceMutation.mutate({ id, currentStatus: status })}
                     loadingId={advancingId}
+                    currencyCode={restaurant?.currency_code || "INR"}
                   />
                 ))}
 

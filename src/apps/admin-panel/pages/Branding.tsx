@@ -10,6 +10,9 @@ import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
 import { useFeatureAccess } from "../hooks/useFeatureAccess";
 import { OperatingHoursEditor } from "../components/branding/OperatingHoursEditor";
+import { SocialLinksCard } from "../components/branding/SocialLinksCard";
+import { TestimonialsCard, type Testimonial } from "../components/branding/TestimonialsCard";
+import { BrandingPreview } from "../components/branding/BrandingPreview";
 
 // UI Components
 import { Button } from "@/components/ui/button";
@@ -91,7 +94,7 @@ export default function AdminBranding() {
   // --- NEW: Enhancement settings (stored in settings JSONB) ---
   const [socialLinks, setSocialLinks] = useState({ instagram: "", facebook: "", twitter: "", youtube: "" });
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
-  const [testimonials, setTestimonials] = useState<{ name: string; text: string; rating: number }[]>([]);
+  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [reservationEnabled, setReservationEnabled] = useState(false);
   const [totalTables, setTotalTables] = useState(10);
@@ -733,35 +736,7 @@ export default function AdminBranding() {
           </Card>
 
           {/* Card 5: Social Media Links */}
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Instagram className="h-4 w-4 text-muted-foreground" />
-                Social Media Links
-              </CardTitle>
-              <CardDescription>Add your social media profiles. They'll appear on your public page.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label className="flex items-center gap-1.5 text-xs"><Instagram className="h-3.5 w-3.5" /> Instagram</Label>
-                  <Input value={socialLinks.instagram} onChange={e => setSocialLinks(p => ({ ...p, instagram: e.target.value }))} placeholder="https://instagram.com/..." />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="flex items-center gap-1.5 text-xs"><Facebook className="h-3.5 w-3.5" /> Facebook</Label>
-                  <Input value={socialLinks.facebook} onChange={e => setSocialLinks(p => ({ ...p, facebook: e.target.value }))} placeholder="https://facebook.com/..." />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="flex items-center gap-1.5 text-xs"><Twitter className="h-3.5 w-3.5" /> Twitter / X</Label>
-                  <Input value={socialLinks.twitter} onChange={e => setSocialLinks(p => ({ ...p, twitter: e.target.value }))} placeholder="https://x.com/..." />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="flex items-center gap-1.5 text-xs"><Youtube className="h-3.5 w-3.5" /> YouTube</Label>
-                  <Input value={socialLinks.youtube} onChange={e => setSocialLinks(p => ({ ...p, youtube: e.target.value }))} placeholder="https://youtube.com/..." />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <SocialLinksCard socialLinks={socialLinks} onChange={setSocialLinks} />
 
           {/* Card 6: Photo Gallery */}
           <Card className="shadow-sm">
@@ -817,40 +792,7 @@ export default function AdminBranding() {
           </Card>
 
           {/* Card 7: Customer Testimonials */}
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Star className="h-4 w-4 text-muted-foreground" />
-                Customer Testimonials
-              </CardTitle>
-              <CardDescription>Add up to 5 customer reviews to display on your public page.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {testimonials.map((t, i) => (
-                <div key={i} className="flex gap-2 items-start p-3 rounded-lg border bg-muted/20">
-                  <div className="flex-1 space-y-2">
-                    <Input value={t.name} placeholder="Customer name" onChange={e => setTestimonials(prev => prev.map((item, idx) => idx === i ? { ...item, name: e.target.value } : item))} />
-                    <Textarea value={t.text} placeholder="What did they say?" className="h-16 resize-none" onChange={e => setTestimonials(prev => prev.map((item, idx) => idx === i ? { ...item, text: e.target.value } : item))} />
-                    <div className="flex items-center gap-1">
-                      {[1, 2, 3, 4, 5].map(s => (
-                        <button key={s} type="button" onClick={() => setTestimonials(prev => prev.map((item, idx) => idx === i ? { ...item, rating: s } : item))}>
-                          <Star className={`h-4 w-4 ${s <= t.rating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'}`} />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={() => setTestimonials(prev => prev.filter((_, idx) => idx !== i))}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              ))}
-              {testimonials.length < 5 && (
-                <Button type="button" variant="outline" size="sm" onClick={() => setTestimonials(prev => [...prev, { name: "", text: "", rating: 5 }])}>
-                  <Plus className="mr-1 h-3.5 w-3.5" /> Add Testimonial
-                </Button>
-              )}
-            </CardContent>
-          </Card>
+          <TestimonialsCard testimonials={testimonials} onChange={setTestimonials} />
 
           {/* Card 8: WhatsApp & Reservations */}
           <Card className="shadow-sm">
@@ -912,123 +854,20 @@ export default function AdminBranding() {
         </div>
 
         {/* RIGHT COLUMN: Live Preview & Link */}
-        <div className="space-y-6">
-
-          {/* 1. Website Link Card */}
-          <Card className="shadow-sm border-primary/20 bg-primary/5">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2 text-primary">
-                <Globe className="h-4 w-4" />
-                Your Website
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="rounded-lg border bg-background p-3">
-                <div className="text-xs font-medium text-muted-foreground mb-1">Public URL</div>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 truncate text-xs font-mono bg-muted/50 p-1 rounded">
-                    {w.slug ? getPublicUrl(w.slug) : "..."}
-                  </code>
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCopyLink}>
-                    <Copy className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-              {/* Show warning if slug changed from saved value */}
-              {restaurantData?.slug && w.slug && w.slug !== restaurantData.slug && (
-                <Alert variant="destructive" className="py-2">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription className="text-xs">
-                    Changing slug will break the old URL: <code className="font-mono">/r/{restaurantData.slug}</code>
-                  </AlertDescription>
-                </Alert>
-              )}
-              <Button className="w-full" variant="outline" asChild>
-                <a
-                  href={restaurantData?.slug ? getPublicUrl(restaurantData.slug) : "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <ExternalLink className="mr-2 h-4 w-4" /> Visit Live Site
-                </a>
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* 2. Visual Preview Card */}
-          <Card className="shadow-sm overflow-hidden lg:sticky lg:top-6">
-            <CardHeader className="bg-muted/30 border-b pb-3">
-              <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Mobile Preview
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {/* Mockup Container */}
-              <div className="relative bg-white min-h-[450px] flex flex-col">
-
-                {/* Header (Cover Image + Logo) */}
-                <div className="relative h-32 w-full bg-gray-100">
-                  {w.cover_image_url ? (
-                    <img src={w.cover_image_url} alt="Cover" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="h-full w-full flex items-center justify-center text-gray-300 bg-gray-200">
-                      <ImageIcon className="h-8 w-8" />
-                    </div>
-                  )}
-
-                  {/* Logo Overlay */}
-                  <div className="absolute -bottom-6 left-1/2 -translate-x-1/2">
-                    <div className="h-16 w-16 rounded-full border-4 border-white bg-white shadow-md overflow-hidden flex items-center justify-center">
-                      {w.logo_url ? (
-                        <img src={w.logo_url} alt="Logo" className="h-full w-full object-cover" />
-                      ) : (
-                        <Store className="h-8 w-8 text-gray-400" />
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Body Content */}
-                <div className="mt-8 px-5 pb-5 text-center flex-1 flex flex-col">
-                  <h3 className="font-bold text-lg text-gray-900 leading-tight">
-                    {w.name || "Your Restaurant"}
-                  </h3>
-
-                  <p className="text-xs text-gray-500 mt-2 line-clamp-3">
-                    {w.description || "Delicious food served daily. Order online for pickup or dine-in."}
-                  </p>
-
-                  {/* Contact Info Preview */}
-                  {(w.contact_email || w.contact_phone) && (
-                    <div className="flex justify-center gap-3 mt-3 text-[10px] text-gray-400">
-                      {w.contact_email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> Email</span>}
-                      {w.contact_phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> Call</span>}
-                    </div>
-                  )}
-
-                  {/* Mock Items */}
-                  <div className="grid grid-cols-2 gap-2 mt-6">
-                    <div className="h-24 rounded-lg bg-gray-50 border border-gray-100 animate-pulse"></div>
-                    <div className="h-24 rounded-lg bg-gray-50 border border-gray-100 animate-pulse"></div>
-                  </div>
-
-                  {/* CTA Button */}
-                  <div className="mt-auto pt-6">
-                    <div
-                      className="w-full py-3 rounded-full text-sm font-bold shadow-lg transition-transform"
-                      style={{
-                        backgroundColor: w.primary_color || "#000000",
-                        color: w.accent_color || "#ffffff"
-                      }}
-                    >
-                      Browse Menu
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <BrandingPreview
+          watched={{
+            name: w.name || "",
+            slug: w.slug || "",
+            description: w.description || "",
+            logo_url: w.logo_url || "",
+            cover_image_url: w.cover_image_url || "",
+            primary_color: w.primary_color || "",
+            accent_color: w.accent_color || "",
+            contact_email: w.contact_email || "",
+            contact_phone: w.contact_phone || "",
+          }}
+          savedSlug={restaurantData?.slug}
+        />
       </div>
     </div>
   );

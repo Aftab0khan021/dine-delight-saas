@@ -18,7 +18,6 @@ import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/formatting";
-import { useRestaurantContext } from "../state/restaurant-context";
 
 // UI Components
 import { Badge } from "@/components/ui/badge";

@@ -150,18 +150,20 @@ export default function AdminQrMenu() {
       return;
     }
 
+    const escapeCSV = (val: string) => `"${val.replace(/"/g, '""')}"`;
+
     // Generate CSV content
     const headers = ["Table Label", "Relative Path", "Full URL", "Status"];
     const rows = qrCodes.map((qr: any) => [
-      qr.table_label || "General Menu",
-      qr.destination_path,
-      `${window.location.origin}${qr.destination_path}`,
-      qr.is_active ? "Active" : "Disabled"
+      escapeCSV(qr.table_label || "General Menu"),
+      escapeCSV(qr.destination_path),
+      escapeCSV(`${window.location.origin}${qr.destination_path}`),
+      escapeCSV(qr.is_active ? "Active" : "Disabled")
     ]);
 
     const csvContent = [
       headers.join(","),
-      ...rows.map((row: any[]) => row.join(","))
+      ...rows.map((row: string[]) => row.join(","))
     ].join("\n");
 
     // Trigger Download

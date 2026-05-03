@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { MessageSquare, Settings, BarChart3, MessageCircle, CheckCircle2, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { formatMoney } from "@/lib/formatting";
 
 export default function WhatsAppSettings() {
     const { restaurant } = useRestaurantContext();
@@ -250,7 +251,7 @@ export default function WhatsAppSettings() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">
-                            ${((stats?.totalRevenue || 0) / 100).toFixed(2)}
+                            {formatMoney(stats?.totalRevenue || 0, restaurant?.currency_code || "INR")}
                         </div>
                     </CardContent>
                 </Card>
@@ -456,9 +457,6 @@ function ConversationsView({ restaurantId }: { restaurantId?: string }) {
                                     State: {conv.state} • Last message: {new Date(conv.last_message_at).toLocaleString()}
                                 </div>
                             </div>
-                            <Button variant="outline" size="sm">
-                                View
-                            </Button>
                         </div>
                     ))}
                 </div>
