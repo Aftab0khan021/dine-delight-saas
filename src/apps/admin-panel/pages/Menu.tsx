@@ -67,6 +67,11 @@ type MenuItemRow = {
   category_id: string | null;
   image_url: string | null;
   is_active: boolean;
+  food_type: string | null;
+  tags: string[] | null;
+  spice_level: number | null;
+  allergens: string[] | null;
+  packaging_charge_cents: number | null;
 };
 
 import { getCurrencyExample } from "@/lib/currency-utils";
@@ -235,6 +240,11 @@ export default function AdminMenu() {
         category_id: values.category_id === "" ? null : values.category_id,
         image_url: values.image_url || null,
         is_active: values.is_active,
+        food_type: values.food_type || 'veg',
+        tags: values.tags || [],
+        spice_level: values.spice_level != null ? Number(values.spice_level) : null,
+        allergens: values.allergens || [],
+        packaging_charge_cents: Number(values.packaging_charge_cents) || 0,
         restaurant_id: restaurant!.id
       };
 
@@ -460,9 +470,14 @@ export default function AdminMenu() {
                     </div>
 
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">{item.name}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${(item as any).food_type === 'nonveg' ? 'bg-red-500' : (item as any).food_type === 'egg' ? 'bg-yellow-500' : 'bg-green-500'}`} title={(item as any).food_type || 'veg'} />
+                        <span className="truncate text-sm font-medium">{item.name}</span>
+                      </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xs font-mono text-muted-foreground">{formatMoney(item.price_cents, currencyCode)}</span>
+                        {(item as any).spice_level > 0 && <span className="text-xs">{'🌶️'.repeat(Math.min((item as any).spice_level, 3))}</span>}
+                        {((item as any).tags || []).slice(0, 2).map((t: string) => <Badge key={t} variant="outline" className="h-4 px-1 text-[9px]">{t}</Badge>)}
                         {!item.is_active && <Badge variant="destructive" className="h-4 px-1 text-[10px]">Sold Out</Badge>}
                       </div>
                     </div>
@@ -487,6 +502,7 @@ export default function AdminMenu() {
         open={catSheetOpen}
         onOpenChange={setCatSheetOpen}
         data={editCat}
+        categories={categories}
         onSave={(vals: any) => saveCategory.mutate(vals)}
         onDelete={(id: string) => deleteCategory.mutate(id)}
       />
@@ -506,7 +522,7 @@ export default function AdminMenu() {
 }
 
 // --- Subcomponent: Category Sheet ---
-function CategorySheet({ open, onOpenChange, data, onSave, onDelete }: any) {
+function CategorySheet({ open, onOpenChange, data, onSave, onDelete, categories }: any) {
   const form = useForm();
 
   useEffect(() => {
@@ -514,11 +530,22 @@ function CategorySheet({ open, onOpenChange, data, onSave, onDelete }: any) {
       form.reset({
         name: data?.name || "",
         description: data?.description || "",
+        parent_id: data?.parent_id || "",
+        available_from: data?.available_from || "",
+        available_to: data?.available_to || "",
       });
     }
   }, [open, data]);
 
-  const onSubmit = (values: any) => onSave(values);
+  const onSubmit = (values: any) => onSave({
+    ...values,
+    parent_id: values.parent_id || null,
+    available_from: values.available_from || null,
+    available_to: values.available_to || null,
+  });
+
+  // Filter out self for parent dropdown
+  const parentOptions = (categories || []).filter((c: any) => c.id !== data?.id && !c.parent_id);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -536,6 +563,42 @@ function CategorySheet({ open, onOpenChange, data, onSave, onDelete }: any) {
             <Label>Description</Label>
             <Textarea {...form.register("description")} placeholder="Optional details..." />
           </div>
+
+          {/* Parent Category (Subcategory support) */}
+          <div className="space-y-2">
+            <Label>Parent Category <span className="text-xs text-muted-foreground">(optional — makes this a subcategory)</span></Label>
+            <Select
+              onValueChange={(v) => form.setValue("parent_id", v === "__none__" ? "" : v)}
+              value={form.watch("parent_id") || "__none__"}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="None (top-level)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">None (top-level)</SelectItem>
+                {parentOptions.map((c: any) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Schedule (time-based availability) */}
+          <div className="space-y-2">
+            <Label>Availability Schedule <span className="text-xs text-muted-foreground">(optional)</span></Label>
+            <p className="text-xs text-muted-foreground">Leave empty to show all day. Set times for breakfast/lunch/dinner menus.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">From</Label>
+                <Input type="time" {...form.register("available_from")} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">To</Label>
+                <Input type="time" {...form.register("available_to")} />
+              </div>
+            </div>
+          </div>
+
           <SheetFooter className="gap-2 sm:justify-between flex-col sm:flex-row">
             {data && (
               <Button type="button" variant="destructive" onClick={() => onDelete(data.id)}>
@@ -599,10 +662,14 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currenc
         name: data?.name || "",
         description: data?.description || "",
         price_cents: data?.price_cents || 0,
-        // FIX: Default to first category if available, else empty string (which mutation converts to null)
         category_id: data?.category_id || (categories && categories.length > 0 ? categories[0].id : ""),
         image_url: data?.image_url || "",
-        is_active: data?.is_active ?? true
+        is_active: data?.is_active ?? true,
+        food_type: data?.food_type || 'veg',
+        tags: data?.tags || [],
+        spice_level: data?.spice_level ?? 0,
+        allergens: data?.allergens || [],
+        packaging_charge_cents: data?.packaging_charge_cents || 0,
       });
     }
   }, [open, data, categories]);
@@ -647,28 +714,134 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currenc
             </div>
           </div>
 
+          {/* Food Type (mandatory) */}
+          <div className="space-y-2">
+            <Label>Food Type <span className="text-destructive">*</span></Label>
+            <div className="flex gap-2">
+              {(['veg', 'nonveg', 'egg'] as const).map(ft => (
+                <button
+                  key={ft}
+                  type="button"
+                  onClick={() => form.setValue('food_type', ft)}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-lg border-2 px-3 py-2 text-sm font-medium transition-colors',
+                    form.watch('food_type') === ft
+                      ? ft === 'veg' ? 'border-green-500 bg-green-50 text-green-700'
+                        : ft === 'egg' ? 'border-yellow-500 bg-yellow-50 text-yellow-700'
+                        : 'border-red-500 bg-red-50 text-red-700'
+                      : 'border-muted text-muted-foreground hover:border-border'
+                  )}
+                >
+                  <span className={`h-2.5 w-2.5 rounded-full ${ft === 'veg' ? 'bg-green-500' : ft === 'egg' ? 'bg-yellow-500' : 'bg-red-500'}`} />
+                  {ft === 'veg' ? 'Veg' : ft === 'nonveg' ? 'Non-Veg' : 'Egg'}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label>Description</Label>
             <Textarea {...form.register("description")} />
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Spice Level */}
+            <div className="space-y-2">
+              <Label>Spice Level</Label>
+              <div className="flex gap-1">
+                {[0, 1, 2, 3].map(level => (
+                  <button
+                    key={level}
+                    type="button"
+                    onClick={() => form.setValue('spice_level', level)}
+                    className={cn(
+                      'rounded-lg border-2 px-3 py-1.5 text-sm transition-colors',
+                      form.watch('spice_level') === level
+                        ? 'border-orange-500 bg-orange-50'
+                        : 'border-muted text-muted-foreground hover:border-border'
+                    )}
+                  >
+                    {level === 0 ? 'Mild' : '🌶️'.repeat(level)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Packaging Charge */}
+            <div className="space-y-2">
+              <Label>Packaging Charge (paise)</Label>
+              <Input type="number" {...form.register('packaging_charge_cents')} placeholder="0" />
+            </div>
+          </div>
+
+          {/* Tags */}
+          <div className="space-y-2">
+            <Label>Tags</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {['Indian', 'Chinese', 'Italian', 'Continental', 'South Indian', 'Mughlai', 'Thai', 'Spicy', "Chef's Special", 'New', 'Bestseller', 'Healthy', 'Jain'].map(tag => {
+                const selected = (form.watch('tags') || []).includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => {
+                      const current: string[] = form.watch('tags') || [];
+                      form.setValue('tags', selected ? current.filter(t => t !== tag) : [...current, tag]);
+                    }}
+                    className={cn(
+                      'rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+                      selected
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-muted text-muted-foreground hover:border-border'
+                    )}
+                  >
+                    {selected ? '✓ ' : ''}{tag}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Allergens */}
+          <div className="space-y-2">
+            <Label>Allergens</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {['Gluten', 'Dairy', 'Nuts', 'Peanuts', 'Shellfish', 'Soy', 'Egg', 'Fish', 'Sesame'].map(allergen => {
+                const selected = (form.watch('allergens') || []).includes(allergen);
+                return (
+                  <button
+                    key={allergen}
+                    type="button"
+                    onClick={() => {
+                      const current: string[] = form.watch('allergens') || [];
+                      form.setValue('allergens', selected ? current.filter(a => a !== allergen) : [...current, allergen]);
+                    }}
+                    className={cn(
+                      'rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+                      selected
+                        ? 'border-amber-500 bg-amber-50 text-amber-700'
+                        : 'border-muted text-muted-foreground hover:border-border'
+                    )}
+                  >
+                    {selected ? '⚠ ' : ''}{allergen}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label>Item Image</Label>
-
-            {/* Upload from device */}
             <Input
               type="file"
               accept="image/png, image/jpeg, image/webp"
               onChange={(e) => handleImageUpload(e, false)}
               disabled={uploading}
             />
-
-            {/* OR paste URL */}
             <Input
               {...form.register("image_url")}
               placeholder="https://example.com/image.jpg"
             />
-
             {form.watch("image_url") && (
               <div className="space-y-2">
                 <img
@@ -676,8 +849,6 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currenc
                   alt="Preview"
                   className="h-32 w-full object-cover rounded-md border"
                 />
-
-                {/* Replace Image */}
                 <Input
                   type="file"
                   accept="image/png, image/jpeg, image/webp"

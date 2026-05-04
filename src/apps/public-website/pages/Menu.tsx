@@ -552,13 +552,11 @@ export default function PublicMenu() {
               // Apply dietary filter
               if (dietaryFilter !== 'all') {
                 filteredItems = filteredItems.filter((item: any) => {
-                const name = (item.name || '').toLowerCase();
-                const desc = (item.description || '').toLowerCase();
-                const text = name + ' ' + desc;
-                if (dietaryFilter === 'veg') return text.includes('veg') && !text.includes('non-veg') && !text.includes('nonveg') || text.includes('paneer') || text.includes('dal') || text.includes('salad');
-                if (dietaryFilter === 'nonveg') return text.includes('chicken') || text.includes('mutton') || text.includes('fish') || text.includes('egg') || text.includes('prawn') || text.includes('meat') || text.includes('non-veg') || text.includes('nonveg');
-                return true;
-              });
+                  const ft = item.food_type || 'veg';
+                  if (dietaryFilter === 'veg') return ft === 'veg';
+                  if (dietaryFilter === 'nonveg') return ft === 'nonveg' || ft === 'egg';
+                  return true;
+                });
               }
               if (filteredItems.length === 0) return null;
               return (
@@ -595,19 +593,32 @@ export default function PublicMenu() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                          <p className="font-medium truncate">
+                          <p className="font-medium truncate flex items-center gap-1.5">
+                            <span className={`inline-block h-2.5 w-2.5 rounded-sm shrink-0 border ${
+                              item.food_type === 'nonveg' ? 'bg-red-500 border-red-600'
+                              : item.food_type === 'egg' ? 'bg-yellow-500 border-yellow-600'
+                              : 'bg-green-500 border-green-600'
+                            }`} />
                             {item.name}
                             {popularIds.includes(item.id) && (
-                              <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-orange-500">
+                              <span className="ml-1 inline-flex items-center gap-0.5 text-xs text-orange-500">
                                 <Flame className="h-3 w-3" /> Hot
                               </span>
                             )}
+                            {(item.spice_level > 0) && <span className="text-xs">{'🌶️'.repeat(Math.min(item.spice_level, 3))}</span>}
                           </p>
                               {item.description ? (
                                 <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
                                   {item.description}
                                 </p>
                               ) : null}
+                              {(item.tags && item.tags.length > 0) && (
+                                <div className="mt-1 flex gap-1 flex-wrap">
+                                  {item.tags.slice(0, 3).map((t: string) => (
+                                    <span key={t} className="text-[10px] bg-muted text-muted-foreground rounded-full px-1.5 py-0.5">{t}</span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                             <p className="font-medium tabular-nums whitespace-nowrap">
                               {formatMoney(item.price_cents, restaurantQuery.data?.currency_code)}
