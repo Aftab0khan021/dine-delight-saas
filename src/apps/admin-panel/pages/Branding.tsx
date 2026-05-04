@@ -101,6 +101,12 @@ export default function AdminBranding() {
   const [dietaryFiltersEnabled, setDietaryFiltersEnabled] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
 
+  // Payment settings state
+  const [payEnabled, setPayEnabled] = useState(false);
+  const [razorpayKeyId, setRazorpayKeyId] = useState("");
+  const [razorpayKeySecret, setRazorpayKeySecret] = useState("");
+  const [savingPayment, setSavingPayment] = useState(false);
+
   // --- Data Fetching ---
   const { data: restaurantData, isLoading } = useQuery({
     queryKey: ["admin", "restaurant", restaurant?.id],
@@ -108,7 +114,7 @@ export default function AdminBranding() {
     queryFn: async () => {
       const { data } = await supabase
         .from("restaurants")
-        .select("id, name, description, logo_url, slug, settings, operating_hours, is_holiday_mode, holiday_mode_message, max_variants_per_item, currency_code")
+        .select("id, name, description, logo_url, slug, settings, operating_hours, is_holiday_mode, holiday_mode_message, max_variants_per_item, currency_code, online_payments_enabled, razorpay_key_id, razorpay_key_secret")
         .eq("id", restaurant!.id)
         .single();
       return data;
@@ -169,6 +175,11 @@ export default function AdminBranding() {
       setReservationEnabled(!!s.reservation_enabled);
       setTotalTables(s.total_tables || 10);
       setDietaryFiltersEnabled(!!s.dietary_filters_enabled);
+
+      // Sync payment settings
+      setPayEnabled(!!(restaurantData as any).online_payments_enabled);
+      setRazorpayKeyId((restaurantData as any).razorpay_key_id || "");
+      setRazorpayKeySecret((restaurantData as any).razorpay_key_secret || "");
     }
   }, [restaurantData]);
 
@@ -858,88 +869,79 @@ export default function AdminBranding() {
               <CardDescription>Accept online payments via Razorpay (UPI, cards, wallets)</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {(() => {
-                const [payEnabled, setPayEnabled] = useState(!!(restaurantData as any)?.online_payments_enabled);
-                const [keyId, setKeyId] = useState((restaurantData as any)?.razorpay_key_id || "");
-                const [keySecret, setKeySecret] = useState((restaurantData as any)?.razorpay_key_secret || "");
-                const [saving, setSaving] = useState(false);
-                const isTestMode = keyId.startsWith("rzp_test_");
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Enable Online Payments</Label>
+                  <p className="text-xs text-muted-foreground">Customers can pay via UPI, cards, wallets</p>
+                </div>
+                <Switch checked={payEnabled} onCheckedChange={setPayEnabled} />
+              </div>
 
-                const savePaymentSettings = async () => {
+              {payEnabled && (
+                <div className="space-y-3 border-t pt-4">
+                  {razorpayKeyId.startsWith("rzp_test_") && (
+                    <Alert>
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription>Test Mode — No real charges will be made.</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="space-y-1">
+                    <Label className="text-sm">Razorpay Key ID</Label>
+                    <Input
+                      value={razorpayKeyId}
+                      onChange={e => setRazorpayKeyId(e.target.value)}
+                      placeholder="rzp_test_xxxxxxxxxxxx"
+                      className="font-mono text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-sm">Razorpay Key Secret</Label>
+                    <Input
+                      type="password"
+                      value={razorpayKeySecret}
+                      onChange={e => setRazorpayKeySecret(e.target.value)}
+                      placeholder="••••••••••••••••"
+                      className="font-mono text-sm"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Get your keys from{" "}
+                    <a href="https://dashboard.razorpay.com/app/keys" target="_blank" rel="noopener noreferrer" className="underline text-primary">
+                      Razorpay Dashboard → Settings → API Keys
+                    </a>
+                  </p>
+                </div>
+              )}
+
+              <Button
+                variant="outline"
+                className="w-full"
+                disabled={savingPayment}
+                onClick={async () => {
                   if (!restaurant?.id) return;
-                  setSaving(true);
+                  setSavingPayment(true);
                   try {
                     const { error } = await supabase
                       .from("restaurants")
                       .update({
                         online_payments_enabled: payEnabled,
-                        razorpay_key_id: keyId.trim() || null,
-                        razorpay_key_secret: keySecret.trim() || null,
-                      })
+                        razorpay_key_id: razorpayKeyId.trim() || null,
+                        razorpay_key_secret: razorpayKeySecret.trim() || null,
+                      } as any)
                       .eq("id", restaurant.id);
                     if (error) throw error;
-                    queryClient.invalidateQueries({ queryKey: ["admin-branding"] });
+                    qc.invalidateQueries({ queryKey: ["admin", "restaurant"] });
                     toast({ title: "Payment settings saved" });
                   } catch (e: any) {
                     toast({ title: "Error", description: e.message, variant: "destructive" });
                   } finally {
-                    setSaving(false);
+                    setSavingPayment(false);
                   }
-                };
-
-                return (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label>Enable Online Payments</Label>
-                        <p className="text-xs text-muted-foreground">Customers can pay via UPI, cards, wallets</p>
-                      </div>
-                      <Switch checked={payEnabled} onCheckedChange={setPayEnabled} />
-                    </div>
-
-                    {payEnabled && (
-                      <div className="space-y-3 border-t pt-4">
-                        {isTestMode && (
-                          <Alert>
-                            <AlertTriangle className="h-4 w-4" />
-                            <AlertDescription>Test Mode — No real charges will be made.</AlertDescription>
-                          </Alert>
-                        )}
-
-                        <div className="space-y-1">
-                          <Label className="text-sm">Razorpay Key ID</Label>
-                          <Input
-                            value={keyId}
-                            onChange={e => setKeyId(e.target.value)}
-                            placeholder="rzp_test_xxxxxxxxxxxx"
-                            className="font-mono text-sm"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-sm">Razorpay Key Secret</Label>
-                          <Input
-                            type="password"
-                            value={keySecret}
-                            onChange={e => setKeySecret(e.target.value)}
-                            placeholder="••••••••••••••••"
-                            className="font-mono text-sm"
-                          />
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Get your keys from{" "}
-                          <a href="https://dashboard.razorpay.com/app/keys" target="_blank" rel="noopener noreferrer" className="underline text-primary">
-                            Razorpay Dashboard → Settings → API Keys
-                          </a>
-                        </p>
-                      </div>
-                    )}
-
-                    <Button onClick={savePaymentSettings} disabled={saving} variant="outline" className="w-full">
-                      {saving ? "Saving…" : "Save Payment Settings"}
-                    </Button>
-                  </>
-                );
-              })()}
+                }}
+              >
+                {savingPayment ? "Saving…" : "Save Payment Settings"}
+              </Button>
             </CardContent>
           </Card>
 
