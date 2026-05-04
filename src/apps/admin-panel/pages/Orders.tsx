@@ -65,6 +65,7 @@ type OrderData = {
   discount_type: string | null;
   discount_reason: string | null;
   payment_method: string | null;
+  payment_status: string | null;
   total_cents: number;
   items_summary: string;
   item_details: any[];
@@ -92,6 +93,13 @@ function OrderCard({
           <div className="flex items-center gap-2">
             <div className="text-sm font-semibold">{shortId(order.id)}</div>
             <Badge variant={statusVariant(uiStatus)}>{uiStatus}</Badge>
+            {order.payment_status === 'paid' ? (
+              <Badge variant="default" className="bg-green-600 text-white text-[10px] px-1.5">Paid</Badge>
+            ) : order.payment_method === 'online' ? (
+              <Badge variant="destructive" className="text-[10px] px-1.5">Unpaid</Badge>
+            ) : (
+              <Badge variant="outline" className="text-[10px] px-1.5">Cash</Badge>
+            )}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
             {formatTime(order.placed_at)} • {order.table_label || "Takeaway"}
@@ -307,7 +315,7 @@ export default function AdminOrders() {
       // Fetch Orders with pagination
       const { data: orders, error, count } = await supabase
         .from("orders")
-        .select("id, status, placed_at, table_label, discount_cents, discount_type, discount_reason, payment_method, total_cents", { count: 'exact' })
+        .select("id, status, placed_at, table_label, discount_cents, discount_type, discount_reason, payment_method, payment_status, total_cents", { count: 'exact' })
         .eq("restaurant_id", restaurant!.id)
         .gte("placed_at", startISO)
         .lt("placed_at", endISO)
