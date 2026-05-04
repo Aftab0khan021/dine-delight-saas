@@ -22,25 +22,11 @@ serve(async (req) => {
     if (!supabaseUrl || !serviceRoleKey) throw new Error("Server misconfigured");
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
-    const { restaurant_id, amount_cents, currency, turnstileToken } = await req.json();
+    const { restaurant_id, amount_cents, currency } = await req.json();
 
     // Validate
     if (!restaurant_id || !amount_cents || amount_cents <= 0) {
       return json({ error: "Invalid request" }, 400);
-    }
-
-    // Verify Turnstile
-    if (turnstileToken) {
-      const turnstileSecret = Deno.env.get("TURNSTILE_SECRET_KEY");
-      if (turnstileSecret) {
-        const tvResp = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: `secret=${turnstileSecret}&response=${turnstileToken}`,
-        });
-        const tvData = await tvResp.json();
-        if (!tvData.success) return json({ error: "Security check failed" }, 403);
-      }
     }
 
     // Fetch restaurant payment config

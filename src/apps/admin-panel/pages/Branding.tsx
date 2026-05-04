@@ -107,6 +107,9 @@ export default function AdminBranding() {
   const [razorpayKeySecret, setRazorpayKeySecret] = useState("");
   const [savingPayment, setSavingPayment] = useState(false);
 
+  // Cuisine types state
+  const [cuisineTypes, setCuisineTypes] = useState<string[]>([]);
+
   // --- Data Fetching ---
   const { data: restaurantData, isLoading } = useQuery({
     queryKey: ["admin", "restaurant", restaurant?.id],
@@ -114,7 +117,7 @@ export default function AdminBranding() {
     queryFn: async () => {
       const { data } = await supabase
         .from("restaurants")
-        .select("id, name, description, logo_url, slug, settings, operating_hours, is_holiday_mode, holiday_mode_message, max_variants_per_item, currency_code, online_payments_enabled, razorpay_key_id, razorpay_key_secret")
+        .select("id, name, description, logo_url, slug, settings, operating_hours, is_holiday_mode, holiday_mode_message, max_variants_per_item, currency_code, online_payments_enabled, razorpay_key_id, razorpay_key_secret, cuisine_types")
         .eq("id", restaurant!.id)
         .single();
       return data;
@@ -180,6 +183,9 @@ export default function AdminBranding() {
       setPayEnabled(!!(restaurantData as any).online_payments_enabled);
       setRazorpayKeyId((restaurantData as any).razorpay_key_id || "");
       setRazorpayKeySecret((restaurantData as any).razorpay_key_secret || "");
+
+      // Sync cuisine types
+      setCuisineTypes(Array.isArray((restaurantData as any).cuisine_types) ? (restaurantData as any).cuisine_types : []);
     }
   }, [restaurantData]);
 
@@ -276,8 +282,9 @@ export default function AdminBranding() {
         operating_hours: operatingHours,
         is_holiday_mode: isHolidayMode,
         holiday_mode_message: holidayMessage || null,
-        max_variants_per_item: maxVariants
-      }).eq("id", restaurant!.id);
+        max_variants_per_item: maxVariants,
+        cuisine_types: cuisineTypes,
+      } as any).eq("id", restaurant!.id);
 
       if (error) throw error;
     },
@@ -862,6 +869,37 @@ export default function AdminBranding() {
             </CardContent>
           </Card>
 
+          {/* Restaurant Cuisine Types */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">🍽️ Cuisine Types</CardTitle>
+              <CardDescription>Select the cuisine types your restaurant specializes in</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-1.5">
+                {['North Indian', 'South Indian', 'Chinese', 'Italian', 'Continental', 'Mughlai', 'Thai', 'Mexican', 'Japanese', 'Korean', 'Mediterranean', 'Street Food', 'Fast Food', 'Desserts', 'Bakery', 'Beverages', 'Biryani', 'Seafood', 'Healthy', 'Vegan'].map(cuisine => {
+                  const selected = cuisineTypes.includes(cuisine);
+                  return (
+                    <button
+                      key={cuisine}
+                      type="button"
+                      onClick={() => {
+                        setCuisineTypes(prev => selected ? prev.filter(c => c !== cuisine) : [...prev, cuisine]);
+                      }}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                        selected
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-muted text-muted-foreground hover:border-border'
+                      }`}
+                    >
+                      {selected ? '✓ ' : ''}{cuisine}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground mt-3">Selected cuisines are saved when you click "Save Changes" above.</p>
+            </CardContent>
+          </Card>
           {/* Payment Settings */}
           <Card>
             <CardHeader>
