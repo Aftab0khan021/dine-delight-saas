@@ -255,6 +255,11 @@ export default function PublicMenu() {
 
       if (paymentMethod === 'online' && onlinePaymentsEnabled) {
         // === ONLINE PAYMENT FLOW ===
+        // Validate amount
+        if (activeCart.subtotalCents <= 0) {
+          throw new Error("Cannot pay online for ₹0 orders. Please use cash.");
+        }
+
         // 1. Create Razorpay order
         const { data: rzpData, error: rzpError } = await supabase.functions.invoke("create-razorpay-order", {
           body: {
@@ -264,8 +269,19 @@ export default function PublicMenu() {
             turnstileToken,
           },
         });
-        if (rzpError || !rzpData?.razorpay_order_id) {
-          throw new Error(rzpData?.error || "Failed to create payment order");
+
+        // Surface the actual error
+        if (rzpError) {
+          const errMsg = typeof rzpError === 'object' && rzpError?.message
+            ? rzpError.message
+            : "Payment gateway unreachable. Is the edge function deployed?";
+          throw new Error(errMsg);
+        }
+        if (rzpData?.error) {
+          throw new Error(rzpData.error);
+        }
+        if (!rzpData?.razorpay_order_id) {
+          throw new Error("No order ID returned from payment gateway");
         }
 
         // 2. Load Razorpay.js if needed
