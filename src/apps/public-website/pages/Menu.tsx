@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/drawer";
 import { useToast } from "@/hooks/use-toast";
 import { CopyButton } from "@/apps/admin-panel/components/qr/CopyButton";
-import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X } from "lucide-react";
+import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote } from "lucide-react";
 import { useRestaurantCart } from "../hooks/useRestaurantCart";
 import { useCollaborativeCart } from "../hooks/useCollaborativeCart";
 import { MenuItemDialog } from "../components/MenuItemDialog";
@@ -107,6 +107,10 @@ export default function PublicMenu() {
 
   // Dietary filter state
   const [dietaryFilter, setDietaryFilter] = useState<'all' | 'veg' | 'nonveg'>('all');
+
+  // Payment method
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online'>('cash');
+  const onlinePaymentsEnabled = !!(restaurantQuery.data as any)?.online_payments_enabled;
 
   const fetchUpsell = useCallback(async (itemId: string, restaurantId: string) => {
     try {
@@ -231,7 +235,7 @@ export default function PublicMenu() {
     setCheckoutError(null);
 
     try {
-      const payload = {
+      const orderPayload = {
         restaurant_id: restaurantId,
         table_label: activeCart.tableLabel ?? undefined,
         items: activeCart.items.map((i) => ({
@@ -247,11 +251,84 @@ export default function PublicMenu() {
         customer_name: customerName.trim() || undefined,
       };
 
-      const { data, error } = await supabase.functions.invoke("place-order", {
-        body: payload,
-      });
+      let data: any;
 
-      if (error) throw error;
+      if (paymentMethod === 'online' && onlinePaymentsEnabled) {
+        // === ONLINE PAYMENT FLOW ===
+        // 1. Create Razorpay order
+        const { data: rzpData, error: rzpError } = await supabase.functions.invoke("create-razorpay-order", {
+          body: {
+            restaurant_id: restaurantId,
+            amount_cents: activeCart.subtotalCents,
+            currency: currencyCode,
+            turnstileToken,
+          },
+        });
+        if (rzpError || !rzpData?.razorpay_order_id) {
+          throw new Error(rzpData?.error || "Failed to create payment order");
+        }
+
+        // 2. Load Razorpay.js if needed
+        if (!(window as any).Razorpay) {
+          await new Promise<void>((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+            s.onload = () => resolve();
+            s.onerror = () => reject(new Error('Failed to load payment gateway'));
+            document.head.appendChild(s);
+          });
+        }
+
+        // 3. Open Razorpay popup
+        data = await new Promise<any>((resolve, reject) => {
+          const options = {
+            key: rzpData.key_id,
+            amount: rzpData.amount,
+            currency: rzpData.currency,
+            name: restaurantQuery.data?.name || 'Restaurant',
+            description: `Order from ${restaurantQuery.data?.name || 'Restaurant'}`,
+            order_id: rzpData.razorpay_order_id,
+            handler: async (response: any) => {
+              try {
+                // 4. Verify payment + place order
+                const { data: verifyData, error: verifyError } = await supabase.functions.invoke("verify-payment", {
+                  body: {
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_signature: response.razorpay_signature,
+                    order_payload: orderPayload,
+                  },
+                });
+                if (verifyError || !verifyData?.id) {
+                  reject(new Error(verifyData?.error || 'Payment verification failed'));
+                } else {
+                  resolve(verifyData);
+                }
+              } catch (e) {
+                reject(e);
+              }
+            },
+            modal: {
+              ondismiss: () => reject(new Error('Payment cancelled')),
+            },
+            prefill: {
+              contact: customerPhone.trim() || undefined,
+              name: customerName.trim() || undefined,
+            },
+            theme: { color: '#1a1a2e' },
+          };
+          const rzp = new (window as any).Razorpay(options);
+          rzp.open();
+        });
+      } else {
+        // === CASH FLOW (existing) ===
+        const { data: cashData, error } = await supabase.functions.invoke("place-order", {
+          body: orderPayload,
+        });
+        if (error) throw error;
+        data = cashData;
+      }
+
       if (!data?.id || !data?.order_token) {
         throw new Error("Order created without a token.");
       }
@@ -261,8 +338,10 @@ export default function PublicMenu() {
       activeCart.clear();
       setCartOpen(true);
       toast({
-        title: "Order placed! 🎉",
-        description: customerPhone ? "Receipt sent to your WhatsApp!" : "Save your order token to track status.",
+        title: paymentMethod === 'online' ? "Payment successful! 🎉" : "Order placed! 🎉",
+        description: paymentMethod === 'online'
+          ? "Your order has been paid and confirmed."
+          : customerPhone ? "Receipt sent to your WhatsApp!" : "Save your order token to track status.",
       });
     } catch (e: any) {
       console.error("Place order error:", e);
@@ -689,6 +768,37 @@ export default function PublicMenu() {
                   </div>
                 </div>
 
+                {/* Payment method selector */}
+                {onlinePaymentsEnabled && (
+                  <div className="border rounded-lg p-3 space-y-2 bg-muted/40">
+                    <p className="text-xs text-muted-foreground font-medium">Payment Method</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('cash')}
+                        className={`flex items-center justify-center gap-2 rounded-lg border-2 p-2.5 text-sm font-medium transition-colors ${
+                          paymentMethod === 'cash'
+                            ? 'border-primary bg-primary/5 text-primary'
+                            : 'border-muted bg-background text-muted-foreground hover:border-border'
+                        }`}
+                      >
+                        <Banknote className="h-4 w-4" /> Cash
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('online')}
+                        className={`flex items-center justify-center gap-2 rounded-lg border-2 p-2.5 text-sm font-medium transition-colors ${
+                          paymentMethod === 'online'
+                            ? 'border-primary bg-primary/5 text-primary'
+                            : 'border-muted bg-background text-muted-foreground hover:border-border'
+                        }`}
+                      >
+                        <CreditCard className="h-4 w-4" /> Pay Online
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* WhatsApp contact capture */}
                 <div className="border rounded-lg p-3 space-y-3 bg-muted/40">
                   <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
@@ -742,9 +852,10 @@ export default function PublicMenu() {
                     || (useCollabCart && !collabCart.isLeader)}
                   onClick={placeOrder}
                 >
-                  {placingOrder ? "Placing\u2026" :
-                    useCollabCart && !collabCart.isLeader ? "Waiting for table leader\u2026" :
-                    !turnstileToken ? "Verifying\u2026" :
+                  {placingOrder ? "Processing…" :
+                    useCollabCart && !collabCart.isLeader ? "Waiting for table leader…" :
+                    !turnstileToken ? "Verifying…" :
+                    paymentMethod === 'online' && onlinePaymentsEnabled ? `Pay ${formatMoney(activeCart.subtotalCents, currencyCode)}` :
                     "Place order"}
                 </Button>
                 {checkoutError ? (

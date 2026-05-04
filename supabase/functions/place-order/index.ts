@@ -57,7 +57,7 @@ serve(async (req) => {
       return json({ error: "Invalid JSON" }, 400);
     }
 
-    const { restaurant_id, items, table_label, turnstileToken, customer_phone, customer_name } = payload;
+    const { restaurant_id, items, table_label, turnstileToken, customer_phone, customer_name, payment_method, payment_verified } = payload;
 
     // Resolve Turnstile secret key strictly from environment variables.
     // Prefer TURNSTILE_SECRET_KEY_PROD, fall back to TURNSTILE_SECRET_KEY_DEV.
@@ -70,6 +70,10 @@ serve(async (req) => {
       return json({ error: "Server configuration error" }, 500);
     }
 
+    // Skip Turnstile for internal calls from verify-payment (already verified)
+    if (payment_verified === true) {
+      console.log('Skipping Turnstile — payment already verified by verify-payment');
+    } else {
     // Verify Turnstile token with Cloudflare
     if (!turnstileToken) {
       return json({ error: "Security check failed: Missing Turnstile token" }, 400);
@@ -91,6 +95,7 @@ serve(async (req) => {
       console.error("Turnstile verification failed:", turnstileOutcome);
       return json({ error: "Security check failed. Please try again." }, 400);
     }
+    } // end else (Turnstile verification)
 
     // Validate required fields
     if (!restaurant_id || !items) {
@@ -314,7 +319,7 @@ serve(async (req) => {
         ip_address: clientIp,
         table_label: table_label || null,
         order_token: order_token,
-        payment_method: 'cash',
+        payment_method: payment_method || 'cash',
         customer_phone: customer_phone || null,
         customer_name: customer_name || null,
       })
