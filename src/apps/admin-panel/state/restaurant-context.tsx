@@ -45,17 +45,35 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       return;
     }
 
-    // 1. Check if the user has any role in user_roles table
+    // 1. Check if the user has any restaurant-level role (NOT super_admin)
     const { data: userRoleRow, error: roleError } = await supabase
       .from("user_roles")
       .select("role, restaurant_id, staff_category_id")
       .eq("user_id", session.user.id)
+      .neq("role", "super_admin") // Exclude super_admin — they shouldn't access /admin
       .order("role", { ascending: false }) // restaurant_admin > user alphabetically
       .limit(1)
       .maybeSingle();
 
     if (roleError || !userRoleRow) {
-      console.warn("Access Denied: No role found for this user.");
+      // Check if they're actually a super_admin trying to access admin panel
+      const { data: superAdminCheck } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", session.user.id)
+        .eq("role", "super_admin")
+        .limit(1)
+        .maybeSingle();
+
+      if (superAdminCheck) {
+        // They're a super_admin — redirect them to super admin dashboard
+        console.warn("Super admin attempted to access restaurant admin. Redirecting.");
+        navigate("/superadmin/dashboard", { replace: true });
+        setLoading(false);
+        return;
+      }
+
+      console.warn("Access Denied: No restaurant role found for this user.");
       setRestaurant(null);
       setRole(null);
       setStaffCategory(null);
@@ -108,7 +126,7 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
 
     setRestaurant(finalRestaurant);
     setStaffCategory(finalStaffCategory);
-    setAccessDenied(false); // ✅ Allowed in for all roles
+    setAccessDenied(false);
     setLoading(false);
   }, [navigate]);
 
