@@ -574,6 +574,63 @@ export default function PublicMenu() {
         </div>
       </div>
 
+      {/* Reorder from History */}
+      <div className="w-full max-w-3xl mx-auto px-4 pt-3">
+        <details className="group">
+          <summary className="flex items-center gap-2 cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground transition-colors py-1">
+            <ShoppingBag className="h-4 w-4" /> Reorder from past orders
+          </summary>
+          <div className="mt-2 space-y-2 pb-2">
+            <div className="flex gap-2">
+              <input
+                type="tel"
+                placeholder="Enter your phone number"
+                value={reorderPhone}
+                onChange={e => setReorderPhone(e.target.value)}
+                className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm"
+              />
+              <button onClick={fetchReorderHistory} disabled={reorderLoading || reorderPhone.length < 10}
+                className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium disabled:opacity-50">
+                {reorderLoading ? '...' : 'Find'}
+              </button>
+            </div>
+            {reorderHistory.length > 0 && (
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {reorderHistory.map((order: any) => (
+                  <div key={order.id} className="rounded-lg border bg-card p-3 space-y-1.5">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>{new Date(order.placed_at).toLocaleDateString()}</span>
+                      <span>{formatMoney(order.total_cents, currencyCode)}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {order.order_items?.map((item: any) => (
+                        <button key={item.id}
+                          onClick={() => {
+                            activeCart.addItem({
+                              cart_id: `reorder-${item.menu_item_id}-${Date.now()}`,
+                              menu_item_id: item.menu_item_id,
+                              name: item.name_snapshot,
+                              quantity: item.quantity,
+                              unit_price_cents: item.unit_price_cents,
+                            });
+                            toast({ title: `Added ${item.name_snapshot}` });
+                          }}
+                          className="text-xs rounded-md border px-2 py-1 hover:bg-muted transition-colors">
+                          +{item.quantity}x {item.name_snapshot}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {reorderHistory.length === 0 && reorderPhone.length >= 10 && !reorderLoading && (
+              <p className="text-xs text-muted-foreground text-center py-2">No past orders found for this number</p>
+            )}
+          </div>
+        </details>
+      </div>
+
       {/* Category Jump Bar + Search */}
       {categoriesWithItems.length > 0 && (
         <div className="sticky top-[73px] z-[9] border-b bg-background/95 backdrop-blur">
@@ -1054,6 +1111,24 @@ export default function PublicMenu() {
                     </div>
                   </div>
                 </div>
+
+                {/* Loyalty Points */}
+                {loyaltyConfig && customerPhone && customerPhone.length >= 10 && (
+                  <div className="border rounded-lg p-3 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-amber-800 dark:text-amber-300 flex items-center gap-1">⭐ Loyalty Points</span>
+                      {loyaltyPoints !== null && <span className="text-sm font-bold text-amber-700 dark:text-amber-300">{loyaltyPoints} pts</span>}
+                    </div>
+                    <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                      You'll earn ~{Math.round((activeCart.subtotalCents / 10000) * loyaltyConfig.points_per_100_spent)} points on this order
+                    </p>
+                    {loyaltyPoints !== null && loyaltyPoints >= loyaltyConfig.min_redeem_points && (
+                      <p className="text-[11px] text-green-600 font-medium">
+                        ✓ You can redeem {loyaltyConfig.min_redeem_points} pts for {formatMoney(Math.round((loyaltyConfig.min_redeem_points / loyaltyConfig.points_to_currency) * 100), currencyCode)} off!
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* Security check */}
                 {!turnstileToken ? (
