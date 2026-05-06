@@ -329,7 +329,7 @@ export default function Home() {
             <p className="text-white/80 mb-8 max-w-lg mx-auto">
               Experience the full customer ordering flow — browse menu, add items, customize & checkout.
             </p>
-            <Link to="/r/vrindavan/menu">
+            <Link to="/r/vrindavan">
               <Button size="lg" variant="outline" className="text-base px-8 border-white/30 text-white hover:bg-white/10">
                 Visit Demo Restaurant <ChevronRight className="ml-1 h-4 w-4" />
               </Button>
