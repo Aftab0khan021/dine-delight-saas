@@ -159,6 +159,44 @@ export default function PublicMenu() {
   // Image lightbox
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
 
+  // Reorder from history
+  const [reorderPhone, setReorderPhone] = useState('');
+  const [reorderHistory, setReorderHistory] = useState<any[]>([]);
+  const [reorderLoading, setReorderLoading] = useState(false);
+  const fetchReorderHistory = useCallback(async () => {
+    if (!reorderPhone || reorderPhone.length < 10 || !restaurantQuery.data?.id) return;
+    setReorderLoading(true);
+    try {
+      const { data } = await supabase
+        .from('orders')
+        .select('id, total_cents, placed_at, order_items(id, menu_item_id, name_snapshot, quantity, unit_price_cents)')
+        .eq('restaurant_id', restaurantQuery.data.id)
+        .eq('customer_phone', reorderPhone)
+        .order('placed_at', { ascending: false })
+        .limit(5);
+      setReorderHistory(data || []);
+    } catch { /* ignore */ }
+    setReorderLoading(false);
+  }, [reorderPhone, restaurantQuery.data?.id]);
+
+  // Loyalty points
+  const loyaltyConfig = useMemo(() => {
+    const s = restaurantQuery.data?.settings as any;
+    if (!s?.loyalty_config?.enabled) return null;
+    return s.loyalty_config as { points_per_100_spent: number; points_to_currency: number; min_redeem_points: number };
+  }, [restaurantQuery.data?.settings]);
+  const [loyaltyPoints, setLoyaltyPoints] = useState<number | null>(null);
+  useEffect(() => {
+    if (!loyaltyConfig || !customerPhone || customerPhone.length < 10 || !restaurantQuery.data?.id) return;
+    supabase
+      .from('loyalty_points')
+      .select('points')
+      .eq('customer_phone', customerPhone)
+      .eq('restaurant_id', restaurantQuery.data.id)
+      .maybeSingle()
+      .then(({ data }) => setLoyaltyPoints(data?.points ?? 0));
+  }, [loyaltyConfig, customerPhone, restaurantQuery.data?.id]);
+
   const fetchUpsell = useCallback(async (itemId: string, restaurantId: string) => {
     try {
       const resp = await fetch(
