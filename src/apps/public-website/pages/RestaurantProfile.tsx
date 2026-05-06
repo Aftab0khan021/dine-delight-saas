@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSEO } from "@/hooks/useSEO";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { MapPin, Phone, Clock, ArrowRight, Utensils, Mail, AlertCircle, Instagram, Facebook, Twitter, Youtube, Star, MessageCircle, CalendarDays, Moon, Sun, ChevronLeft, ChevronRight } from "lucide-react";
@@ -71,6 +72,12 @@ export default function RestaurantProfile() {
       if (!data) throw new Error("Restaurant not found");
       return data;
     },
+  });
+
+  useSEO({
+    title: restaurant ? `${restaurant.name} — Dine Delight` : "Restaurant — Dine Delight",
+    description: restaurant?.description || `Order food from ${restaurant?.name || 'this restaurant'} — browse menu, book a table, and more.`,
+    ogImage: restaurant?.logo_url || undefined,
   });
 
   // Featured menu items

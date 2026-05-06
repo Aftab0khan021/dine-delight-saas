@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useSEO } from "@/hooks/useSEO";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -78,6 +79,11 @@ export default function Home() {
   const [statsVisible, setStatsVisible] = useState(false);
   const [activeTestimonial, setActiveTestimonial] = useState(0);
   const statsRef = useRef<HTMLDivElement>(null);
+
+  useSEO({
+    title: "Dine Delight — Restaurant Management Platform | Zero Commission",
+    description: "Complete restaurant management platform with menu management, QR ordering, online payments, analytics & more. Zero commission. Full control.",
+  });
 
   // — Dynamic stats from DB —
   const { data: stats } = useQuery({

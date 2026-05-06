@@ -19,14 +19,16 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer";
 import { useToast } from "@/hooks/use-toast";
+import { useSEO } from "@/hooks/useSEO";
 import { CopyButton } from "@/apps/admin-panel/components/qr/CopyButton";
-import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote } from "lucide-react";
+import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote, ShieldAlert } from "lucide-react";
 import { useRestaurantCart } from "../hooks/useRestaurantCart";
 import { useCollaborativeCart } from "../hooks/useCollaborativeCart";
 import { MenuItemDialog } from "../components/MenuItemDialog";
 import { TablePresence } from "../components/TablePresence";
 import { SplitBillView } from "../components/SplitBillView";
 import { Turnstile } from "@/components/security/Turnstile";
+import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 import { formatMoney } from "@/lib/formatting";
 
 type RestaurantRow = Tables<"restaurants">;
@@ -108,6 +110,17 @@ export default function PublicMenu() {
   // Dietary filter state
   const [dietaryFilter, setDietaryFilter] = useState<'all' | 'veg' | 'nonveg'>('all');
 
+  // Allergen exclusion filter
+  const [excludeAllergens, setExcludeAllergens] = useState<string[]>([]);
+  const ALLERGEN_OPTIONS = ['Gluten', 'Dairy', 'Nuts', 'Shellfish', 'Soy', 'Egg'];
+
+  // SEO
+  useSEO({
+    title: restaurantQuery.data ? `Menu — ${restaurantQuery.data.name} | Dine Delight` : "Menu | Dine Delight",
+    description: restaurantQuery.data ? `Browse the menu and order from ${restaurantQuery.data.name}. Fresh food, easy ordering.` : undefined,
+    ogImage: (restaurantQuery.data as any)?.logo_url || undefined,
+  });
+
   // Payment method
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online'>('cash');
   const onlinePaymentsEnabled = !!(restaurantQuery.data as any)?.online_payments_enabled;
@@ -180,7 +193,18 @@ export default function PublicMenu() {
       byCategory.set(key, list);
     }
 
-    const result: CategoryWithItems[] = categories
+    // Filter categories by time-based scheduling (available_from/available_to)
+    const now = new Date();
+    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+    const timeFiltered = categories.filter((c: any) => {
+      if (c.available_from && c.available_to) {
+        return currentTime >= c.available_from && currentTime <= c.available_to;
+      }
+      return true; // No schedule = always visible
+    });
+
+    const result: CategoryWithItems[] = timeFiltered
       .map((c) => ({ ...c, items: byCategory.get(c.id) ?? [] }))
       .filter((c) => c.items.length > 0);
 
@@ -430,6 +454,7 @@ export default function PublicMenu() {
 
   return (
     <main className="min-h-screen w-full bg-background">
+      <PWAInstallPrompt />
       <header className="border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
         <div className="w-full max-w-3xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
@@ -531,10 +556,32 @@ export default function PublicMenu() {
               const enabled = s && typeof s === 'object' && s.dietary_filters_enabled;
               if (!enabled) return null;
               return (
-                <div className="flex gap-2 flex-wrap">
-                  <Button size="sm" variant={dietaryFilter === 'all' ? 'default' : 'outline'} className="rounded-full" onClick={() => setDietaryFilter('all')}>All</Button>
-                  <Button size="sm" variant={dietaryFilter === 'veg' ? 'default' : 'outline'} className="rounded-full text-green-600 border-green-200" onClick={() => setDietaryFilter('veg')}><Leaf className="mr-1 h-3.5 w-3.5" />Veg</Button>
-                  <Button size="sm" variant={dietaryFilter === 'nonveg' ? 'default' : 'outline'} className="rounded-full text-red-600 border-red-200" onClick={() => setDietaryFilter('nonveg')}><Drumstick className="mr-1 h-3.5 w-3.5" />Non-Veg</Button>
+                <div className="space-y-2">
+                  <div className="flex gap-2 flex-wrap">
+                    <Button size="sm" variant={dietaryFilter === 'all' ? 'default' : 'outline'} className="rounded-full" onClick={() => setDietaryFilter('all')}>All</Button>
+                    <Button size="sm" variant={dietaryFilter === 'veg' ? 'default' : 'outline'} className="rounded-full text-green-600 border-green-200" onClick={() => setDietaryFilter('veg')}><Leaf className="mr-1 h-3.5 w-3.5" />Veg</Button>
+                    <Button size="sm" variant={dietaryFilter === 'nonveg' ? 'default' : 'outline'} className="rounded-full text-red-600 border-red-200" onClick={() => setDietaryFilter('nonveg')}><Drumstick className="mr-1 h-3.5 w-3.5" />Non-Veg</Button>
+                  </div>
+                  {/* Allergen Exclusion Filter */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs text-muted-foreground flex items-center gap-1"><ShieldAlert className="h-3 w-3" />Exclude:</span>
+                    {ALLERGEN_OPTIONS.map(a => {
+                      const active = excludeAllergens.includes(a);
+                      return (
+                        <button
+                          key={a}
+                          onClick={() => setExcludeAllergens(prev => active ? prev.filter(x => x !== a) : [...prev, a])}
+                          className={`rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                            active
+                              ? 'bg-destructive/10 border-destructive/30 text-destructive'
+                              : 'border-muted text-muted-foreground hover:border-border'
+                          }`}
+                        >
+                          {active ? '✕ ' : ''}{a}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })()}
@@ -556,6 +603,13 @@ export default function PublicMenu() {
                   if (dietaryFilter === 'veg') return ft === 'veg';
                   if (dietaryFilter === 'nonveg') return ft === 'nonveg' || ft === 'egg';
                   return true;
+                });
+              }
+              // Apply allergen exclusion filter
+              if (excludeAllergens.length > 0) {
+                filteredItems = filteredItems.filter((item: any) => {
+                  const itemAllergens: string[] = Array.isArray(item.allergens) ? item.allergens : [];
+                  return !excludeAllergens.some(a => itemAllergens.includes(a));
                 });
               }
               if (filteredItems.length === 0) return null;
@@ -976,13 +1030,33 @@ export default function PublicMenu() {
           </div>
         </div>
       )}
+      {/* ═══ Sticky Cart Bar ═══ */}
+      {activeCart.itemCount > 0 && !cartOpen && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 p-3 bg-background/95 backdrop-blur-lg border-t shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
+          <div className="max-w-3xl mx-auto">
+            <button
+              onClick={() => setCartOpen(true)}
+              className="w-full flex items-center justify-between bg-primary text-primary-foreground rounded-xl px-5 py-3.5 font-medium shadow-lg hover:opacity-90 transition-opacity"
+            >
+              <div className="flex items-center gap-2">
+                <ShoppingBag className="h-5 w-5" />
+                <span>{activeCart.itemCount} {activeCart.itemCount === 1 ? 'item' : 'items'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span>{formatMoney(activeCart.totalCents, restaurantQuery.data?.currency_code)}</span>
+                <span className="text-sm opacity-80">View Cart →</span>
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
       {/* WhatsApp Floating Button */}
       {(() => {
         const s = restaurantQuery.data?.settings as any;
         const waNum = s && typeof s === 'object' ? s.whatsapp_number : null;
         if (!waNum) return null;
         return (
-          <a href={`https://wa.me/${waNum.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi! I'd like to place an order from ${restaurantQuery.data?.name || 'your restaurant'}`)}`} target="_blank" rel="noopener noreferrer" className="fixed bottom-24 right-4 z-40 h-14 w-14 rounded-full bg-green-500 text-white shadow-lg flex items-center justify-center hover:bg-green-600 hover:scale-110 transition-all" aria-label="Order via WhatsApp">
+          <a href={`https://wa.me/${waNum.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi! I'd like to place an order from ${restaurantQuery.data?.name || 'your restaurant'}`)}`} target="_blank" rel="noopener noreferrer" className={`fixed ${activeCart.itemCount > 0 && !cartOpen ? 'bottom-24' : 'bottom-6'} right-4 z-40 h-14 w-14 rounded-full bg-green-500 text-white shadow-lg flex items-center justify-center hover:bg-green-600 hover:scale-110 transition-all`} aria-label="Order via WhatsApp">
             <MessageCircle className="h-7 w-7" />
           </a>
         );

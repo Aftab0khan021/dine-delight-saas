@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Loader2, CheckCircle2, Clock, ChefHat, ShoppingBag, ArrowLeft, Download, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useSEO } from "@/hooks/useSEO";
 import { formatMoney } from "@/lib/formatting";
 
 // Types
@@ -36,6 +37,8 @@ export default function TrackOrder() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
   const { toast } = useToast();
+
+  useSEO({ title: "Track Order | Dine Delight", description: "Track your food order status in real-time." });
 
   const [loading, setLoading] = useState(false); // Changed default to false, we control it manually or via Turnstile
   const [turnstileToken, setTurnstileToken] = useState("");
