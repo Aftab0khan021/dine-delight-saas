@@ -132,16 +132,29 @@ export default function PublicMenu() {
     localStorage.setItem("dd-dark", darkMode ? "1" : "0");
   }, [darkMode]);
 
-  // Tip selector
+  // Tip selector — reads config from restaurant settings
+  const tipConfig = useMemo(() => {
+    const s = restaurantQuery.data?.settings as any;
+    if (!s?.tip_config?.enabled) return null;
+    return s.tip_config as { mode: string; percentage_options?: number[]; amount_options?: number[] };
+  }, [restaurantQuery.data?.settings]);
   const [tipPercent, setTipPercent] = useState<number>(0);
-  const tipCents = Math.round((activeCart.subtotalCents * tipPercent) / 100);
+  const [tipAmount, setTipAmount] = useState<number>(0);
+  const tipCents = tipConfig?.mode === 'amount'
+    ? tipAmount * 100
+    : tipConfig?.mode === 'both'
+      ? (tipPercent > 0 ? Math.round((activeCart.subtotalCents * tipPercent) / 100) : tipAmount * 100)
+      : Math.round((activeCart.subtotalCents * tipPercent) / 100);
 
   // Order type
   const [orderType, setOrderType] = useState<'dine_in' | 'pickup' | 'delivery'>('dine_in');
 
-  // GST (5% standard for restaurants)
-  const GST_RATE = 0.05;
-  const gstCents = Math.round(activeCart.subtotalCents * GST_RATE);
+  // GST — dynamic from restaurant settings
+  const taxSettings = useMemo(() => {
+    const s = restaurantQuery.data?.settings as any;
+    return { rate: (s?.tax_rate ?? 5) / 100, label: s?.tax_label || 'GST' };
+  }, [restaurantQuery.data?.settings]);
+  const gstCents = Math.round(activeCart.subtotalCents * taxSettings.rate);
 
   // Image lightbox
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
@@ -888,29 +901,49 @@ export default function PublicMenu() {
                   </div>
                 </div>
 
-                {/* Tip for Staff */}
+                {/* Tip for Staff — dynamic from settings */}
+                {tipConfig && (
                 <div className="border rounded-lg p-3 space-y-2 bg-muted/40">
                   <p className="text-xs text-muted-foreground font-medium">Tip for Staff</p>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {[0, 10, 15, 20].map(pct => (
-                      <button key={pct} onClick={() => setTipPercent(pct)}
-                        className={`rounded-lg border py-1.5 text-xs font-medium transition-colors ${tipPercent === pct ? 'border-primary bg-primary/10 text-primary' : 'border-muted text-muted-foreground hover:border-border'}`}>
-                        {pct === 0 ? 'None' : `${pct}%`}
-                      </button>
-                    ))}
-                  </div>
-                  {tipPercent > 0 && (
+                  {(tipConfig.mode === 'percentage' || tipConfig.mode === 'both') && (
+                    <div className="flex gap-1.5 flex-wrap">
+                      <button onClick={() => { setTipPercent(0); setTipAmount(0); }}
+                        className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${tipPercent === 0 && tipAmount === 0 ? 'border-primary bg-primary/10 text-primary' : 'border-muted text-muted-foreground'}`}>None</button>
+                      {(tipConfig.percentage_options || [10, 15, 20]).map(pct => (
+                        <button key={pct} onClick={() => { setTipPercent(pct); setTipAmount(0); }}
+                          className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${tipPercent === pct ? 'border-primary bg-primary/10 text-primary' : 'border-muted text-muted-foreground'}`}>
+                          {pct}%
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {(tipConfig.mode === 'amount' || tipConfig.mode === 'both') && (
+                    <div className="flex gap-1.5 flex-wrap">
+                      {tipConfig.mode === 'amount' && (
+                        <button onClick={() => { setTipAmount(0); setTipPercent(0); }}
+                          className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${tipAmount === 0 && tipPercent === 0 ? 'border-primary bg-primary/10 text-primary' : 'border-muted text-muted-foreground'}`}>None</button>
+                      )}
+                      {(tipConfig.amount_options || [20, 50, 100]).map(amt => (
+                        <button key={amt} onClick={() => { setTipAmount(amt); setTipPercent(0); }}
+                          className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${tipAmount === amt ? 'border-primary bg-primary/10 text-primary' : 'border-muted text-muted-foreground'}`}>
+                          ₹{amt}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {tipCents > 0 && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Tip ({tipPercent}%)</span>
+                      <span className="text-muted-foreground">Tip</span>
                       <span className="font-medium">{formatMoney(tipCents, currencyCode)}</span>
                     </div>
                   )}
                 </div>
+                )}
 
-                {/* GST / Tax Breakdown */}
+                {/* Tax Breakdown — dynamic label + rate */}
                 <div className="space-y-1.5 text-sm border-t pt-2">
                   <div className="flex justify-between text-muted-foreground">
-                    <span>GST (5%)</span>
+                    <span>{taxSettings.label} ({Math.round(taxSettings.rate * 100)}%)</span>
                     <span>{formatMoney(gstCents, currencyCode)}</span>
                   </div>
                   {activeCart.discountCents > 0 && (

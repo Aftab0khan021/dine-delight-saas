@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { Star } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -45,6 +46,12 @@ export default function TrackOrder() {
   const [error, setError] = useState<string | null>(null);
   const [order, setOrder] = useState<OrderDetails | null>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
+
+  // Review state
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   // 1. Fetch Order (Secure)
   const fetchOrder = useCallback(async (tToken?: string) => {
@@ -306,6 +313,65 @@ export default function TrackOrder() {
             })()}
           </CardContent>
         </Card>
+
+        {/* Order Review */}
+        {order && (order.status === 'completed' || order.status === 'delivered') && !reviewSubmitted && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Rate Your Experience</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex gap-1 justify-center">
+                {[1, 2, 3, 4, 5].map(s => (
+                  <button key={s} onClick={() => setReviewRating(s)} className="p-1 hover:scale-110 transition-transform">
+                    <Star className={`h-8 w-8 ${s <= reviewRating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'}`} />
+                  </button>
+                ))}
+              </div>
+              {reviewRating > 0 && (
+                <>
+                  <textarea
+                    placeholder="Tell us about your experience (optional)"
+                    value={reviewComment}
+                    onChange={e => setReviewComment(e.target.value)}
+                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm min-h-[80px] resize-none"
+                  />
+                  <Button
+                    className="w-full"
+                    disabled={submittingReview}
+                    onClick={async () => {
+                      setSubmittingReview(true);
+                      try {
+                        await supabase.from('order_reviews').insert({
+                          order_id: order.id,
+                          restaurant_id: order.restaurant_id,
+                          customer_phone: order.customer_phone || null,
+                          rating: reviewRating,
+                          comment: reviewComment || null,
+                        });
+                        setReviewSubmitted(true);
+                        toast({ title: "Thank you!", description: "Your review has been submitted." });
+                      } catch {
+                        toast({ title: "Error", description: "Failed to submit review.", variant: "destructive" });
+                      } finally {
+                        setSubmittingReview(false);
+                      }
+                    }}
+                  >
+                    {submittingReview ? "Submitting..." : "Submit Review"}
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
+        {reviewSubmitted && (
+          <Card className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
+            <CardContent className="p-4 text-center">
+              <p className="text-green-700 dark:text-green-300 font-medium">✨ Thank you for your review!</p>
+            </CardContent>
+          </Card>
+        )}
 
       </div>
     </div>

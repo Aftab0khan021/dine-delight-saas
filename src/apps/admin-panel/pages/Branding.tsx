@@ -101,6 +101,21 @@ export default function AdminBranding() {
   const [dietaryFiltersEnabled, setDietaryFiltersEnabled] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
 
+  // Tier B: Tax, Tip, Loyalty, Referral config
+  const [taxRate, setTaxRate] = useState(5);
+  const [taxLabel, setTaxLabel] = useState("GST");
+  const [tipEnabled, setTipEnabled] = useState(true);
+  const [tipMode, setTipMode] = useState<'percentage' | 'amount' | 'both'>('percentage');
+  const [tipPercentages, setTipPercentages] = useState('10,15,20');
+  const [tipAmounts, setTipAmounts] = useState('20,50,100');
+  const [loyaltyEnabled, setLoyaltyEnabled] = useState(false);
+  const [loyaltyEarnRate, setLoyaltyEarnRate] = useState(10);
+  const [loyaltyRedeemRate, setLoyaltyRedeemRate] = useState(10);
+  const [loyaltyMinRedeem, setLoyaltyMinRedeem] = useState(100);
+  const [referralEnabled, setReferralEnabled] = useState(false);
+  const [referrerReward, setReferrerReward] = useState(50);
+  const [refereeReward, setRefereeReward] = useState(25);
+
   // Payment settings state
   const [payEnabled, setPayEnabled] = useState(false);
   const [razorpayKeyId, setRazorpayKeyId] = useState("");
@@ -178,6 +193,21 @@ export default function AdminBranding() {
       setReservationEnabled(!!s.reservation_enabled);
       setTotalTables(s.total_tables || 10);
       setDietaryFiltersEnabled(!!s.dietary_filters_enabled);
+
+      // Tier B config
+      setTaxRate(s.tax_rate ?? 5);
+      setTaxLabel(s.tax_label || 'GST');
+      setTipEnabled(s.tip_config?.enabled ?? true);
+      setTipMode(s.tip_config?.mode || 'percentage');
+      setTipPercentages((s.tip_config?.percentage_options || [10,15,20]).join(','));
+      setTipAmounts((s.tip_config?.amount_options || [20,50,100]).join(','));
+      setLoyaltyEnabled(!!s.loyalty_config?.enabled);
+      setLoyaltyEarnRate(s.loyalty_config?.points_per_100_spent ?? 10);
+      setLoyaltyRedeemRate(s.loyalty_config?.points_to_currency ?? 10);
+      setLoyaltyMinRedeem(s.loyalty_config?.min_redeem_points ?? 100);
+      setReferralEnabled(!!s.referral_config?.enabled);
+      setReferrerReward(Math.round((s.referral_config?.referrer_reward_cents ?? 5000) / 100));
+      setRefereeReward(Math.round((s.referral_config?.referee_reward_cents ?? 2500) / 100));
 
       // Sync payment settings
       setPayEnabled(!!(restaurantData as any).online_payments_enabled);
@@ -270,6 +300,26 @@ export default function AdminBranding() {
         reservation_enabled: reservationEnabled,
         total_tables: totalTables,
         dietary_filters_enabled: dietaryFiltersEnabled,
+        // Tier B config
+        tax_rate: taxRate,
+        tax_label: taxLabel,
+        tip_config: {
+          enabled: tipEnabled,
+          mode: tipMode,
+          percentage_options: tipPercentages.split(',').map(Number).filter(n => n > 0),
+          amount_options: tipAmounts.split(',').map(Number).filter(n => n > 0),
+        },
+        loyalty_config: {
+          enabled: loyaltyEnabled,
+          points_per_100_spent: loyaltyEarnRate,
+          points_to_currency: loyaltyRedeemRate,
+          min_redeem_points: loyaltyMinRedeem,
+        },
+        referral_config: {
+          enabled: referralEnabled,
+          referrer_reward_cents: referrerReward * 100,
+          referee_reward_cents: refereeReward * 100,
+        },
       };
 
       const { error } = await supabase.from("restaurants").update({
@@ -980,6 +1030,123 @@ export default function AdminBranding() {
               >
                 {savingPayment ? "Saving…" : "Save Payment Settings"}
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* ═══ Tax / GST Config ═══ */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2"><DollarSign className="h-4 w-4" /> Tax / GST</CardTitle>
+              <CardDescription>Configure tax rate for your restaurant</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Tax Label</Label>
+                  <Input value={taxLabel} onChange={e => setTaxLabel(e.target.value)} placeholder="GST" className="h-8" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Rate (%)</Label>
+                  <Input type="number" min={0} max={30} step={0.5} value={taxRate} onChange={e => setTaxRate(Number(e.target.value))} className="h-8" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ═══ Tip Config ═══ */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">💰 Tip for Staff</CardTitle>
+              <CardDescription>Let customers tip your staff at checkout</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">Enable Tips</Label>
+                <Switch checked={tipEnabled} onCheckedChange={setTipEnabled} />
+              </div>
+              {tipEnabled && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Mode</Label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(['percentage', 'amount', 'both'] as const).map(m => (
+                        <button key={m} onClick={() => setTipMode(m)}
+                          className={`rounded-md border py-1.5 text-xs font-medium capitalize ${tipMode === m ? 'border-primary bg-primary/10 text-primary' : 'border-muted text-muted-foreground'}`}>
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {(tipMode === 'percentage' || tipMode === 'both') && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Percentage Options (comma-separated)</Label>
+                      <Input value={tipPercentages} onChange={e => setTipPercentages(e.target.value)} placeholder="10,15,20" className="h-8" />
+                    </div>
+                  )}
+                  {(tipMode === 'amount' || tipMode === 'both') && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Amount Options in ₹ (comma-separated)</Label>
+                      <Input value={tipAmounts} onChange={e => setTipAmounts(e.target.value)} placeholder="20,50,100" className="h-8" />
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ═══ Loyalty Config ═══ */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2"><Star className="h-4 w-4" /> Loyalty Points</CardTitle>
+              <CardDescription>Reward repeat customers with points</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">Enable Loyalty Program</Label>
+                <Switch checked={loyaltyEnabled} onCheckedChange={setLoyaltyEnabled} />
+              </div>
+              {loyaltyEnabled && (
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Points per ₹100</Label>
+                    <Input type="number" min={1} max={100} value={loyaltyEarnRate} onChange={e => setLoyaltyEarnRate(Number(e.target.value))} className="h-8" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Points = ₹1</Label>
+                    <Input type="number" min={1} max={100} value={loyaltyRedeemRate} onChange={e => setLoyaltyRedeemRate(Number(e.target.value))} className="h-8" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Min Redeem</Label>
+                    <Input type="number" min={10} max={1000} value={loyaltyMinRedeem} onChange={e => setLoyaltyMinRedeem(Number(e.target.value))} className="h-8" />
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ═══ Referral Config ═══ */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2"><Users className="h-4 w-4" /> Referral Program</CardTitle>
+              <CardDescription>Grow through customer referrals</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">Enable Referrals</Label>
+                <Switch checked={referralEnabled} onCheckedChange={setReferralEnabled} />
+              </div>
+              {referralEnabled && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Referrer Reward (₹)</Label>
+                    <Input type="number" min={0} max={500} value={referrerReward} onChange={e => setReferrerReward(Number(e.target.value))} className="h-8" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Referee Reward (₹)</Label>
+                    <Input type="number" min={0} max={500} value={refereeReward} onChange={e => setRefereeReward(Number(e.target.value))} className="h-8" />
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
