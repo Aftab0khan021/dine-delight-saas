@@ -21,6 +21,7 @@ import {
   Bot,
   CalendarDays,
   Package,
+  Shield,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,7 @@ const growthNavItems: NavItem[] = [
   { to: "/admin/insights",   label: "Menu Insights",  icon: BarChart3,     adminOnly: true },
   { to: "/admin/developer",  label: "Developer API",  icon: Code2,         adminOnly: true },
   { to: "/admin/whatsapp",   label: "WhatsApp Bot",   icon: Bot,           adminOnly: true },
+  { to: "/admin/otp-settings", label: "OTP Settings", icon: Shield,        adminOnly: true },
 ];
 
 

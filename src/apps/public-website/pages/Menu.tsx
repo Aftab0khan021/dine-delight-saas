@@ -90,6 +90,7 @@ export default function PublicMenu() {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerName, setCustomerName] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
 
   // Stable callback for Turnstile — avoids re-render loops inside Drawer portal
   const handleTurnstileSuccess = useCallback((token: string) => {
@@ -1111,6 +1112,21 @@ export default function PublicMenu() {
                     </div>
                   </div>
                 </div>
+
+                {/* Delivery Address — only when delivery selected */}
+                {orderType === 'delivery' && (
+                  <div className="border rounded-lg p-3 space-y-2 bg-muted/40">
+                    <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                      📍 Delivery Address
+                    </p>
+                    <textarea
+                      placeholder="Enter your full delivery address..."
+                      value={deliveryAddress}
+                      onChange={e => setDeliveryAddress(e.target.value)}
+                      className="w-full rounded-lg border bg-background px-3 py-2 text-sm min-h-[60px] resize-none"
+                    />
+                  </div>
+                )}
 
                 {/* Loyalty Points */}
                 {loyaltyConfig && customerPhone && customerPhone.length >= 10 && (

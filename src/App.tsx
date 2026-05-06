@@ -34,6 +34,7 @@ import AdminDeveloperAPI from "./apps/admin-panel/pages/DeveloperAPI";
 import AdminKitchenDashboard from "./apps/admin-panel/pages/KitchenDashboard";
 import AdminReservations from "./apps/admin-panel/pages/Reservations";
 import AdminInventory from "./apps/admin-panel/pages/Inventory";
+import AdminOTPSettings from "./apps/admin-panel/pages/OTPSettings";
 
 // Super Admin
 import SuperAdminAuth from "./apps/super-admin/pages/Auth";
@@ -139,6 +140,7 @@ const App = () => (
             <Route path="inventory" element={<AdminInventory />} />
             {/* WhatsApp bot settings (from dev merge) */}
             <Route path="whatsapp" element={<AdminWhatsAppSettings />} />
+            <Route path="otp-settings" element={<AdminOTPSettings />} />
           </Route>
 
           {/* Super Admin Routes */}

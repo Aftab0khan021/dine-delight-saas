@@ -247,6 +247,29 @@ export default function RestaurantProfile() {
           </section>
         )}
 
+        {/* Events & Special Nights */}
+        {Array.isArray((settings as any)?.events) && (settings as any).events.length > 0 && (
+          <section className="space-y-4">
+            <h2 className="text-2xl font-bold tracking-tight text-center">Events & Special Nights</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {(settings as any).events.map((evt: any, i: number) => (
+                <div key={i} className="rounded-xl border bg-card p-5 space-y-2 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center gap-3">
+                    <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                      <CalendarDays className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">{evt.name}</h3>
+                      {evt.date && <p className="text-xs text-muted-foreground">{evt.date}</p>}
+                    </div>
+                  </div>
+                  {evt.description && <p className="text-sm text-muted-foreground">{evt.description}</p>}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Info Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="p-6 bg-card border rounded-2xl flex flex-col items-center text-center gap-3 shadow-sm">
