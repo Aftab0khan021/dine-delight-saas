@@ -21,7 +21,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useSEO } from "@/hooks/useSEO";
 import { CopyButton } from "@/apps/admin-panel/components/qr/CopyButton";
-import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote, ShieldAlert } from "lucide-react";
+import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote, ShieldAlert, Moon, Sun, Truck, Store } from "lucide-react";
 import { useRestaurantCart } from "../hooks/useRestaurantCart";
 import { useCollaborativeCart } from "../hooks/useCollaborativeCart";
 import { MenuItemDialog } from "../components/MenuItemDialog";
@@ -124,6 +124,27 @@ export default function PublicMenu() {
   // Payment method
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online'>('cash');
   const onlinePaymentsEnabled = !!(restaurantQuery.data as any)?.online_payments_enabled;
+
+  // Dark mode
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("dd-dark") === "1");
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+    localStorage.setItem("dd-dark", darkMode ? "1" : "0");
+  }, [darkMode]);
+
+  // Tip selector
+  const [tipPercent, setTipPercent] = useState<number>(0);
+  const tipCents = Math.round((activeCart.subtotalCents * tipPercent) / 100);
+
+  // Order type
+  const [orderType, setOrderType] = useState<'dine_in' | 'pickup' | 'delivery'>('dine_in');
+
+  // GST (5% standard for restaurants)
+  const GST_RATE = 0.05;
+  const gstCents = Math.round(activeCart.subtotalCents * GST_RATE);
+
+  // Image lightbox
+  const [lightboxImg, setLightboxImg] = useState<string | null>(null);
 
   const fetchUpsell = useCallback(async (itemId: string, restaurantId: string) => {
     try {
@@ -485,6 +506,23 @@ export default function PublicMenu() {
         </div>
       </header>
 
+      {/* Dark mode toggle */}
+      <button onClick={() => setDarkMode(!darkMode)} className="fixed top-4 right-4 z-50 h-10 w-10 rounded-full bg-card border shadow-lg flex items-center justify-center hover:scale-110 transition-transform" aria-label="Toggle dark mode">
+        {darkMode ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5" />}
+      </button>
+
+      {/* Order Type Selector */}
+      <div className="w-full max-w-3xl mx-auto px-4 pt-3">
+        <div className="flex gap-1 p-1 bg-muted rounded-lg">
+          {([['dine_in', 'Dine In', Store], ['pickup', 'Pickup', ShoppingBag], ['delivery', 'Delivery', Truck]] as const).map(([type, label, Icon]) => (
+            <button key={type} onClick={() => setOrderType(type as any)}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-sm font-medium transition-colors ${orderType === type ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+              <Icon className="h-3.5 w-3.5" />{label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Category Jump Bar + Search */}
       {categoriesWithItems.length > 0 && (
         <div className="sticky top-[73px] z-[9] border-b bg-background/95 backdrop-blur">
@@ -639,8 +677,9 @@ export default function PublicMenu() {
                           <img
                             src={item.image_url}
                             alt={item.name}
-                            className="h-20 w-20 rounded-md object-cover border"
+                            className="h-20 w-20 rounded-md object-cover border cursor-pointer hover:opacity-80 transition-opacity"
                             loading="lazy"
+                            onClick={() => setLightboxImg(item.image_url)}
                           />
                         ) : null}
 
@@ -846,6 +885,43 @@ export default function PublicMenu() {
                     <p className="font-medium tabular-nums">
                       {formatMoney(activeCart.subtotalCents, currencyCode)}
                     </p>
+                  </div>
+                </div>
+
+                {/* Tip for Staff */}
+                <div className="border rounded-lg p-3 space-y-2 bg-muted/40">
+                  <p className="text-xs text-muted-foreground font-medium">Tip for Staff</p>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[0, 10, 15, 20].map(pct => (
+                      <button key={pct} onClick={() => setTipPercent(pct)}
+                        className={`rounded-lg border py-1.5 text-xs font-medium transition-colors ${tipPercent === pct ? 'border-primary bg-primary/10 text-primary' : 'border-muted text-muted-foreground hover:border-border'}`}>
+                        {pct === 0 ? 'None' : `${pct}%`}
+                      </button>
+                    ))}
+                  </div>
+                  {tipPercent > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Tip ({tipPercent}%)</span>
+                      <span className="font-medium">{formatMoney(tipCents, currencyCode)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* GST / Tax Breakdown */}
+                <div className="space-y-1.5 text-sm border-t pt-2">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>GST (5%)</span>
+                    <span>{formatMoney(gstCents, currencyCode)}</span>
+                  </div>
+                  {activeCart.discountCents > 0 && (
+                    <div className="flex justify-between text-green-600">
+                      <span>Discount</span>
+                      <span>-{formatMoney(activeCart.discountCents, currencyCode)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-bold text-base pt-1 border-t">
+                    <span>Grand Total</span>
+                    <span>{formatMoney(activeCart.totalCents + gstCents + tipCents, currencyCode)}</span>
                   </div>
                 </div>
 
@@ -1061,6 +1137,14 @@ export default function PublicMenu() {
           </a>
         );
       })()}
+
+      {/* Image Lightbox */}
+      {lightboxImg && (
+        <div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4" onClick={() => setLightboxImg(null)}>
+          <button className="absolute top-4 right-4 text-white hover:text-gray-300 z-10" onClick={() => setLightboxImg(null)}><X className="h-8 w-8" /></button>
+          <img src={lightboxImg} alt="Item" className="max-h-[85vh] max-w-full object-contain rounded-lg" onClick={e => e.stopPropagation()} />
+        </div>
+      )}
     </main>
   );
 }

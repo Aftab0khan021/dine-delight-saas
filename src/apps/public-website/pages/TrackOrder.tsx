@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, CheckCircle2, Clock, ChefHat, ShoppingBag, ArrowLeft, Download, Printer } from "lucide-react";
+import { Loader2, CheckCircle2, Clock, ChefHat, ShoppingBag, ArrowLeft, Download, Printer, Share2, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSEO } from "@/hooks/useSEO";
 import { formatMoney } from "@/lib/formatting";
@@ -277,7 +277,33 @@ export default function TrackOrder() {
               >
                 <Printer className="h-3.5 w-3.5 mr-1.5" /> Print Receipt
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const text = `🧾 Receipt from ${order.restaurant?.name || 'Restaurant'}\n\n${items.map(i => `${i.quantity}x ${i.name_snapshot} — ${formatMoney(i.line_total_cents, order.currency_code)}`).join('\n')}\n\nTotal: ${formatMoney(order.total_cents, order.currency_code)}\n\nTrack: ${window.location.href}`;
+                  const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+                  window.open(waUrl, '_blank');
+                }}
+              >
+                <Share2 className="h-3.5 w-3.5 mr-1.5" /> Share on WhatsApp
+              </Button>
             </div>
+
+            {/* Allergen Report */}
+            {(() => {
+              const allergens = new Set<string>();
+              items.forEach((i: any) => {
+                if (Array.isArray(i.allergens_snapshot)) i.allergens_snapshot.forEach((a: string) => allergens.add(a));
+              });
+              if (allergens.size === 0) return null;
+              return (
+                <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  <p className="text-xs font-medium text-amber-800 dark:text-amber-300 flex items-center gap-1"><ShieldAlert className="h-3.5 w-3.5" /> Allergen Notice</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">Your order may contain: {Array.from(allergens).join(', ')}</p>
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
 

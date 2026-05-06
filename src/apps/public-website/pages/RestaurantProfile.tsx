@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useSEO } from "@/hooks/useSEO";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { MapPin, Phone, Clock, ArrowRight, Utensils, Mail, AlertCircle, Instagram, Facebook, Twitter, Youtube, Star, MessageCircle, CalendarDays, Moon, Sun, ChevronLeft, ChevronRight } from "lucide-react";
+import { MapPin, Phone, Clock, ArrowRight, Utensils, Mail, AlertCircle, Instagram, Facebook, Twitter, Youtube, Star, MessageCircle, CalendarDays, Moon, Sun, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
@@ -47,6 +48,7 @@ export default function RestaurantProfile() {
   const slug = (restaurantSlug ?? "").trim();
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("dd-dark") === "1");
   const [galleryIdx, setGalleryIdx] = useState(0);
+  const [lightboxImg, setLightboxImg] = useState<string | null>(null);
   const [reviewIdx, setReviewIdx] = useState(0);
 
   // Reservation form
@@ -155,6 +157,14 @@ export default function RestaurantProfile() {
           </div>
           <div className="space-y-2 max-w-2xl text-white drop-shadow-md">
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight">{restaurant.name}</h1>
+            {/* Cuisine Badges */}
+            {Array.isArray((settings as any)?.cuisine_types) && (settings as any).cuisine_types.length > 0 && (
+              <div className="flex flex-wrap justify-center gap-1.5 mt-1">
+                {(settings as any).cuisine_types.map((c: string) => (
+                  <Badge key={c} variant="secondary" className="bg-white/20 text-white border-white/30 text-xs backdrop-blur-sm">{c}</Badge>
+                ))}
+              </div>
+            )}
             <p className="text-base sm:text-lg md:text-xl opacity-90 font-light">{restaurant.description || "Welcome to our restaurant — explore our menu and order online."}</p>
           </div>
           {/* Open/Closed Badge */}
@@ -198,7 +208,7 @@ export default function RestaurantProfile() {
             <div className="relative">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 {galleryImages.map((url, i) => (
-                  <div key={i} className="aspect-square rounded-xl overflow-hidden cursor-pointer hover:opacity-90 transition-opacity">
+                  <div key={i} className="aspect-square rounded-xl overflow-hidden cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setLightboxImg(url)}>
                     <img src={url} alt={`Gallery ${i + 1}`} className="h-full w-full object-cover" loading="lazy" />
                   </div>
                 ))}
@@ -226,6 +236,14 @@ export default function RestaurantProfile() {
                 </Link>
               ))}
             </div>
+          </section>
+        )}
+
+        {/* Chef's Story */}
+        {(settings as any)?.chefs_story && (
+          <section className="space-y-4 text-center">
+            <h2 className="text-2xl font-bold tracking-tight">Our Story</h2>
+            <p className="text-muted-foreground leading-relaxed text-base max-w-2xl mx-auto">{(settings as any).chefs_story}</p>
           </section>
         )}
 
@@ -316,6 +334,28 @@ export default function RestaurantProfile() {
           </section>
         )}
       </div>
+
+      {/* Schema.org Structured Data */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "Restaurant",
+        "name": restaurant.name,
+        "description": restaurant.description || "",
+        "image": restaurant.logo_url || "",
+        "url": window.location.href,
+        ...(settings?.address ? { "address": { "@type": "PostalAddress", "streetAddress": settings.address } } : {}),
+        ...(contactPhone ? { "telephone": contactPhone } : {}),
+        ...(contactEmail ? { "email": contactEmail } : {}),
+        "servesCuisine": Array.isArray((settings as any)?.cuisine_types) ? (settings as any).cuisine_types : [],
+      }) }} />
+
+      {/* Gallery Lightbox */}
+      {lightboxImg && (
+        <div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4" onClick={() => setLightboxImg(null)}>
+          <button className="absolute top-4 right-4 text-white hover:text-gray-300 z-10" onClick={() => setLightboxImg(null)}><X className="h-8 w-8" /></button>
+          <img src={lightboxImg} alt="Gallery" className="max-h-[85vh] max-w-full object-contain rounded-lg" onClick={e => e.stopPropagation()} />
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="border-t py-8 text-center text-sm text-muted-foreground bg-muted/30">
