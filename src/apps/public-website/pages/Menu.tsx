@@ -21,7 +21,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useSEO } from "@/hooks/useSEO";
 import { CopyButton } from "@/apps/admin-panel/components/qr/CopyButton";
-import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote, ShieldAlert, Moon, Sun, Truck, Store } from "lucide-react";
+import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote, ShieldAlert, Moon, Sun, Truck, Store, User } from "lucide-react";
 import { useRestaurantCart } from "../hooks/useRestaurantCart";
 import { useCollaborativeCart } from "../hooks/useCollaborativeCart";
 import { MenuItemDialog } from "../components/MenuItemDialog";
@@ -529,18 +529,18 @@ export default function PublicMenu() {
     <main className="min-h-screen w-full bg-background">
       <PWAInstallPrompt />
       <header className="border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
-        <div className="w-full max-w-3xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
+        <div className="w-full max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4 min-w-0">
             {restaurantQuery.data?.logo_url ? (
               <img
                 src={restaurantQuery.data.logo_url}
                 alt={`${restaurantQuery.data.name} logo`}
-                className="h-12 w-12 rounded-md object-cover border"
+                className="h-12 w-12 rounded-md object-cover border shrink-0"
                 loading="lazy"
               />
             ) : (
               <div
-                className="h-12 w-12 rounded-md border bg-muted"
+                className="h-12 w-12 rounded-md border bg-muted shrink-0"
                 aria-hidden="true"
               />
             )}
@@ -555,6 +555,15 @@ export default function PublicMenu() {
               ) : null}
             </div>
           </div>
+          {restaurantQuery.data?.slug && (
+            <Link 
+              to={`/r/${restaurantQuery.data.slug}/account`}
+              className="h-10 w-10 shrink-0 rounded-full bg-muted/50 flex items-center justify-center text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+              title="My Account"
+            >
+              <User className="h-5 w-5" />
+            </Link>
+          )}
         </div>
       </header>
 
