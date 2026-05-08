@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { MapPin, Phone, Star, Package, LogOut, ArrowLeft, Loader2, ArrowRight } from "lucide-react";
+import { MapPin, Phone, Star, Package, LogOut, ArrowLeft, Loader2, ArrowRight, Edit2, Plus, Trash2 } from "lucide-react";
 import { formatMoney } from "@/lib/formatting";
 import { Turnstile } from "@/components/security/Turnstile";
 
@@ -24,6 +24,16 @@ export default function CustomerDashboard() {
 
   // Once authenticated
   const [customerId, setCustomerId] = useState<string | null>(null);
+
+  // Profile Edit State
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+
+  // Address State
+  const [isAddingAddress, setIsAddingAddress] = useState(false);
+  const [newAddressLabel, setNewAddressLabel] = useState("");
+  const [newAddressText, setNewAddressText] = useState("");
 
   // 1. Fetch Restaurant details
   const restaurantQuery = useQuery({
@@ -182,6 +192,70 @@ export default function CustomerDashboard() {
     },
   });
 
+  const handleUpdateProfile = async () => {
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from("customer_profiles")
+        .update({ name: editName, email: editEmail })
+        .eq("phone", phone);
+      if (error) throw error;
+      toast({ title: "Success", description: "Profile updated successfully." });
+      setIsEditingProfile(false);
+      profileQuery.refetch();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddAddress = async () => {
+    if (!newAddressText) return;
+    setLoading(true);
+    try {
+      const currentAddresses = profileQuery.data?.saved_addresses || [];
+      const newAddresses = [...currentAddresses, { label: newAddressLabel || "Address", address: newAddressText }];
+      
+      const { error } = await supabase
+        .from("customer_profiles")
+        .update({ saved_addresses: newAddresses })
+        .eq("phone", phone);
+        
+      if (error) throw error;
+      toast({ title: "Success", description: "Address added successfully." });
+      setIsAddingAddress(false);
+      setNewAddressLabel("");
+      setNewAddressText("");
+      profileQuery.refetch();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveAddress = async (index: number) => {
+    setLoading(true);
+    try {
+      const currentAddresses = profileQuery.data?.saved_addresses || [];
+      const newAddresses = currentAddresses.filter((_: any, i: number) => i !== index);
+      
+      const { error } = await supabase
+        .from("customer_profiles")
+        .update({ saved_addresses: newAddresses })
+        .eq("phone", phone);
+        
+      if (error) throw error;
+      toast({ title: "Success", description: "Address removed." });
+      profileQuery.refetch();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (restaurantQuery.isLoading) {
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
@@ -308,15 +382,46 @@ export default function CustomerDashboard() {
             {/* Profile Info */}
             <Card>
               <CardContent className="p-6">
-                <div className="flex items-start gap-4">
-                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                    <Phone className="h-5 w-5" />
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-4">
+                    <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                      <Phone className="h-5 w-5" />
+                    </div>
+                    {isEditingProfile ? (
+                      <div className="space-y-3 w-full">
+                        <Input 
+                          placeholder="Your Name" 
+                          value={editName} 
+                          onChange={e => setEditName(e.target.value)} 
+                        />
+                        <Input 
+                          placeholder="Email Address" 
+                          type="email" 
+                          value={editEmail} 
+                          onChange={e => setEditEmail(e.target.value)} 
+                        />
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={handleUpdateProfile} disabled={loading}>Save</Button>
+                          <Button size="sm" variant="outline" onClick={() => setIsEditingProfile(false)}>Cancel</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <h3 className="font-semibold text-lg">{profileQuery.data?.name || "Customer"}</h3>
+                        <p className="text-muted-foreground">{phone}</p>
+                        {profileQuery.data?.email && <p className="text-sm text-muted-foreground">{profileQuery.data.email}</p>}
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-lg">{profileQuery.data?.name || "Customer"}</h3>
-                    <p className="text-muted-foreground">{phone}</p>
-                    {profileQuery.data?.email && <p className="text-sm text-muted-foreground">{profileQuery.data.email}</p>}
-                  </div>
+                  {!isEditingProfile && (
+                    <Button variant="ghost" size="icon" onClick={() => {
+                      setEditName(profileQuery.data?.name || "");
+                      setEditEmail(profileQuery.data?.email || "");
+                      setIsEditingProfile(true);
+                    }}>
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -329,20 +434,51 @@ export default function CustomerDashboard() {
                     <MapPin className="h-5 w-5 text-muted-foreground" />
                     Saved Addresses
                   </h3>
+                  {!isAddingAddress && (
+                    <Button variant="outline" size="sm" onClick={() => setIsAddingAddress(true)}>
+                      <Plus className="h-4 w-4 mr-1" /> Add
+                    </Button>
+                  )}
                 </div>
+
+                {isAddingAddress && (
+                  <div className="mb-4 p-4 border rounded-md bg-muted/10 space-y-3">
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium">Label (e.g. Home, Work)</label>
+                      <Input value={newAddressLabel} onChange={e => setNewAddressLabel(e.target.value)} placeholder="Home" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium">Full Address</label>
+                      <Input value={newAddressText} onChange={e => setNewAddressText(e.target.value)} placeholder="123 Main St, Apt 4B" />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={handleAddAddress} disabled={loading || !newAddressText}>Save Address</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setIsAddingAddress(false)}>Cancel</Button>
+                    </div>
+                  </div>
+                )}
+
                 {profileQuery.data?.saved_addresses && Array.isArray(profileQuery.data.saved_addresses) && profileQuery.data.saved_addresses.length > 0 ? (
                   <div className="space-y-3">
                     {profileQuery.data.saved_addresses.map((addr: any, i: number) => (
-                      <div key={i} className="flex flex-col gap-1 p-3 border rounded-md">
+                      <div key={i} className="flex flex-col gap-1 p-3 border rounded-md group relative pr-10">
                         <span className="font-medium text-sm">{addr.label || 'Address'}</span>
                         <span className="text-sm text-muted-foreground">{addr.address}</span>
+                        <button 
+                          onClick={() => handleRemoveAddress(i)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-destructive transition-colors"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center p-4 bg-muted/20 rounded-md border border-dashed">
-                    <p className="text-sm text-muted-foreground">No saved addresses found.</p>
-                  </div>
+                  !isAddingAddress && (
+                    <div className="text-center p-4 bg-muted/20 rounded-md border border-dashed">
+                      <p className="text-sm text-muted-foreground">No saved addresses found.</p>
+                    </div>
+                  )
                 )}
               </CardContent>
             </Card>
