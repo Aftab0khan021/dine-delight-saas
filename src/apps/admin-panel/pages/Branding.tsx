@@ -1077,22 +1077,94 @@ export default function AdminBranding() {
             </CardContent>
           </Card>
 
-          {/* ═══ Tax / GST Config ═══ */}
+          {/* ═══ Tax / GST & Bill Charges ═══ */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2"><DollarSign className="h-4 w-4" /> Tax / GST</CardTitle>
-              <CardDescription>Configure tax rate for your restaurant</CardDescription>
+              <CardTitle className="text-base flex items-center gap-2"><DollarSign className="h-4 w-4" /> Taxes & Bill Charges</CardTitle>
+              <CardDescription>Configure all taxes, service charges, packing fees, and other charges shown on the customer bill</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
+              {/* Legacy main tax */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Tax Label</Label>
+                  <Label className="text-xs">Primary Tax Label</Label>
                   <Input value={taxLabel} onChange={e => setTaxLabel(e.target.value)} placeholder="GST" className="h-8" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Rate (%)</Label>
+                  <Label className="text-xs">Primary Tax Rate (%)</Label>
                   <Input type="number" min={0} max={30} step={0.5} value={taxRate} onChange={e => setTaxRate(Number(e.target.value))} className="h-8" />
                 </div>
+              </div>
+              <p className="text-xs text-muted-foreground">This is your main tax. Add extra charges below for a detailed bill breakdown.</p>
+
+              <Separator />
+
+              {/* Dynamic charges list */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Additional Bill Charges</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setBillCharges(prev => [...prev, { label: '', type: 'percentage', value: 0 }])}
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1" /> Add Charge
+                  </Button>
+                </div>
+
+                {billCharges.length === 0 && (
+                  <p className="text-xs text-muted-foreground italic py-2">No additional charges. Click "Add Charge" to add CGST, SGST, service charge, packing, delivery, etc.</p>
+                )}
+
+                {billCharges.map((charge, idx) => (
+                  <div key={idx} className="flex items-end gap-2 border rounded-lg p-3 bg-muted/30">
+                    <div className="flex-1 space-y-1">
+                      <Label className="text-[11px]">Label</Label>
+                      <Input
+                        value={charge.label}
+                        onChange={e => setBillCharges(prev => prev.map((c, i) => i === idx ? { ...c, label: e.target.value } : c))}
+                        placeholder="e.g. CGST, Service Charge, Packing"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="w-28 space-y-1">
+                      <Label className="text-[11px]">Type</Label>
+                      <select
+                        value={charge.type}
+                        onChange={e => setBillCharges(prev => prev.map((c, i) => i === idx ? { ...c, type: e.target.value as 'percentage' | 'flat' } : c))}
+                        className="flex h-8 w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm"
+                      >
+                        <option value="percentage">%</option>
+                        <option value="flat">₹ Flat</option>
+                      </select>
+                    </div>
+                    <div className="w-20 space-y-1">
+                      <Label className="text-[11px]">{charge.type === 'percentage' ? 'Rate' : 'Amount'}</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={charge.type === 'percentage' ? 0.5 : 1}
+                        value={charge.value}
+                        onChange={e => setBillCharges(prev => prev.map((c, i) => i === idx ? { ...c, value: Number(e.target.value) } : c))}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
+                      onClick={() => setBillCharges(prev => prev.filter((_, i) => i !== idx))}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+
+                {billCharges.length > 0 && (
+                  <p className="text-xs text-muted-foreground">All charges are auto-saved when you click "Save Changes" at the top.</p>
+                )}
               </div>
             </CardContent>
           </Card>

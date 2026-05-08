@@ -207,12 +207,30 @@ export default function PublicMenu() {
   // Order type
   const [orderType, setOrderType] = useState<'dine_in' | 'pickup' | 'delivery'>('dine_in');
 
-  // GST — dynamic from restaurant settings
+  // Tax & Bill Charges — dynamic from restaurant settings
   const taxSettings = useMemo(() => {
     const s = restaurantQuery.data?.settings as any;
     return { rate: (s?.tax_rate ?? 5) / 100, label: s?.tax_label || 'GST' };
   }, [restaurantQuery.data?.settings]);
   const gstCents = Math.round(activeCart.subtotalCents * taxSettings.rate);
+
+  // Additional bill charges (CGST, SGST, service charge, packing, delivery, etc.)
+  type BillCharge = { label: string; type: 'percentage' | 'flat'; value: number };
+  const billCharges: BillCharge[] = useMemo(() => {
+    const s = restaurantQuery.data?.settings as any;
+    return Array.isArray(s?.bill_charges) ? s.bill_charges.filter((c: any) => c.label && c.value > 0) : [];
+  }, [restaurantQuery.data?.settings]);
+
+  const billChargeAmounts = useMemo(() => {
+    return billCharges.map(c => ({
+      label: c.label,
+      cents: c.type === 'percentage'
+        ? Math.round(activeCart.subtotalCents * c.value / 100)
+        : Math.round(c.value * 100), // flat amount in rupees → cents
+    }));
+  }, [billCharges, activeCart.subtotalCents]);
+
+  const totalExtraChargesCents = billChargeAmounts.reduce((sum, c) => sum + c.cents, 0);
 
   // Image lightbox
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
@@ -500,7 +518,7 @@ export default function PublicMenu() {
         data = upiOrderData;
 
         // Build UPI deep-link
-        const grandTotalRupees = ((activeCart.totalCents + gstCents + tipCents) / 100).toFixed(2);
+        const grandTotalRupees = ((activeCart.totalCents + gstCents + totalExtraChargesCents + tipCents) / 100).toFixed(2);
         const upiParams = new URLSearchParams({
           pa: upiConfig.upiId,
           pn: upiConfig.merchantName,
@@ -1171,17 +1189,28 @@ export default function PublicMenu() {
                   )}
                 </div>
                 )}
-                {/* Tax, Discount, Total — inside bill card */}
+                {/* Tax, Charges, Discount, Total — inside bill card */}
                   {tipCents > 0 && (
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>Tip</span>
                       <span className="tabular-nums">{formatMoney(tipCents, currencyCode)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>{taxSettings.label} ({Math.round(taxSettings.rate * 100)}%)</span>
-                    <span className="tabular-nums">{formatMoney(gstCents, currencyCode)}</span>
-                  </div>
+                  {/* Primary Tax */}
+                  {taxSettings.rate > 0 && (
+                    <div className="flex justify-between text-sm text-muted-foreground">
+                      <span>{taxSettings.label} ({Math.round(taxSettings.rate * 100)}%)</span>
+                      <span className="tabular-nums">{formatMoney(gstCents, currencyCode)}</span>
+                    </div>
+                  )}
+                  {/* Additional Charges */}
+                  {billChargeAmounts.map((charge, idx) => (
+                    <div key={idx} className="flex justify-between text-sm text-muted-foreground">
+                      <span>{charge.label} {billCharges[idx]?.type === 'percentage' ? `(${billCharges[idx].value}%)` : ''}</span>
+                      <span className="tabular-nums">{formatMoney(charge.cents, currencyCode)}</span>
+                    </div>
+                  ))}
+                  {/* Discount */}
                   {activeCart.discountCents > 0 && (
                     <div className="flex justify-between text-sm text-green-600 font-medium">
                       <span className="flex items-center gap-1"><Tag className="h-3 w-3" /> Coupon Discount {activeCart.coupon?.code && <code className="text-[10px] bg-green-100 dark:bg-green-900/30 px-1 rounded">{activeCart.coupon.code}</code>}</span>
@@ -1191,7 +1220,7 @@ export default function PublicMenu() {
                   <Separator />
                   <div className="flex justify-between items-center">
                     <span className="font-bold text-base">Grand Total</span>
-                    <span className="font-bold text-lg tabular-nums">{formatMoney(activeCart.totalCents + gstCents + tipCents, currencyCode)}</span>
+                    <span className="font-bold text-lg tabular-nums">{formatMoney(activeCart.totalCents + gstCents + totalExtraChargesCents + tipCents, currencyCode)}</span>
                   </div>
                   {activeCart.discountCents > 0 && (
                     <p className="text-xs text-green-600 text-right font-medium">🎉 You save {formatMoney(activeCart.discountCents, currencyCode)}!</p>
@@ -1402,8 +1431,8 @@ export default function PublicMenu() {
                   {placingOrder ? "Processing…" :
                     useCollabCart && !collabCart.isLeader ? "Waiting for table leader…" :
                     !turnstileToken ? "Verifying…" :
-                    paymentMethod === 'upi' && upiConfig ? `Pay ${formatMoney(activeCart.totalCents + gstCents + tipCents, currencyCode)} via UPI` :
-                    paymentMethod === 'online' && onlinePaymentsEnabled ? `Pay ${formatMoney(activeCart.totalCents + gstCents + tipCents, currencyCode)}` :
+                    paymentMethod === 'upi' && upiConfig ? `Pay ${formatMoney(activeCart.totalCents + gstCents + totalExtraChargesCents + tipCents, currencyCode)} via UPI` :
+                    paymentMethod === 'online' && onlinePaymentsEnabled ? `Pay ${formatMoney(activeCart.totalCents + gstCents + totalExtraChargesCents + tipCents, currencyCode)}` :
                     "Place Order"}
                 </Button>
                 {checkoutError ? (
