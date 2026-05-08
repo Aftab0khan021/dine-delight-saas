@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addDays, startOfDay, subHours, subDays, subMonths, subQuarters, subYears } from "date-fns";
-import { Search, Lock, Bell, BellOff, Printer, ChevronLeft, ChevronRight, Smartphone, CheckCircle } from "lucide-react";
+import { Search, Lock, Bell, BellOff, Printer, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
@@ -77,15 +77,11 @@ function OrderCard({
   onAdvance,
   loadingId,
   currencyCode,
-  onVerifyUpi,
-  verifyingUpiId,
 }: {
   order: OrderData;
   onAdvance: (id: string, currentStatus: OrderStatus) => void;
   loadingId: string | null;
   currencyCode: string;
-  onVerifyUpi: (id: string) => void;
-  verifyingUpiId: string | null;
 }) {
   const uiStatus = STATUS_MAP[order.status as OrderStatus];
   const isLoading = loadingId === order.id;
@@ -99,9 +95,7 @@ function OrderCard({
             <Badge variant={statusVariant(uiStatus)}>{uiStatus}</Badge>
             {order.payment_status === 'paid' ? (
               <Badge variant="default" className="bg-green-600 text-white text-[10px] px-1.5">Paid</Badge>
-            ) : order.payment_method === 'upi' ? (
-              <Badge variant="default" className="bg-amber-500 text-white text-[10px] px-1.5 animate-pulse">⏳ UPI Pending</Badge>
-            ) : order.payment_method === 'online' ? (
+            ) : order.payment_method === 'online' || order.payment_method === 'upi' ? (
               <Badge variant="destructive" className="text-[10px] px-1.5">Unpaid</Badge>
             ) : (
               <Badge variant="outline" className="text-[10px] px-1.5">Cash</Badge>
@@ -174,18 +168,6 @@ function OrderCard({
           <ManualDiscountDialog orderId={order.id} orderTotalCents={order.total_cents} />
         )}
 
-        {/* UPI Payment Verification */}
-        {order.payment_method === 'upi' && order.payment_status !== 'paid' && (
-          <Button
-            className="w-full bg-amber-600 hover:bg-amber-700 text-white"
-            size="sm"
-            onClick={() => onVerifyUpi(order.id)}
-            disabled={verifyingUpiId === order.id}
-          >
-            <Smartphone className="h-3.5 w-3.5 mr-1.5" />
-            {verifyingUpiId === order.id ? 'Verifying…' : 'Verify UPI Payment'}
-          </Button>
-        )}
       </div>
     </div>
   );
@@ -202,7 +184,6 @@ export default function AdminOrders() {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("last_24h");
   const [search, setSearch] = useState("");
   const [advancingId, setAdvancingId] = useState<string | null>(null);
-  const [verifyingUpiId, setVerifyingUpiId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const ORDERS_PER_PAGE = 50;
 
@@ -459,32 +440,6 @@ export default function AdminOrders() {
     }
   });
 
-
-  // --- UPI Payment Verification ---
-  const verifyUpiMutation = useMutation({
-    mutationFn: async (orderId: string) => {
-      setVerifyingUpiId(orderId);
-      const { data, error } = await supabase
-        .from("orders")
-        .update({ payment_status: 'paid' } as any)
-        .eq("id", orderId)
-        .eq("restaurant_id", restaurant!.id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ["admin", "orders"] });
-      setVerifyingUpiId(null);
-      toast({ title: "✅ UPI Payment Verified", description: `Order ${shortId(data.id)} payment confirmed.` });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Verification Failed", description: error.message, variant: "destructive" });
-      setVerifyingUpiId(null);
-    }
-  });
-
   // --- 4. Filtering & Grouping ---
   const orders = ordersQuery.data?.orders || [];
   const totalCount = ordersQuery.data?.totalCount || 0;
@@ -625,8 +580,6 @@ export default function AdminOrders() {
                     onAdvance={(id, status) => advanceMutation.mutate({ id, currentStatus: status })}
                     loadingId={advancingId}
                     currencyCode={restaurant?.currency_code || "INR"}
-                    onVerifyUpi={(id) => verifyUpiMutation.mutate(id)}
-                    verifyingUpiId={verifyingUpiId}
                   />
                 ))}
 

@@ -92,9 +92,6 @@ export default function PublicMenu() {
   const [customerName, setCustomerName] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
 
-  // UPI pending payment state
-  const [upiPendingOrder, setUpiPendingOrder] = useState<{ orderId: string; token: string; amount: string; upiUrl: string } | null>(null);
-
   // Coupon state
   const [couponInput, setCouponInput] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
@@ -133,11 +130,6 @@ export default function PublicMenu() {
   // Payment method
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online' | 'upi'>('cash');
   const onlinePaymentsEnabled = !!(restaurantQuery.data as any)?.online_payments_enabled;
-  const upiConfig = useMemo(() => {
-    const s = restaurantQuery.data?.settings as any;
-    if (!s?.upi_id) return null;
-    return { upiId: s.upi_id, merchantName: s.upi_merchant_name || restaurantQuery.data?.name || 'Restaurant' };
-  }, [restaurantQuery.data]);
 
   // Active coupons for offers banner
   const { data: menuCoupons } = useQuery({
@@ -590,26 +582,8 @@ export default function PublicMenu() {
             rzp.open();
           });
 
-        } else if (upiConfig) {
-          // ─── FALLBACK: Direct UPI deep-link (needs admin verification) ───
-          const { data: upiOrderData, error } = await supabase.functions.invoke("place-order", {
-            body: { ...orderPayload, payment_method: 'upi' },
-          });
-          if (error) throw error;
-          data = upiOrderData;
-
-          const grandTotalRupees = ((activeCart.totalCents + gstCents + totalExtraChargesCents + tipCents) / 100).toFixed(2);
-          const upiParams = new URLSearchParams({
-            pa: upiConfig.upiId, pn: upiConfig.merchantName, am: grandTotalRupees, cu: 'INR',
-            tn: `Order ${(data?.id || '').slice(0, 8).toUpperCase()} at ${restaurantQuery.data?.name || 'Restaurant'}`,
-          });
-          setUpiPendingOrder({ orderId: data.id, token: data.order_token, amount: grandTotalRupees, upiUrl: `upi://pay?${upiParams.toString()}` });
-          activeCart.clear();
-          setCartOpen(true);
-          toast({ title: "Order created!", description: "Complete UPI payment to confirm." });
-          return;
         } else {
-          throw new Error("UPI payments not configured for this restaurant.");
+          throw new Error("UPI payments require Razorpay. Please enable Online Payments in admin settings.");
         }
       } else {
         // === CASH FLOW (existing) ===
@@ -648,8 +622,8 @@ export default function PublicMenu() {
   }, [restaurantQuery.data?.name]);
 
   useEffect(() => {
-    if (activeCart.itemCount === 0 && !placedOrderToken && !upiPendingOrder) setCartOpen(false);
-  }, [activeCart.itemCount, placedOrderToken, upiPendingOrder]);
+    if (activeCart.itemCount === 0 && !placedOrderToken) setCartOpen(false);
+  }, [activeCart.itemCount, placedOrderToken]);
 
   // Fetch smart menu ranking after restaurant loads
   useEffect(() => {
@@ -1119,63 +1093,7 @@ export default function PublicMenu() {
               </div>
             )}
             {activeCart.items.length === 0 ? (
-              upiPendingOrder ? (
-                /* ═══ UPI PAYMENT PENDING SCREEN ═══ */
-                <Card className="p-5 space-y-4 border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20">
-                  <div className="text-center space-y-2">
-                    <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/50">
-                      <Smartphone className="h-6 w-6 text-amber-600" />
-                    </div>
-                    <h3 className="font-bold text-base">Complete UPI Payment</h3>
-                    <p className="text-sm text-muted-foreground">Your order has been created. Please pay via UPI to confirm it.</p>
-                  </div>
-
-                  <div className="rounded-lg border bg-card p-3 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Order ID</span>
-                      <span className="font-mono text-xs">#{upiPendingOrder.orderId.slice(0, 8).toUpperCase()}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Amount</span>
-                      <span className="font-bold text-lg">₹{upiPendingOrder.amount}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Pay To</span>
-                      <span className="font-mono text-xs">{upiConfig?.upiId}</span>
-                    </div>
-                  </div>
-
-                  <a
-                    href={upiPendingOrder.upiUrl}
-                    className="flex items-center justify-center gap-2 w-full rounded-lg bg-blue-600 hover:bg-blue-700 text-white py-3 text-sm font-semibold transition-colors"
-                  >
-                    <Smartphone className="h-4 w-4" />
-                    Open UPI App & Pay ₹{upiPendingOrder.amount}
-                  </a>
-
-                  <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-100/50 dark:bg-amber-900/20 p-3 space-y-1">
-                    <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1">
-                      ⚠️ Payment Verification Required
-                    </p>
-                    <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                      After paying, the restaurant will verify your payment from their UPI app. Your order will be confirmed once payment is verified.
-                    </p>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Link to={`/track?token=${encodeURIComponent(upiPendingOrder.token)}`} className="flex-1">
-                      <Button variant="outline" size="sm" className="w-full">Track Order</Button>
-                    </Link>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => { setUpiPendingOrder(null); setPlacedOrderId(null); setPlacedOrderToken(null); }}
-                    >
-                      Close
-                    </Button>
-                  </div>
-                </Card>
-              ) : placedOrderToken ? (
+              placedOrderToken ? (
                 <Card className="p-6">
                   <p className="text-sm text-muted-foreground">Order placed</p>
                   <p className="mt-2 font-mono text-sm break-all">{placedOrderToken}</p>
@@ -1365,10 +1283,10 @@ export default function PublicMenu() {
                 </div>
 
                 {/* Payment method selector */}
-                {(onlinePaymentsEnabled || upiConfig) && (
+                {onlinePaymentsEnabled && (
                   <div className="border rounded-lg p-3 space-y-2 bg-muted/40">
                     <p className="text-xs text-muted-foreground font-medium">Payment Method</p>
-                    <div className={`grid gap-2 ${(upiConfig || onlinePaymentsEnabled) && onlinePaymentsEnabled ? 'grid-cols-3' : onlinePaymentsEnabled || upiConfig ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                    <div className={`grid gap-2 ${onlinePaymentsEnabled ? 'grid-cols-3' : 'grid-cols-1'}`}>
                       <button
                         type="button"
                         onClick={() => setPaymentMethod('cash')}
@@ -1393,7 +1311,7 @@ export default function PublicMenu() {
                           <CreditCard className="h-4 w-4" /> Card
                         </button>
                       )}
-                      {(onlinePaymentsEnabled || upiConfig) && (
+                      {onlinePaymentsEnabled && (
                         <button
                           type="button"
                           onClick={() => setPaymentMethod('upi')}
@@ -1409,9 +1327,7 @@ export default function PublicMenu() {
                     </div>
                     {paymentMethod === 'upi' && (
                       <div className="mt-2 p-2 rounded-md bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 text-center space-y-1">
-                        <p className="text-xs text-blue-700 dark:text-blue-300 font-medium">
-                          {onlinePaymentsEnabled ? 'Pay securely via UPI — auto-verified' : 'Pay directly via UPI app'}
-                        </p>
+                        <p className="text-xs text-blue-700 dark:text-blue-300 font-medium">Pay securely via UPI — auto-verified</p>
                         <p className="text-[10px] text-blue-600 dark:text-blue-400">GPay • PhonePe • Paytm • BHIM</p>
                       </div>
                     )}
@@ -1573,7 +1489,7 @@ export default function PublicMenu() {
                   {placingOrder ? "Processing…" :
                     useCollabCart && !collabCart.isLeader ? "Waiting for table leader…" :
                     !turnstileToken ? "Verifying…" :
-                    paymentMethod === 'upi' && upiConfig ? `Pay ${formatMoney(activeCart.totalCents + gstCents + totalExtraChargesCents + tipCents, currencyCode)} via UPI` :
+                    paymentMethod === 'upi' && onlinePaymentsEnabled ? `Pay ${formatMoney(activeCart.totalCents + gstCents + totalExtraChargesCents + tipCents, currencyCode)} via UPI` :
                     paymentMethod === 'online' && onlinePaymentsEnabled ? `Pay ${formatMoney(activeCart.totalCents + gstCents + totalExtraChargesCents + tipCents, currencyCode)}` :
                     "Place Order"}
                 </Button>
