@@ -21,6 +21,9 @@ import {
   Moon,
   Sun,
   PartyPopper,
+  Search,
+  XCircle,
+  CircleDot,
 } from "lucide-react";
 
 function normalizeSettings(settings: any | null) {
@@ -50,6 +53,11 @@ export default function TableReservation() {
   const [resOccasion, setResOccasion] = useState("");
   const [resSubmitting, setResSubmitting] = useState(false);
   const [resSuccess, setResSuccess] = useState(false);
+
+  // Status tracking
+  const [trackPhone, setTrackPhone] = useState("");
+  const [trackLoading, setTrackLoading] = useState(false);
+  const [trackedReservations, setTrackedReservations] = useState<any[] | null>(null);
 
   // Fetch Restaurant
   const { data: restaurant, isLoading, error } = useQuery({
@@ -117,6 +125,33 @@ export default function TableReservation() {
     }
     setResSuccess(true);
     toast({ title: "Reservation Submitted!", description: "The restaurant will confirm your booking." });
+  };
+
+  const handleTrackReservation = async () => {
+    if (!trackPhone || trackPhone.length < 10 || !restaurant?.id) return;
+    setTrackLoading(true);
+    try {
+      const { data } = await supabase
+        .from("reservations")
+        .select("id, customer_name, party_size, reservation_date, reservation_time, status, notes, updated_at")
+        .eq("restaurant_id", restaurant.id)
+        .eq("customer_phone", trackPhone)
+        .order("reservation_date", { ascending: false })
+        .limit(5);
+      setTrackedReservations(data || []);
+    } catch {
+      setTrackedReservations([]);
+    }
+    setTrackLoading(false);
+  };
+
+  const statusConfig: Record<string, { icon: any; color: string; bg: string; label: string }> = {
+    pending: { icon: CircleDot, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800", label: "Pending Confirmation" },
+    confirmed: { icon: CheckCircle2, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800", label: "Confirmed ✅" },
+    seated: { icon: Users, color: "text-green-600", bg: "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800", label: "Seated 🍽️" },
+    completed: { icon: CheckCircle2, color: "text-gray-600", bg: "bg-gray-50 dark:bg-gray-800/30 border-gray-200 dark:border-gray-700", label: "Completed" },
+    cancelled: { icon: XCircle, color: "text-red-600", bg: "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800", label: "Cancelled ❌" },
+    no_show: { icon: XCircle, color: "text-purple-600", bg: "bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800", label: "No Show" },
   };
 
   if (isLoading) {
@@ -352,6 +387,78 @@ export default function TableReservation() {
             </form>
           </div>
         )}
+
+        {/* Track Reservation Status */}
+        <div className="mt-12 border-t pt-8">
+          <div className="text-center space-y-2 mb-6">
+            <h2 className="text-xl font-bold tracking-tight">Check Reservation Status</h2>
+            <p className="text-sm text-muted-foreground">Enter your phone number to view your bookings</p>
+          </div>
+          <div className="flex gap-2 max-w-md mx-auto">
+            <Input
+              type="tel"
+              placeholder="Enter your phone number"
+              value={trackPhone}
+              onChange={e => setTrackPhone(e.target.value)}
+              className="h-11"
+            />
+            <Button
+              onClick={handleTrackReservation}
+              disabled={trackLoading || trackPhone.length < 10}
+              style={{ backgroundColor: themeColor }}
+              className="shrink-0 px-6"
+            >
+              {trackLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Search className="h-4 w-4 mr-1" /> Check</>}
+            </Button>
+          </div>
+
+          {trackedReservations !== null && (
+            <div className="mt-6 space-y-3 max-w-md mx-auto">
+              {trackedReservations.length === 0 ? (
+                <Card className="p-6 text-center border-dashed">
+                  <p className="text-muted-foreground text-sm">No reservations found for this number.</p>
+                </Card>
+              ) : (
+                trackedReservations.map((r: any) => {
+                  const sc = statusConfig[r.status] || statusConfig.pending;
+                  const StatusIcon = sc.icon;
+                  return (
+                    <Card key={r.id} className={`border ${sc.bg} overflow-hidden`}>
+                      <CardContent className="p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <StatusIcon className={`h-5 w-5 ${sc.color}`} />
+                            <span className={`font-semibold text-sm ${sc.color}`}>{sc.label}</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground">#{r.id.slice(0, 8).toUpperCase()}</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <CalendarDays className="h-3.5 w-3.5" />
+                            {new Date(r.reservation_date + "T00:00:00").toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <Clock className="h-3.5 w-3.5" />
+                            {r.reservation_time?.slice(0, 5)}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <Users className="h-3.5 w-3.5" />
+                            {r.party_size} guests
+                          </div>
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <User className="h-3.5 w-3.5" />
+                            {r.customer_name}
+                          </div>
+                        </div>
+                        {r.notes && <p className="text-xs text-muted-foreground italic">{r.notes}</p>}
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
       </main>
     </div>
   );

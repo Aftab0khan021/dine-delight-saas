@@ -43,11 +43,36 @@ export default function AdminReservations() {
   });
 
   const updateStatus = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+    mutationFn: async ({ id, status, reservation }: { id: string; status: string; reservation?: any }) => {
       const { error } = await supabase.from("reservations").update({ status }).eq("id", id);
       if (error) throw error;
+
+      // Send notification to customer for key status changes
+      if (reservation?.customer_phone && ["confirmed", "cancelled", "seated"].includes(status)) {
+        const statusMessages: Record<string, string> = {
+          confirmed: `✅ Your reservation at ${restaurant?.name} for ${reservation.party_size} guests on ${reservation.reservation_date} at ${reservation.reservation_time?.slice(0, 5)} has been CONFIRMED! We look forward to seeing you.`,
+          cancelled: `❌ Unfortunately, your reservation at ${restaurant?.name} for ${reservation.reservation_date} at ${reservation.reservation_time?.slice(0, 5)} has been cancelled. Please contact us if you have any questions.`,
+          seated: `🍽️ Welcome to ${restaurant?.name}! Your table is ready. Enjoy your dining experience!`,
+        };
+
+        try {
+          await supabase.functions.invoke("send-whatsapp", {
+            body: {
+              restaurant_id: restaurant?.id,
+              phone: reservation.customer_phone,
+              customer_name: reservation.customer_name,
+              order_id: id,
+              items_summary: `Reservation: ${reservation.party_size} guests`,
+              total: 0,
+              currency: "INR",
+            },
+          });
+        } catch (notifErr) {
+          console.warn("Notification send failed (non-blocking):", notifErr);
+        }
+      }
     },
-    onSuccess: () => { toast({ title: "Updated" }); qc.invalidateQueries({ queryKey: ["admin", "reservations"] }); },
+    onSuccess: () => { toast({ title: "Updated & Notified" }); qc.invalidateQueries({ queryKey: ["admin", "reservations"] }); },
     onError: (e: Error) => { toast({ title: "Error", description: e.message, variant: "destructive" }); },
   });
 
@@ -128,21 +153,21 @@ export default function AdminReservations() {
                   <div className="flex gap-2 shrink-0">
                     {r.status === "pending" && (
                       <>
-                        <Button size="sm" onClick={() => updateStatus.mutate({ id: r.id, status: "confirmed" })}><Check className="mr-1 h-3.5 w-3.5" />Confirm</Button>
-                        <Button size="sm" variant="destructive" onClick={() => updateStatus.mutate({ id: r.id, status: "cancelled" })}><X className="mr-1 h-3.5 w-3.5" />Decline</Button>
+                        <Button size="sm" onClick={() => updateStatus.mutate({ id: r.id, status: "confirmed", reservation: r })}><Check className="mr-1 h-3.5 w-3.5" />Confirm</Button>
+                        <Button size="sm" variant="destructive" onClick={() => updateStatus.mutate({ id: r.id, status: "cancelled", reservation: r })}><X className="mr-1 h-3.5 w-3.5" />Decline</Button>
                       </>
                     )}
                     {r.status === "confirmed" && (
-                      <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ id: r.id, status: "seated" })}>Mark Seated</Button>
+                      <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ id: r.id, status: "seated", reservation: r })}>Mark Seated</Button>
                     )}
                     {r.status === "seated" && (
-                      <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ id: r.id, status: "completed" })}>Complete</Button>
+                      <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ id: r.id, status: "completed", reservation: r })}>Complete</Button>
                     )}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild><Button size="sm" variant="ghost"><ChevronDown className="h-4 w-4" /></Button></DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         {STATUSES.map(s => (
-                          <DropdownMenuItem key={s} onClick={() => updateStatus.mutate({ id: r.id, status: s })} className="capitalize">{s.replace("_", " ")}</DropdownMenuItem>
+                          <DropdownMenuItem key={s} onClick={() => updateStatus.mutate({ id: r.id, status: s, reservation: r })} className="capitalize">{s.replace("_", " ")}</DropdownMenuItem>
                         ))}
                       </DropdownMenuContent>
                     </DropdownMenu>
