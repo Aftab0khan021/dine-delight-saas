@@ -104,6 +104,9 @@ export default function AdminBranding() {
   // Tier B: Tax, Tip, Loyalty, Referral config
   const [taxRate, setTaxRate] = useState(5);
   const [taxLabel, setTaxLabel] = useState("GST");
+  // Dynamic bill charges (CGST, SGST, service charge, packing, delivery, etc.)
+  type BillCharge = { label: string; type: 'percentage' | 'flat'; value: number; order_types?: string[] };
+  const [billCharges, setBillCharges] = useState<BillCharge[]>([]);
   const [tipEnabled, setTipEnabled] = useState(true);
   const [tipMode, setTipMode] = useState<'percentage' | 'amount' | 'both'>('percentage');
   const [tipPercentages, setTipPercentages] = useState('10,15,20');
@@ -120,6 +123,8 @@ export default function AdminBranding() {
   const [payEnabled, setPayEnabled] = useState(false);
   const [razorpayKeyId, setRazorpayKeyId] = useState("");
   const [razorpayKeySecret, setRazorpayKeySecret] = useState("");
+  const [upiId, setUpiId] = useState("");
+  const [upiMerchantName, setUpiMerchantName] = useState("");
   const [savingPayment, setSavingPayment] = useState(false);
 
   // Cuisine types state
@@ -197,6 +202,7 @@ export default function AdminBranding() {
       // Tier B config
       setTaxRate(s.tax_rate ?? 5);
       setTaxLabel(s.tax_label || 'GST');
+      setBillCharges(Array.isArray(s.bill_charges) ? s.bill_charges : []);
       setTipEnabled(s.tip_config?.enabled ?? true);
       setTipMode(s.tip_config?.mode || 'percentage');
       setTipPercentages((s.tip_config?.percentage_options || [10,15,20]).join(','));
@@ -213,6 +219,8 @@ export default function AdminBranding() {
       setPayEnabled(!!(restaurantData as any).online_payments_enabled);
       setRazorpayKeyId((restaurantData as any).razorpay_key_id || "");
       setRazorpayKeySecret((restaurantData as any).razorpay_key_secret || "");
+      setUpiId(s.upi_id || "");
+      setUpiMerchantName(s.upi_merchant_name || "");
 
       // Sync cuisine types
       setCuisineTypes(Array.isArray((restaurantData as any).cuisine_types) ? (restaurantData as any).cuisine_types : []);
@@ -303,6 +311,7 @@ export default function AdminBranding() {
         // Tier B config
         tax_rate: taxRate,
         tax_label: taxLabel,
+        bill_charges: billCharges,
         tip_config: {
           enabled: tipEnabled,
           mode: tipMode,
@@ -1002,6 +1011,35 @@ export default function AdminBranding() {
                 </div>
               )}
 
+              <Separator />
+
+              {/* UPI Direct Payment */}
+              <div className="space-y-3">
+                <div className="space-y-0.5">
+                  <Label className="flex items-center gap-2">📱 UPI Direct Payment</Label>
+                  <p className="text-xs text-muted-foreground">Let customers pay directly via UPI apps (GPay, PhonePe, Paytm) — no Razorpay needed</p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm">UPI ID</Label>
+                  <Input
+                    value={upiId}
+                    onChange={e => setUpiId(e.target.value)}
+                    placeholder="yourname@upi or yourname@paytm"
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">Leave empty to disable UPI direct payments</p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm">Merchant Name (displayed to customer)</Label>
+                  <Input
+                    value={upiMerchantName}
+                    onChange={e => setUpiMerchantName(e.target.value)}
+                    placeholder="Your Restaurant Name"
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+
               <Button
                 variant="outline"
                 className="w-full"
@@ -1010,12 +1048,18 @@ export default function AdminBranding() {
                   if (!restaurant?.id) return;
                   setSavingPayment(true);
                   try {
+                    const currentSettings = (restaurantData as any)?.settings || {};
                     const { error } = await supabase
                       .from("restaurants")
                       .update({
                         online_payments_enabled: payEnabled,
                         razorpay_key_id: razorpayKeyId.trim() || null,
                         razorpay_key_secret: razorpayKeySecret.trim() || null,
+                        settings: {
+                          ...currentSettings,
+                          upi_id: upiId.trim() || null,
+                          upi_merchant_name: upiMerchantName.trim() || null,
+                        },
                       } as any)
                       .eq("id", restaurant.id);
                     if (error) throw error;

@@ -21,7 +21,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useSEO } from "@/hooks/useSEO";
 import { CopyButton } from "@/apps/admin-panel/components/qr/CopyButton";
-import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote, ShieldAlert, Moon, Sun, Truck, Store, User, Tag, CheckCircle2 } from "lucide-react";
+import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote, ShieldAlert, Moon, Sun, Truck, Store, User, Tag, CheckCircle2, Smartphone, Copy } from "lucide-react";
 import { useRestaurantCart } from "../hooks/useRestaurantCart";
 import { useCollaborativeCart } from "../hooks/useCollaborativeCart";
 import { MenuItemDialog } from "../components/MenuItemDialog";
@@ -128,8 +128,60 @@ export default function PublicMenu() {
   });
 
   // Payment method
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online' | 'upi'>('cash');
   const onlinePaymentsEnabled = !!(restaurantQuery.data as any)?.online_payments_enabled;
+  const upiConfig = useMemo(() => {
+    const s = restaurantQuery.data?.settings as any;
+    if (!s?.upi_id) return null;
+    return { upiId: s.upi_id, merchantName: s.upi_merchant_name || restaurantQuery.data?.name || 'Restaurant' };
+  }, [restaurantQuery.data]);
+
+  // Active coupons for offers banner
+  const { data: menuCoupons } = useQuery({
+    queryKey: ["public-menu", "coupons", restaurantQuery.data?.id],
+    enabled: !!restaurantQuery.data?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("coupons")
+        .select("id, code, description, discount_type, discount_value, min_order_cents, max_discount_cents, expires_at")
+        .eq("restaurant_id", restaurantQuery.data!.id)
+        .eq("is_active", true)
+        .or(`expires_at.is.null,expires_at.gte.${new Date().toISOString()}`)
+        .order("discount_value", { ascending: false })
+        .limit(6);
+      return data || [];
+    },
+  });
+  const [copiedOffer, setCopiedOffer] = useState<string | null>(null);
+
+  // Auto-apply best coupon when cart has items
+  useEffect(() => {
+    if (!menuCoupons || menuCoupons.length === 0 || activeCart.items.length === 0 || activeCart.coupon) return;
+    // Find the best coupon that meets min order
+    let bestDiscount = 0;
+    let bestCoupon: any = null;
+    for (const c of menuCoupons) {
+      if (c.min_order_cents && activeCart.subtotalCents < c.min_order_cents) continue;
+      let discount = 0;
+      if (c.discount_type === 'percentage') {
+        discount = Math.round((activeCart.subtotalCents * c.discount_value) / 100);
+        if (c.max_discount_cents) discount = Math.min(discount, c.max_discount_cents);
+      } else {
+        discount = c.discount_value;
+      }
+      if (discount > bestDiscount) {
+        bestDiscount = discount;
+        bestCoupon = c;
+      }
+    }
+    if (bestCoupon && bestDiscount > 0) {
+      activeCart.applyCoupon({
+        code: bestCoupon.code,
+        discount_type: 'fixed',
+        discount_value: bestDiscount,
+      });
+    }
+  }, [menuCoupons, activeCart.subtotalCents, activeCart.items.length]);
 
   // Dark mode
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("dd-dark") === "1");
@@ -438,6 +490,28 @@ export default function PublicMenu() {
           const rzp = new (window as any).Razorpay(options);
           rzp.open();
         });
+      } else if (paymentMethod === 'upi' && upiConfig) {
+        // === UPI DEEP-LINK FLOW ===
+        // Place order first (as cash), then redirect to UPI
+        const { data: upiOrderData, error } = await supabase.functions.invoke("place-order", {
+          body: { ...orderPayload, payment_method: 'upi' },
+        });
+        if (error) throw error;
+        data = upiOrderData;
+
+        // Build UPI deep-link
+        const grandTotalRupees = ((activeCart.totalCents + gstCents + tipCents) / 100).toFixed(2);
+        const upiParams = new URLSearchParams({
+          pa: upiConfig.upiId,
+          pn: upiConfig.merchantName,
+          am: grandTotalRupees,
+          cu: 'INR',
+          tn: `Order ${(data?.id || '').slice(0, 8).toUpperCase()} at ${restaurantQuery.data?.name || 'Restaurant'}`,
+        });
+        const upiUrl = `upi://pay?${upiParams.toString()}`;
+
+        // Open UPI intent
+        window.location.href = upiUrl;
       } else {
         // === CASH FLOW (existing) ===
         const { data: cashData, error } = await supabase.functions.invoke("place-order", {
@@ -588,6 +662,37 @@ export default function PublicMenu() {
           ))}
         </div>
       </div>
+
+      {/* Offers Banner */}
+      {menuCoupons && menuCoupons.length > 0 && (
+        <div className="w-full max-w-3xl mx-auto px-4 pt-3">
+          <div className="flex items-center gap-2 mb-2">
+            <Tag className="h-4 w-4 text-amber-500" />
+            <p className="text-sm font-semibold">Available Offers</p>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
+            {menuCoupons.map((c: any) => (
+              <div key={c.id} className="snap-start shrink-0 w-[200px] rounded-xl border bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border-amber-200 dark:border-amber-800 p-3 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 rounded-full">
+                    {c.discount_type === 'percentage' ? `${c.discount_value}% OFF` : `₹${c.discount_value / 100} OFF`}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground line-clamp-1">{c.description || 'Special Discount'}</p>
+                <div className="flex items-center gap-1.5">
+                  <code className="text-xs font-mono font-bold bg-white dark:bg-background rounded px-1.5 py-0.5 border flex-1 truncate">{c.code}</code>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(c.code); setCopiedOffer(c.code); setTimeout(() => setCopiedOffer(null), 1500); }}
+                    className="h-6 w-6 rounded border flex items-center justify-center hover:bg-muted text-muted-foreground"
+                  >
+                    {copiedOffer === c.code ? <CheckCircle2 className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Reorder from History */}
       <div className="w-full max-w-3xl mx-auto px-4 pt-3">
@@ -1002,14 +1107,31 @@ export default function PublicMenu() {
           <DrawerFooter className="shrink-0 max-h-[50vh] overflow-y-auto border-t">
             {activeCart.items.length > 0 ? (
               <>
-                <div className="flex flex-col gap-2">
+                {/* ═══ BILL / INVOICE ═══ */}
+                <div className="rounded-lg border bg-card p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm text-muted-foreground">Subtotal</p>
-                    <p className="font-medium tabular-nums">
-                      {formatMoney(activeCart.subtotalCents, currencyCode)}
-                    </p>
+                    <h3 className="font-bold text-sm uppercase tracking-wider text-muted-foreground">Bill Summary</h3>
+                    <span className="text-[10px] text-muted-foreground">{activeCart.itemCount} items</span>
                   </div>
-                </div>
+                  <Separator />
+                  {/* Itemized List */}
+                  <div className="space-y-1.5">
+                    {activeCart.items.map((line) => (
+                      <div key={line.cart_id} className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-xs text-muted-foreground w-5 text-right shrink-0">{line.quantity}×</span>
+                          <span className="truncate">{line.name}</span>
+                        </div>
+                        <span className="tabular-nums font-medium shrink-0 ml-2">{formatMoney(line.price_cents * line.quantity, currencyCode)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <Separator className="border-dashed" />
+                  {/* Subtotal */}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="font-medium tabular-nums">{formatMoney(activeCart.subtotalCents, currencyCode)}</span>
+                  </div>
 
                 {/* Tip for Staff — dynamic from settings */}
                 {tipConfig && (
@@ -1049,34 +1171,42 @@ export default function PublicMenu() {
                   )}
                 </div>
                 )}
-
-                {/* Tax Breakdown — dynamic label + rate */}
-                <div className="space-y-1.5 text-sm border-t pt-2">
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>{taxSettings.label} ({Math.round(taxSettings.rate * 100)}%)</span>
-                    <span>{formatMoney(gstCents, currencyCode)}</span>
-                  </div>
-                  {activeCart.discountCents > 0 && (
-                    <div className="flex justify-between text-green-600">
-                      <span>Discount</span>
-                      <span>-{formatMoney(activeCart.discountCents, currencyCode)}</span>
+                {/* Tax, Discount, Total — inside bill card */}
+                  {tipCents > 0 && (
+                    <div className="flex justify-between text-sm text-muted-foreground">
+                      <span>Tip</span>
+                      <span className="tabular-nums">{formatMoney(tipCents, currencyCode)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between font-bold text-base pt-1 border-t">
-                    <span>Grand Total</span>
-                    <span>{formatMoney(activeCart.totalCents + gstCents + tipCents, currencyCode)}</span>
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>{taxSettings.label} ({Math.round(taxSettings.rate * 100)}%)</span>
+                    <span className="tabular-nums">{formatMoney(gstCents, currencyCode)}</span>
                   </div>
+                  {activeCart.discountCents > 0 && (
+                    <div className="flex justify-between text-sm text-green-600 font-medium">
+                      <span className="flex items-center gap-1"><Tag className="h-3 w-3" /> Coupon Discount {activeCart.coupon?.code && <code className="text-[10px] bg-green-100 dark:bg-green-900/30 px-1 rounded">{activeCart.coupon.code}</code>}</span>
+                      <span className="tabular-nums">−{formatMoney(activeCart.discountCents, currencyCode)}</span>
+                    </div>
+                  )}
+                  <Separator />
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-base">Grand Total</span>
+                    <span className="font-bold text-lg tabular-nums">{formatMoney(activeCart.totalCents + gstCents + tipCents, currencyCode)}</span>
+                  </div>
+                  {activeCart.discountCents > 0 && (
+                    <p className="text-xs text-green-600 text-right font-medium">🎉 You save {formatMoney(activeCart.discountCents, currencyCode)}!</p>
+                  )}
                 </div>
 
                 {/* Payment method selector */}
-                {onlinePaymentsEnabled && (
+                {(onlinePaymentsEnabled || upiConfig) && (
                   <div className="border rounded-lg p-3 space-y-2 bg-muted/40">
                     <p className="text-xs text-muted-foreground font-medium">Payment Method</p>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className={`grid gap-2 ${upiConfig && onlinePaymentsEnabled ? 'grid-cols-3' : 'grid-cols-2'}`}>
                       <button
                         type="button"
                         onClick={() => setPaymentMethod('cash')}
-                        className={`flex items-center justify-center gap-2 rounded-lg border-2 p-2.5 text-sm font-medium transition-colors ${
+                        className={`flex items-center justify-center gap-1.5 rounded-lg border-2 p-2.5 text-sm font-medium transition-colors ${
                           paymentMethod === 'cash'
                             ? 'border-primary bg-primary/5 text-primary'
                             : 'border-muted bg-background text-muted-foreground hover:border-border'
@@ -1084,18 +1214,39 @@ export default function PublicMenu() {
                       >
                         <Banknote className="h-4 w-4" /> Cash
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethod('online')}
-                        className={`flex items-center justify-center gap-2 rounded-lg border-2 p-2.5 text-sm font-medium transition-colors ${
-                          paymentMethod === 'online'
-                            ? 'border-primary bg-primary/5 text-primary'
-                            : 'border-muted bg-background text-muted-foreground hover:border-border'
-                        }`}
-                      >
-                        <CreditCard className="h-4 w-4" /> Pay Online
-                      </button>
+                      {onlinePaymentsEnabled && (
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod('online')}
+                          className={`flex items-center justify-center gap-1.5 rounded-lg border-2 p-2.5 text-sm font-medium transition-colors ${
+                            paymentMethod === 'online'
+                              ? 'border-primary bg-primary/5 text-primary'
+                              : 'border-muted bg-background text-muted-foreground hover:border-border'
+                          }`}
+                        >
+                          <CreditCard className="h-4 w-4" /> Card
+                        </button>
+                      )}
+                      {upiConfig && (
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod('upi')}
+                          className={`flex items-center justify-center gap-1.5 rounded-lg border-2 p-2.5 text-sm font-medium transition-colors ${
+                            paymentMethod === 'upi'
+                              ? 'border-primary bg-primary/5 text-primary'
+                              : 'border-muted bg-background text-muted-foreground hover:border-border'
+                          }`}
+                        >
+                          <Smartphone className="h-4 w-4" /> UPI
+                        </button>
+                      )}
                     </div>
+                    {paymentMethod === 'upi' && upiConfig && (
+                      <div className="mt-2 p-2 rounded-md bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 text-center space-y-1">
+                        <p className="text-xs text-blue-700 dark:text-blue-300 font-medium">Pay directly via any UPI app</p>
+                        <p className="text-[10px] text-blue-600 dark:text-blue-400">GPay • PhonePe • Paytm • BHIM</p>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1251,8 +1402,9 @@ export default function PublicMenu() {
                   {placingOrder ? "Processing…" :
                     useCollabCart && !collabCart.isLeader ? "Waiting for table leader…" :
                     !turnstileToken ? "Verifying…" :
-                    paymentMethod === 'online' && onlinePaymentsEnabled ? `Pay ${formatMoney(activeCart.subtotalCents, currencyCode)}` :
-                    "Place order"}
+                    paymentMethod === 'upi' && upiConfig ? `Pay ${formatMoney(activeCart.totalCents + gstCents + tipCents, currencyCode)} via UPI` :
+                    paymentMethod === 'online' && onlinePaymentsEnabled ? `Pay ${formatMoney(activeCart.totalCents + gstCents + tipCents, currencyCode)}` :
+                    "Place Order"}
                 </Button>
                 {checkoutError ? (
                   <p className="text-sm text-destructive">{checkoutError}</p>
