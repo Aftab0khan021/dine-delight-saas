@@ -92,6 +92,9 @@ export default function PublicMenu() {
   const [customerName, setCustomerName] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
 
+  // UPI pending payment state
+  const [upiPendingOrder, setUpiPendingOrder] = useState<{ orderId: string; token: string; amount: string; upiUrl: string } | null>(null);
+
   // Coupon state
   const [couponInput, setCouponInput] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
@@ -403,6 +406,18 @@ export default function PublicMenu() {
       return;
     }
 
+    // UPI requires name + phone for verification
+    if (paymentMethod === 'upi') {
+      if (!customerName.trim() || customerName.trim().length < 2) {
+        setCheckoutError("Please enter your name for UPI payment verification.");
+        return;
+      }
+      if (!customerPhone.trim() || customerPhone.replace(/\D/g, '').length < 10) {
+        setCheckoutError("Please enter a valid phone number for UPI payment verification.");
+        return;
+      }
+    }
+
     setPlacingOrder(true);
     setCheckoutError(null);
 
@@ -508,28 +523,94 @@ export default function PublicMenu() {
           const rzp = new (window as any).Razorpay(options);
           rzp.open();
         });
-      } else if (paymentMethod === 'upi' && upiConfig) {
-        // === UPI DEEP-LINK FLOW ===
-        // Place order first (as cash), then redirect to UPI
-        const { data: upiOrderData, error } = await supabase.functions.invoke("place-order", {
-          body: { ...orderPayload, payment_method: 'upi' },
-        });
-        if (error) throw error;
-        data = upiOrderData;
+      } else if (paymentMethod === 'upi') {
+        // === UPI PAYMENT FLOW ===
 
-        // Build UPI deep-link
-        const grandTotalRupees = ((activeCart.totalCents + gstCents + totalExtraChargesCents + tipCents) / 100).toFixed(2);
-        const upiParams = new URLSearchParams({
-          pa: upiConfig.upiId,
-          pn: upiConfig.merchantName,
-          am: grandTotalRupees,
-          cu: 'INR',
-          tn: `Order ${(data?.id || '').slice(0, 8).toUpperCase()} at ${restaurantQuery.data?.name || 'Restaurant'}`,
-        });
-        const upiUrl = `upi://pay?${upiParams.toString()}`;
+        if (onlinePaymentsEnabled) {
+          // ─── RAZORPAY UPI (auto-verified, like Swiggy/Zomato) ───
+          if (activeCart.subtotalCents <= 0) throw new Error("Cannot pay ₹0 via UPI.");
 
-        // Open UPI intent
-        window.location.href = upiUrl;
+          const totalAmountCents = activeCart.totalCents + gstCents + totalExtraChargesCents + tipCents;
+          const { data: rzpData, error: rzpError } = await supabase.functions.invoke("create-razorpay-order", {
+            body: { restaurant_id: restaurantId, amount_cents: totalAmountCents, currency: currencyCode, turnstileToken },
+          });
+          if (rzpError) throw new Error(typeof rzpError === 'object' && rzpError?.message ? rzpError.message : "Payment gateway error.");
+          if (rzpData?.error) throw new Error(rzpData.error);
+          if (!rzpData?.razorpay_order_id) throw new Error("No order ID from gateway.");
+
+          if (!(window as any).Razorpay) {
+            await new Promise<void>((resolve, reject) => {
+              const s = document.createElement('script');
+              s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+              s.onload = () => resolve();
+              s.onerror = () => reject(new Error('Failed to load payment SDK'));
+              document.head.appendChild(s);
+            });
+          }
+
+          // Open Razorpay in UPI-only mode (PhonePe, GPay, Paytm buttons)
+          data = await new Promise<any>((resolve, reject) => {
+            const rzp = new (window as any).Razorpay({
+              key: rzpData.key_id,
+              amount: rzpData.amount,
+              currency: rzpData.currency,
+              name: restaurantQuery.data?.name || 'Restaurant',
+              description: `Order from ${restaurantQuery.data?.name || 'Restaurant'}`,
+              order_id: rzpData.razorpay_order_id,
+              handler: async (response: any) => {
+                try {
+                  const { data: v, error: vErr } = await supabase.functions.invoke("verify-payment", {
+                    body: {
+                      razorpay_order_id: response.razorpay_order_id,
+                      razorpay_payment_id: response.razorpay_payment_id,
+                      razorpay_signature: response.razorpay_signature,
+                      order_payload: { ...orderPayload, payment_method: 'upi' },
+                    },
+                  });
+                  if (vErr || !v?.id) reject(new Error(v?.error || 'Payment verification failed'));
+                  else resolve(v);
+                } catch (e) { reject(e); }
+              },
+              modal: { ondismiss: () => reject(new Error('Payment cancelled')) },
+              prefill: { contact: customerPhone.trim() || undefined, name: customerName.trim() || undefined, method: 'upi' },
+              config: {
+                display: {
+                  blocks: {
+                    upi: {
+                      name: 'Pay via UPI',
+                      instruments: [{ method: 'upi', flows: ['intent', 'collect', 'qrcode'], apps: ['google_pay', 'phonepe', 'paytm'] }],
+                    },
+                  },
+                  sequence: ['block.upi'],
+                  preferences: { show_default_blocks: false },
+                },
+              },
+              theme: { color: '#1a1a2e' },
+            });
+            rzp.open();
+          });
+
+        } else if (upiConfig) {
+          // ─── FALLBACK: Direct UPI deep-link (needs admin verification) ───
+          const { data: upiOrderData, error } = await supabase.functions.invoke("place-order", {
+            body: { ...orderPayload, payment_method: 'upi' },
+          });
+          if (error) throw error;
+          data = upiOrderData;
+
+          const grandTotalRupees = ((activeCart.totalCents + gstCents + totalExtraChargesCents + tipCents) / 100).toFixed(2);
+          const upiParams = new URLSearchParams({
+            pa: upiConfig.upiId, pn: upiConfig.merchantName, am: grandTotalRupees, cu: 'INR',
+            tn: `Order ${(data?.id || '').slice(0, 8).toUpperCase()} at ${restaurantQuery.data?.name || 'Restaurant'}`,
+          });
+          setUpiPendingOrder({ orderId: data.id, token: data.order_token, amount: grandTotalRupees, upiUrl: `upi://pay?${upiParams.toString()}` });
+          activeCart.clear();
+          setCartOpen(true);
+          toast({ title: "Order created!", description: "Complete UPI payment to confirm." });
+          return;
+        } else {
+          throw new Error("UPI payments not configured for this restaurant.");
+        }
       } else {
         // === CASH FLOW (existing) ===
         const { data: cashData, error } = await supabase.functions.invoke("place-order", {
@@ -548,8 +629,8 @@ export default function PublicMenu() {
       activeCart.clear();
       setCartOpen(true);
       toast({
-        title: paymentMethod === 'online' ? "Payment successful! 🎉" : "Order placed! 🎉",
-        description: paymentMethod === 'online'
+        title: (paymentMethod === 'online' || (paymentMethod === 'upi' && onlinePaymentsEnabled)) ? "Payment successful! 🎉" : "Order placed! 🎉",
+        description: (paymentMethod === 'online' || (paymentMethod === 'upi' && onlinePaymentsEnabled))
           ? "Your order has been paid and confirmed."
           : customerPhone ? "Receipt sent to your WhatsApp!" : "Save your order token to track status.",
       });
@@ -567,8 +648,8 @@ export default function PublicMenu() {
   }, [restaurantQuery.data?.name]);
 
   useEffect(() => {
-    if (activeCart.itemCount === 0 && !placedOrderToken) setCartOpen(false);
-  }, [activeCart.itemCount, placedOrderToken]);
+    if (activeCart.itemCount === 0 && !placedOrderToken && !upiPendingOrder) setCartOpen(false);
+  }, [activeCart.itemCount, placedOrderToken, upiPendingOrder]);
 
   // Fetch smart menu ranking after restaurant loads
   useEffect(() => {
@@ -1038,7 +1119,63 @@ export default function PublicMenu() {
               </div>
             )}
             {activeCart.items.length === 0 ? (
-              placedOrderToken ? (
+              upiPendingOrder ? (
+                /* ═══ UPI PAYMENT PENDING SCREEN ═══ */
+                <Card className="p-5 space-y-4 border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20">
+                  <div className="text-center space-y-2">
+                    <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/50">
+                      <Smartphone className="h-6 w-6 text-amber-600" />
+                    </div>
+                    <h3 className="font-bold text-base">Complete UPI Payment</h3>
+                    <p className="text-sm text-muted-foreground">Your order has been created. Please pay via UPI to confirm it.</p>
+                  </div>
+
+                  <div className="rounded-lg border bg-card p-3 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Order ID</span>
+                      <span className="font-mono text-xs">#{upiPendingOrder.orderId.slice(0, 8).toUpperCase()}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Amount</span>
+                      <span className="font-bold text-lg">₹{upiPendingOrder.amount}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Pay To</span>
+                      <span className="font-mono text-xs">{upiConfig?.upiId}</span>
+                    </div>
+                  </div>
+
+                  <a
+                    href={upiPendingOrder.upiUrl}
+                    className="flex items-center justify-center gap-2 w-full rounded-lg bg-blue-600 hover:bg-blue-700 text-white py-3 text-sm font-semibold transition-colors"
+                  >
+                    <Smartphone className="h-4 w-4" />
+                    Open UPI App & Pay ₹{upiPendingOrder.amount}
+                  </a>
+
+                  <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-100/50 dark:bg-amber-900/20 p-3 space-y-1">
+                    <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                      ⚠️ Payment Verification Required
+                    </p>
+                    <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                      After paying, the restaurant will verify your payment from their UPI app. Your order will be confirmed once payment is verified.
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Link to={`/track?token=${encodeURIComponent(upiPendingOrder.token)}`} className="flex-1">
+                      <Button variant="outline" size="sm" className="w-full">Track Order</Button>
+                    </Link>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { setUpiPendingOrder(null); setPlacedOrderId(null); setPlacedOrderToken(null); }}
+                    >
+                      Close
+                    </Button>
+                  </div>
+                </Card>
+              ) : placedOrderToken ? (
                 <Card className="p-6">
                   <p className="text-sm text-muted-foreground">Order placed</p>
                   <p className="mt-2 font-mono text-sm break-all">{placedOrderToken}</p>
@@ -1231,7 +1368,7 @@ export default function PublicMenu() {
                 {(onlinePaymentsEnabled || upiConfig) && (
                   <div className="border rounded-lg p-3 space-y-2 bg-muted/40">
                     <p className="text-xs text-muted-foreground font-medium">Payment Method</p>
-                    <div className={`grid gap-2 ${upiConfig && onlinePaymentsEnabled ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                    <div className={`grid gap-2 ${(upiConfig || onlinePaymentsEnabled) && onlinePaymentsEnabled ? 'grid-cols-3' : onlinePaymentsEnabled || upiConfig ? 'grid-cols-2' : 'grid-cols-1'}`}>
                       <button
                         type="button"
                         onClick={() => setPaymentMethod('cash')}
@@ -1256,7 +1393,7 @@ export default function PublicMenu() {
                           <CreditCard className="h-4 w-4" /> Card
                         </button>
                       )}
-                      {upiConfig && (
+                      {(onlinePaymentsEnabled || upiConfig) && (
                         <button
                           type="button"
                           onClick={() => setPaymentMethod('upi')}
@@ -1270,41 +1407,46 @@ export default function PublicMenu() {
                         </button>
                       )}
                     </div>
-                    {paymentMethod === 'upi' && upiConfig && (
+                    {paymentMethod === 'upi' && (
                       <div className="mt-2 p-2 rounded-md bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 text-center space-y-1">
-                        <p className="text-xs text-blue-700 dark:text-blue-300 font-medium">Pay directly via any UPI app</p>
+                        <p className="text-xs text-blue-700 dark:text-blue-300 font-medium">
+                          {onlinePaymentsEnabled ? 'Pay securely via UPI — auto-verified' : 'Pay directly via UPI app'}
+                        </p>
                         <p className="text-[10px] text-blue-600 dark:text-blue-400">GPay • PhonePe • Paytm • BHIM</p>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* WhatsApp contact capture */}
+                {/* Customer Details */}
                 <div className="border rounded-lg p-3 space-y-3 bg-muted/40">
                   <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                    📱 Get receipt on WhatsApp (optional)
+                    📱 {paymentMethod === 'upi' ? 'Customer Details (required for UPI)' : 'Get receipt on WhatsApp (optional)'}
                   </p>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <Label className="text-xs">Name</Label>
+                      <Label className="text-xs">Name {paymentMethod === 'upi' && <span className="text-destructive">*</span>}</Label>
                       <Input
                         placeholder="Your name"
                         value={customerName}
                         onChange={e => setCustomerName(e.target.value)}
-                        className="h-8 text-sm"
+                        className={`h-8 text-sm ${paymentMethod === 'upi' && !customerName.trim() ? 'border-destructive' : ''}`}
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">WhatsApp number</Label>
+                      <Label className="text-xs">Phone {paymentMethod === 'upi' && <span className="text-destructive">*</span>}</Label>
                       <Input
                         placeholder="+91 98765 43210"
                         value={customerPhone}
                         onChange={e => setCustomerPhone(e.target.value)}
                         type="tel"
-                        className="h-8 text-sm"
+                        className={`h-8 text-sm ${paymentMethod === 'upi' && (!customerPhone.trim() || customerPhone.replace(/\D/g, '').length < 10) ? 'border-destructive' : ''}`}
                       />
                     </div>
                   </div>
+                  {paymentMethod === 'upi' && (!customerName.trim() || !customerPhone.trim()) && (
+                    <p className="text-[11px] text-destructive">Name and phone are required for UPI payment verification</p>
+                  )}
                 </div>
 
                 {/* Delivery Address — only when delivery selected */}
