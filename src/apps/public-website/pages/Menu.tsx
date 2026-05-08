@@ -898,12 +898,12 @@ export default function PublicMenu() {
           </button>
         </DrawerTrigger>
 
-        <DrawerContent className="max-h-[85vh]">
-          <DrawerHeader className="text-left">
+        <DrawerContent className="max-h-[85vh] flex flex-col">
+          <DrawerHeader className="text-left shrink-0">
             <DrawerTitle>Cart</DrawerTitle>
           </DrawerHeader>
 
-          <div className="px-4 pb-4 overflow-auto">
+          <div className="px-4 pb-4 flex-1 overflow-y-auto min-h-0">
             {/* Collaborative cart presence */}
             {useCollabCart && collabCart.participants.length > 1 && (
               <div className="mb-3">
@@ -999,7 +999,7 @@ export default function PublicMenu() {
             </div>
           )}
 
-          <DrawerFooter>
+          <DrawerFooter className="shrink-0 max-h-[50vh] overflow-y-auto border-t">
             {activeCart.items.length > 0 ? (
               <>
                 <div className="flex flex-col gap-2">
