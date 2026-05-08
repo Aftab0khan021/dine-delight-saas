@@ -13,6 +13,7 @@ import TrackOrder from "./apps/public-website/pages/TrackOrder";
 import RestaurantProfile from "./apps/public-website/pages/RestaurantProfile";
 import QrResolver from "./apps/public-website/pages/QrResolver";
 import CustomerDashboard from "./apps/public-website/pages/CustomerDashboard";
+import TableReservation from "./apps/public-website/pages/TableReservation";
 
 // Admin Panel
 import AdminAuth from "./apps/admin-panel/pages/Auth";
@@ -112,6 +113,7 @@ const App = () => (
           <Route path="/" element={<Home />} />
           <Route path="/r/:restaurantSlug" element={<RestaurantProfile />} />
           <Route path="/r/:restaurantSlug/account" element={<CustomerDashboard />} />
+          <Route path="/r/:restaurantSlug/reserve" element={<TableReservation />} />
           <Route path="/q/:code" element={<QrResolver />} />
           <Route path="/r/:restaurantSlug/menu" element={<PublicMenu />} />
           <Route path="/track" element={<TrackOrder />} />

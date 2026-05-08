@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSEO } from "@/hooks/useSEO";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { MapPin, Phone, Clock, ArrowRight, Utensils, Mail, AlertCircle, Instagram, Facebook, Twitter, Youtube, Star, MessageCircle, CalendarDays, Moon, Sun, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { MapPin, Phone, Clock, ArrowRight, Utensils, Mail, AlertCircle, Instagram, Facebook, Twitter, Youtube, Star, MessageCircle, CalendarDays, Moon, Sun, ChevronLeft, ChevronRight, X, Tag, Copy, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,14 +51,7 @@ export default function RestaurantProfile() {
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
   const [reviewIdx, setReviewIdx] = useState(0);
 
-  // Reservation form
-  const [resName, setResName] = useState("");
-  const [resPhone, setResPhone] = useState("");
-  const [resDate, setResDate] = useState("");
-  const [resTime, setResTime] = useState("");
-  const [resParty, setResParty] = useState(2);
-  const [resSubmitting, setResSubmitting] = useState(false);
-  const [resSuccess, setResSuccess] = useState(false);
+
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -92,6 +85,31 @@ export default function RestaurantProfile() {
     },
   });
 
+  // Active Coupons / Offers
+  const { data: activeCoupons } = useQuery({
+    queryKey: ["public", "coupons", restaurant?.id],
+    enabled: !!restaurant?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("coupons")
+        .select("id, code, description, discount_type, discount_value, min_order_cents, max_discount_cents, expires_at")
+        .eq("restaurant_id", restaurant!.id)
+        .eq("is_active", true)
+        .or(`expires_at.is.null,expires_at.gte.${new Date().toISOString()}`)
+        .order("created_at", { ascending: false })
+        .limit(6);
+      return data || [];
+    },
+  });
+
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const handleCopyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    toast({ title: "Coupon Copied!", description: `Code ${code} copied to clipboard.` });
+    setTimeout(() => setCopiedCode(null), 2000);
+  };
+
   useEffect(() => {
     if (restaurant?.name) {
       document.title = `${restaurant.name} | Dine Delight`;
@@ -121,16 +139,7 @@ export default function RestaurantProfile() {
   const hasSocial = Object.values(socialLinks).some((v: any) => !!v);
   const currencyCode = restaurant?.currency_code || "INR";
 
-  const handleReservation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!resName || !resPhone || !resDate || !resTime) { toast({ title: "Fill all fields", variant: "destructive" }); return; }
-    setResSubmitting(true);
-    const { error } = await supabase.from("reservations").insert({ restaurant_id: restaurant.id, customer_name: resName, customer_phone: resPhone, party_size: resParty, reservation_date: resDate, reservation_time: resTime, status: "pending" });
-    setResSubmitting(false);
-    if (error) { toast({ title: "Failed to book", description: error.message, variant: "destructive" }); return; }
-    setResSuccess(true);
-    toast({ title: "Reservation Submitted!", description: "The restaurant will confirm your booking." });
-  };
+
 
   return (
     <div className="min-h-screen w-full bg-background flex flex-col">
@@ -200,6 +209,44 @@ export default function RestaurantProfile() {
           <h2 className="text-3xl font-bold tracking-tight">About Us</h2>
           <p className="text-muted-foreground leading-relaxed text-lg max-w-2xl mx-auto">{restaurant.description || "Welcome to our restaurant."}</p>
         </section>
+
+        {/* Exciting Offers */}
+        {activeCoupons && activeCoupons.length > 0 && (
+          <section className="space-y-4">
+            <div className="text-center">
+              <p className="text-sm font-semibold uppercase tracking-wider" style={{ color: themeColor }}>Special Offers</p>
+              <h2 className="text-2xl font-bold tracking-tight">Exciting Offers for You</h2>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {activeCoupons.map((coupon: any) => (
+                <div key={coupon.id} className="relative rounded-2xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow group">
+                  <div className="p-5 space-y-3">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white" style={{ backgroundColor: themeColor }}>
+                      <Tag className="h-3 w-3" />
+                      {coupon.discount_type === 'percentage' ? `${coupon.discount_value}% OFF` : `₹${coupon.discount_value / 100} OFF`}
+                    </div>
+                    <h4 className="font-semibold">{coupon.description || `Special Discount`}</h4>
+                    {coupon.min_order_cents > 0 && (
+                      <p className="text-xs text-muted-foreground">On orders above {formatMoney(coupon.min_order_cents, currencyCode)}</p>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 bg-muted rounded-md px-3 py-1.5 text-sm font-mono font-bold tracking-wider">{coupon.code}</code>
+                      <button
+                        onClick={() => handleCopyCode(coupon.code)}
+                        className="h-8 w-8 rounded-md border flex items-center justify-center hover:bg-muted transition-colors"
+                      >
+                        {copiedCode === coupon.code ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    {coupon.expires_at && (
+                      <p className="text-[11px] text-muted-foreground">Valid till {new Date(coupon.expires_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Photo Gallery */}
         {galleryImages.length > 0 && (
@@ -321,31 +368,7 @@ export default function RestaurantProfile() {
           </section>
         )}
 
-        {/* Reservation Form */}
-        {reservationEnabled && !resSuccess && (
-          <section className="space-y-4">
-            <h2 className="text-2xl font-bold tracking-tight text-center">Reserve a Table</h2>
-            <form onSubmit={handleReservation} className="max-w-lg mx-auto bg-card border rounded-2xl p-6 shadow-sm space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5 col-span-2 sm:col-span-1"><Label>Name *</Label><Input value={resName} onChange={e => setResName(e.target.value)} placeholder="Your name" required /></div>
-                <div className="space-y-1.5 col-span-2 sm:col-span-1"><Label>Phone *</Label><Input value={resPhone} onChange={e => setResPhone(e.target.value)} placeholder="+91 ..." required /></div>
-                <div className="space-y-1.5"><Label>Date *</Label><Input type="date" value={resDate} onChange={e => setResDate(e.target.value)} min={new Date().toISOString().split('T')[0]} required /></div>
-                <div className="space-y-1.5"><Label>Time *</Label><Input type="time" value={resTime} onChange={e => setResTime(e.target.value)} required /></div>
-                <div className="space-y-1.5 col-span-2"><Label>Party Size</Label><Input type="number" min={1} max={20} value={resParty} onChange={e => setResParty(Number(e.target.value))} /></div>
-              </div>
-              <Button type="submit" className="w-full" disabled={resSubmitting} style={{ backgroundColor: themeColor }}>
-                {resSubmitting ? "Booking..." : <><CalendarDays className="mr-2 h-4 w-4" />Book Table</>}
-              </Button>
-            </form>
-          </section>
-        )}
-        {resSuccess && (
-          <section className="text-center space-y-2 p-6 bg-green-50 dark:bg-green-950/20 rounded-2xl border border-green-200 dark:border-green-800">
-            <CalendarDays className="h-10 w-10 text-green-600 mx-auto" />
-            <h3 className="text-xl font-bold text-green-800 dark:text-green-300">Reservation Submitted!</h3>
-            <p className="text-sm text-green-700 dark:text-green-400">The restaurant will confirm your booking soon.</p>
-          </section>
-        )}
+
 
         {/* Social Links */}
         {hasSocial && (
@@ -402,9 +425,16 @@ export default function RestaurantProfile() {
               <span className={`h-1.5 w-1.5 rounded-full ${openStatus.open ? 'bg-green-500' : 'bg-red-500'}`} />{openStatus.label}
             </span>
           </div>
-          <Button size="sm" className="rounded-full px-6 font-bold shrink-0" style={{ backgroundColor: themeColor }} asChild>
-            <Link to={`/r/${slug}/menu`}>Order Now <ArrowRight className="ml-1 h-4 w-4" /></Link>
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            {reservationEnabled && (
+              <Button size="sm" variant="outline" className="rounded-full px-4 font-bold" asChild>
+                <Link to={`/r/${slug}/reserve`}><CalendarDays className="mr-1 h-4 w-4" />Book Table</Link>
+              </Button>
+            )}
+            <Button size="sm" className="rounded-full px-6 font-bold" style={{ backgroundColor: themeColor }} asChild>
+              <Link to={`/r/${slug}/menu`}>Order Now <ArrowRight className="ml-1 h-4 w-4" /></Link>
+            </Button>
+          </div>
         </div>
       </div>
     </div>

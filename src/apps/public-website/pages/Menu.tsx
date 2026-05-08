@@ -21,7 +21,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useSEO } from "@/hooks/useSEO";
 import { CopyButton } from "@/apps/admin-panel/components/qr/CopyButton";
-import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote, ShieldAlert, Moon, Sun, Truck, Store, User } from "lucide-react";
+import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote, ShieldAlert, Moon, Sun, Truck, Store, User, Tag, CheckCircle2 } from "lucide-react";
 import { useRestaurantCart } from "../hooks/useRestaurantCart";
 import { useCollaborativeCart } from "../hooks/useCollaborativeCart";
 import { MenuItemDialog } from "../components/MenuItemDialog";
@@ -91,6 +91,11 @@ export default function PublicMenu() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
+
+  // Coupon state
+  const [couponInput, setCouponInput] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
 
   // Stable callback for Turnstile — avoids re-render loops inside Drawer portal
   const handleTurnstileSuccess = useCallback((token: string) => {
@@ -1154,6 +1159,69 @@ export default function PublicMenu() {
                     )}
                   </div>
                 )}
+
+                {/* Coupon Code */}
+                <div className="border rounded-lg p-3 space-y-2 bg-muted/40">
+                  <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                    <Tag className="h-3 w-3" /> Have a coupon?
+                  </p>
+                  {activeCart.coupon ? (
+                    <div className="flex items-center justify-between bg-green-50 dark:bg-green-950/20 rounded-md px-3 py-2 border border-green-200 dark:border-green-800">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                        <span className="text-sm font-bold text-green-700 dark:text-green-300">{activeCart.coupon.code}</span>
+                        <span className="text-xs text-green-600">(-{formatMoney(activeCart.discountCents, currencyCode)})</span>
+                      </div>
+                      <button onClick={() => { activeCart.removeCoupon(); setCouponInput(""); setCouponError(null); }} className="text-xs text-red-500 hover:text-red-700 font-medium">Remove</button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Enter coupon code"
+                        value={couponInput}
+                        onChange={e => { setCouponInput(e.target.value.toUpperCase()); setCouponError(null); }}
+                        className="h-8 text-sm font-mono tracking-wider uppercase"
+                      />
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="h-8 px-4 text-xs"
+                        disabled={!couponInput || couponLoading}
+                        onClick={async () => {
+                          if (!couponInput || !restaurantQuery.data?.id) return;
+                          setCouponLoading(true);
+                          setCouponError(null);
+                          try {
+                            const { data, error } = await supabase.rpc('validate_coupon', {
+                              _restaurant_id: restaurantQuery.data.id,
+                              _coupon_code: couponInput,
+                              _order_total_cents: activeCart.subtotalCents,
+                            });
+                            if (error) throw error;
+                            const result = data?.[0] || data;
+                            if (result?.valid) {
+                              activeCart.applyCoupon({
+                                code: couponInput,
+                                discount_type: 'fixed',
+                                discount_value: result.discount_cents,
+                              });
+                              toast({ title: "Coupon Applied!", description: `You save ${formatMoney(result.discount_cents, currencyCode)}` });
+                            } else {
+                              setCouponError(result?.message || 'Invalid coupon');
+                            }
+                          } catch (err: any) {
+                            setCouponError(err.message || 'Could not validate coupon');
+                          } finally {
+                            setCouponLoading(false);
+                          }
+                        }}
+                      >
+                        {couponLoading ? '...' : 'Apply'}
+                      </Button>
+                    </div>
+                  )}
+                  {couponError && <p className="text-xs text-destructive">{couponError}</p>}
+                </div>
 
                 {/* Security check */}
                 {!turnstileToken ? (
