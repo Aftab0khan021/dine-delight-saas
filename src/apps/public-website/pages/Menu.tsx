@@ -727,7 +727,7 @@ export default function PublicMenu() {
             </div>
           </div>
           {restaurantQuery.data?.slug && (
-            <Link 
+            <Link
               to={`/r/${restaurantQuery.data.slug}/account`}
               className="h-10 w-10 shrink-0 rounded-full bg-muted/50 flex items-center justify-center text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
               title="My Account"
@@ -735,13 +735,17 @@ export default function PublicMenu() {
               <User className="h-5 w-5" />
             </Link>
           )}
+          {/* Dark mode toggle — inline with profile icon to avoid overlap */}
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            className="h-10 w-10 shrink-0 rounded-full bg-card border shadow-sm flex items-center justify-center hover:scale-110 transition-transform"
+            aria-label="Toggle dark mode"
+          >
+            {darkMode ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5" />}
+          </button>
         </div>
       </header>
 
-      {/* Dark mode toggle */}
-      <button onClick={() => setDarkMode(!darkMode)} className="fixed top-4 right-4 z-50 h-10 w-10 rounded-full bg-card border shadow-lg flex items-center justify-center hover:scale-110 transition-transform" aria-label="Toggle dark mode">
-        {darkMode ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5" />}
-      </button>
 
       {/* Order Type Selector — context-aware */}
       <div className="w-full max-w-3xl mx-auto px-4 pt-3">
