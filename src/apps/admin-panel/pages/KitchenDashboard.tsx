@@ -1,15 +1,15 @@
-import { useState, useEffect, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { RefreshCw, ChefHat, Clock, Store, Filter, Truck, ShoppingBag } from "lucide-react";
+import { RefreshCw, ChefHat, Clock, Store, Filter, Truck, ShoppingBag, AlertTriangle, Package } from "lucide-react";
 import { formatMoney } from "@/lib/formatting";
 import { shortId } from "@/lib/formatting";
-import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 
 type OrderStatus = "pending" | "accepted" | "in_progress" | "ready" | "completed" | "cancelled";
 
@@ -222,12 +222,54 @@ function OrderKOTCard({ order, brandMap, currency, qc }: {
   currency: string;
   qc: any;
 }) {
+  const { toast } = useToast();
   const brand = brandMap[order.restaurant_id];
   const minutesAgo = Math.floor((Date.now() - new Date(order.placed_at).getTime()) / 60_000);
   const isUrgent = minutesAgo > 15 && ["pending", "accepted"].includes(order.status);
 
+  // Fetch ingredient impact preview (only for pending orders, before accept)
+  const ingredientPreviewQuery = useQuery({
+    queryKey: ["ingredient-preview", order.id],
+    enabled: order.status === "pending",
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("order_ingredient_preview")
+        .select("ingredient_name, unit, current_stock, total_needed, stock_after, low_stock_threshold")
+        .eq("order_id", order.id);
+      if (error) return [];
+      return data || [];
+    },
+  });
+
+  const ingredientWarnings = (ingredientPreviewQuery.data || []).filter(
+    (i: any) => i.stock_after <= 0
+  );
+  const ingredientLow = (ingredientPreviewQuery.data || []).filter(
+    (i: any) => i.stock_after > 0 && i.stock_after <= i.low_stock_threshold
+  );
+
   const statusMutation = async (newStatus: string) => {
     await supabase.from("orders").update({ status: newStatus }).eq("id", order.id);
+
+    // Deduct inventory when order moves to 'accepted'
+    if (newStatus === "accepted") {
+      const { data, error } = await supabase.rpc("deduct_stock_for_accepted_order", {
+        p_order_id: order.id,
+        p_restaurant_id: order.restaurant_id,
+      }) as any;
+      if (!error && data) {
+        const lowAlerts = data?.low_stock_alerts || [];
+        const disabled = data?.disabled_items || [];
+        if (disabled.length > 0) {
+          toast({ title: "⚠️ Items auto-disabled", description: disabled.join(", "), variant: "destructive" });
+        } else if (lowAlerts.length > 0) {
+          toast({ title: "📦 Low Stock Alert", description: lowAlerts.join(", ") });
+        }
+        qc.invalidateQueries({ queryKey: ["ingredients"] });
+      }
+    }
+
     qc.invalidateQueries({ queryKey: ["kitchen-orders"] });
   };
 
@@ -280,6 +322,28 @@ function OrderKOTCard({ order, brandMap, currency, qc }: {
           </div>
         ))}
       </div>
+
+      {/* Inventory impact preview — shown only on pending orders */}
+      {order.status === "pending" && (ingredientPreviewQuery.data || []).length > 0 && (
+        <div className="space-y-1">
+          {ingredientWarnings.length > 0 && (
+            <div className="text-[10px] bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded px-2 py-1 flex items-start gap-1">
+              <AlertTriangle className="h-3 w-3 text-red-500 shrink-0 mt-0.5" />
+              <span className="text-red-700 dark:text-red-400">
+                <strong>Will run out:</strong> {ingredientWarnings.map((i: any) => `${i.ingredient_name}`).join(", ")}
+              </span>
+            </div>
+          )}
+          {ingredientLow.length > 0 && (
+            <div className="text-[10px] bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-2 py-1 flex items-start gap-1">
+              <Package className="h-3 w-3 text-amber-500 shrink-0 mt-0.5" />
+              <span className="text-amber-700 dark:text-amber-400">
+                <strong>Will go low:</strong> {ingredientLow.map((i: any) => `${i.ingredient_name} (${Number(i.stock_after).toFixed(1)} ${i.unit} left)`).join(", ")}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Delivery address */}
       {order.order_type === 'delivery' && order.delivery_address && (

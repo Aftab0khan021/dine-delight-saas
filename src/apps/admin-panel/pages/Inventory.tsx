@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Plus, Package, AlertTriangle, ArrowUpDown, RefreshCw, Link2, Unlink, History } from "lucide-react";
 
-const UNITS = ["g", "kg", "ml", "L", "pcs", "cups", "tbsp", "tsp", "oz", "lb"];
+const UNITS = ["pcs", "g", "kg", "ml", "L", "cups", "tbsp", "tsp", "oz", "lb"];
 
 type Ingredient = {
   id: string; name: string; unit: string; current_stock: number;
@@ -339,13 +339,36 @@ export default function Inventory() {
           {/* Add new link */}
           <div className="border-t pt-4 space-y-3">
             <Label>Link New Menu Item</Label>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Select value={linkItemId} onValueChange={setLinkItemId}>
-                <SelectTrigger className="flex-1"><SelectValue placeholder="Select menu item..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select menu item..." /></SelectTrigger>
                 <SelectContent>{(menuItemsQuery.data || []).map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}</SelectContent>
               </Select>
-              <Input type="number" value={linkQty} onChange={e => setLinkQty(e.target.value)} className="w-24" placeholder="Qty" />
-              <Button onClick={() => linkMutation.mutate()} disabled={!linkItemId || linkMutation.isPending}>Link</Button>
+              <div className="flex gap-2 items-center">
+                <div className="flex-1">
+                  <Label className="text-xs text-muted-foreground mb-1 block">
+                    Quantity used per order of this item ({selected?.unit})
+                  </Label>
+                  <Input
+                    type="number"
+                    value={linkQty}
+                    onChange={e => setLinkQty(e.target.value)}
+                    placeholder={`e.g. 0.5`}
+                    min="0.001"
+                    step="0.001"
+                  />
+                </div>
+                <div className="pt-5">
+                  <span className="text-sm font-medium text-muted-foreground">{selected?.unit}</span>
+                </div>
+              </div>
+              <Button
+                onClick={() => linkMutation.mutate()}
+                disabled={!linkItemId || !linkQty || parseFloat(linkQty) <= 0 || linkMutation.isPending}
+                className="w-full"
+              >
+                {linkMutation.isPending ? "Linking..." : `Link — uses ${linkQty || "?"} ${selected?.unit} per item`}
+              </Button>
             </div>
           </div>
         </DialogContent>
