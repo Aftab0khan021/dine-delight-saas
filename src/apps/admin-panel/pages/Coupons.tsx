@@ -10,7 +10,10 @@ import {
     Trash,
     Plus,
     Calendar,
-    Percent
+    Percent,
+    Star,
+    Users,
+    Gift
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -68,6 +71,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 
 // --- Validation ---
 const couponSchema = z.object({
@@ -94,6 +98,74 @@ export default function AdminCoupons() {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [deleteId, setDeleteId] = useState<string | null>(null);
+
+    // Loyalty & Referral state
+    const [loyaltyEnabled, setLoyaltyEnabled] = useState(false);
+    const [loyaltyEarnRate, setLoyaltyEarnRate] = useState(10);
+    const [loyaltyRedeemRate, setLoyaltyRedeemRate] = useState(10);
+    const [loyaltyMinRedeem, setLoyaltyMinRedeem] = useState(100);
+    const [referralEnabled, setReferralEnabled] = useState(false);
+    const [referrerReward, setReferrerReward] = useState(50);
+    const [refereeReward, setRefereeReward] = useState(25);
+    const [savingLoyalty, setSavingLoyalty] = useState(false);
+
+    // Fetch restaurant settings for loyalty/referral
+    const restaurantQuery = useQuery({
+        queryKey: ["admin", "restaurant-settings", restaurant?.id],
+        enabled: !!restaurant?.id,
+        queryFn: async () => {
+            const { data } = await supabase
+                .from("restaurants")
+                .select("settings")
+                .eq("id", restaurant!.id)
+                .single();
+            return data;
+        },
+        onSuccess: (data: any) => {
+            const s = data?.settings || {};
+            setLoyaltyEnabled(!!s.loyalty_config?.enabled);
+            setLoyaltyEarnRate(s.loyalty_config?.points_per_100_spent ?? 10);
+            setLoyaltyRedeemRate(s.loyalty_config?.points_to_currency ?? 10);
+            setLoyaltyMinRedeem(s.loyalty_config?.min_redeem_points ?? 100);
+            setReferralEnabled(!!s.referral_config?.enabled);
+            setReferrerReward(Math.round((s.referral_config?.referrer_reward_cents ?? 5000) / 100));
+            setRefereeReward(Math.round((s.referral_config?.referee_reward_cents ?? 2500) / 100));
+        },
+    } as any);
+
+    const handleSaveLoyalty = async () => {
+        if (!restaurant?.id) return;
+        setSavingLoyalty(true);
+        try {
+            const currentSettings = (restaurantQuery.data as any)?.settings || {};
+            const { error } = await supabase
+                .from("restaurants")
+                .update({
+                    settings: {
+                        ...currentSettings,
+                        loyalty_config: {
+                            enabled: loyaltyEnabled,
+                            points_per_100_spent: loyaltyEarnRate,
+                            points_to_currency: loyaltyRedeemRate,
+                            min_redeem_points: loyaltyMinRedeem,
+                        },
+                        referral_config: {
+                            enabled: referralEnabled,
+                            referrer_reward_cents: referrerReward * 100,
+                            referee_reward_cents: refereeReward * 100,
+                        },
+                    },
+                } as any)
+                .eq("id", restaurant.id);
+            if (error) throw error;
+            qc.invalidateQueries({ queryKey: ["admin", "restaurant-settings"] });
+            toast({ title: "Loyalty & Referral settings saved" });
+        } catch (e: any) {
+            toast({ title: "Error", description: e.message, variant: "destructive" });
+        } finally {
+            setSavingLoyalty(false);
+        }
+    };
 
     const form = useForm<CouponForm>({
         resolver: zodResolver(couponSchema),
@@ -322,6 +394,73 @@ export default function AdminCoupons() {
                     )}
                 </CardContent>
             </Card>
+
+            {/* Loyalty Program */}
+            <Card className="shadow-sm">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="text-base flex items-center gap-2"><Star className="h-4 w-4 text-amber-500" /> Loyalty Points Program</CardTitle>
+                            <CardDescription>Reward repeat customers with points on every order</CardDescription>
+                        </div>
+                        <Switch checked={loyaltyEnabled} onCheckedChange={setLoyaltyEnabled} />
+                    </div>
+                </CardHeader>
+                {loyaltyEnabled && (
+                    <CardContent className="space-y-4 border-t pt-4">
+                        <div className="grid grid-cols-3 gap-4">
+                            <div className="space-y-1.5">
+                                <Label className="text-xs">Points earned per ₹100 spent</Label>
+                                <Input type="number" min={1} max={100} value={loyaltyEarnRate} onChange={e => setLoyaltyEarnRate(Number(e.target.value))} className="h-8" />
+                                <p className="text-[10px] text-muted-foreground">e.g. 10 pts per ₹100</p>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs">Points needed for ₹1 discount</Label>
+                                <Input type="number" min={1} max={200} value={loyaltyRedeemRate} onChange={e => setLoyaltyRedeemRate(Number(e.target.value))} className="h-8" />
+                                <p className="text-[10px] text-muted-foreground">e.g. 10 pts = ₹1</p>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs">Minimum points to redeem</Label>
+                                <Input type="number" min={10} max={1000} value={loyaltyMinRedeem} onChange={e => setLoyaltyMinRedeem(Number(e.target.value))} className="h-8" />
+                                <p className="text-[10px] text-muted-foreground">e.g. min 100 pts</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                )}
+            </Card>
+
+            {/* Referral Program */}
+            <Card className="shadow-sm">
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="text-base flex items-center gap-2"><Gift className="h-4 w-4 text-purple-500" /> Referral Program</CardTitle>
+                            <CardDescription>Reward customers who refer friends to your restaurant</CardDescription>
+                        </div>
+                        <Switch checked={referralEnabled} onCheckedChange={setReferralEnabled} />
+                    </div>
+                </CardHeader>
+                {referralEnabled && (
+                    <CardContent className="space-y-4 border-t pt-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <Label className="text-xs">Referrer gets (₹)</Label>
+                                <Input type="number" min={0} max={500} value={referrerReward} onChange={e => setReferrerReward(Number(e.target.value))} className="h-8" />
+                                <p className="text-[10px] text-muted-foreground">Customer who shared the link</p>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs">New customer gets (₹)</Label>
+                                <Input type="number" min={0} max={500} value={refereeReward} onChange={e => setRefereeReward(Number(e.target.value))} className="h-8" />
+                                <p className="text-[10px] text-muted-foreground">First-time customer from referral</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                )}
+            </Card>
+
+            <Button onClick={handleSaveLoyalty} disabled={savingLoyalty} className="w-full">
+                {savingLoyalty ? "Saving…" : "Save Loyalty & Referral Settings"}
+            </Button>
 
             {/* Create/Edit Dialog */}
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

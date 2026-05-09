@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { format } from "date-fns";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
+import { useToast } from "@/hooks/use-toast";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatMoney } from "@/lib/formatting";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle, DollarSign, CreditCard, Percent, X, Plus } from "lucide-react";
 
 type SubscriptionRow = {
   id: string;
@@ -60,6 +67,110 @@ type InvoiceRow = {
 
 export default function RestaurantBilling() {
   const { restaurant } = useRestaurantContext();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  // ─── Tax & Tip State ───────────────────────────────────────────
+  type BillCharge = { label: string; type: 'percentage' | 'flat'; value: number };
+  const [taxRate, setTaxRate] = useState(5);
+  const [taxLabel, setTaxLabel] = useState('GST');
+  const [billCharges, setBillCharges] = useState<BillCharge[]>([]);
+  const [tipEnabled, setTipEnabled] = useState(true);
+  const [tipMode, setTipMode] = useState<'percentage' | 'amount' | 'both'>('percentage');
+  const [tipPercentages, setTipPercentages] = useState('10,15,20');
+  const [tipAmounts, setTipAmounts] = useState('20,50,100');
+  const [savingTax, setSavingTax] = useState(false);
+
+  // ─── Payment State ─────────────────────────────────────────────
+  const [payEnabled, setPayEnabled] = useState(false);
+  const [razorpayKeyId, setRazorpayKeyId] = useState('');
+  const [razorpayKeySecret, setRazorpayKeySecret] = useState('');
+  const [savingPayment, setSavingPayment] = useState(false);
+
+  // ─── Restaurant Settings Query ─────────────────────────────────
+  const settingsQuery = useQuery({
+    queryKey: ['admin', 'billing-settings', restaurant?.id],
+    enabled: !!restaurant?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('restaurants')
+        .select('settings, online_payments_enabled, razorpay_key_id, razorpay_key_secret')
+        .eq('id', restaurant!.id)
+        .single();
+      return data;
+    },
+  });
+
+  useEffect(() => {
+    if (!settingsQuery.data) return;
+    const s = (settingsQuery.data as any)?.settings || {};
+    setTaxRate(s.tax_rate ?? 5);
+    setTaxLabel(s.tax_label || 'GST');
+    setBillCharges(Array.isArray(s.bill_charges) ? s.bill_charges : []);
+    setTipEnabled(s.tip_config?.enabled ?? true);
+    setTipMode(s.tip_config?.mode || 'percentage');
+    setTipPercentages((s.tip_config?.percentage_options || [10, 15, 20]).join(','));
+    setTipAmounts((s.tip_config?.amount_options || [20, 50, 100]).join(','));
+    setPayEnabled(!!(settingsQuery.data as any).online_payments_enabled);
+    setRazorpayKeyId((settingsQuery.data as any).razorpay_key_id || '');
+    setRazorpayKeySecret((settingsQuery.data as any).razorpay_key_secret || '');
+  }, [settingsQuery.data]);
+
+  const handleSaveTax = async () => {
+    if (!restaurant?.id) return;
+    setSavingTax(true);
+    try {
+      const currentSettings = (settingsQuery.data as any)?.settings || {};
+      const { error } = await supabase
+        .from('restaurants')
+        .update({
+          settings: {
+            ...currentSettings,
+            tax_rate: taxRate,
+            tax_label: taxLabel,
+            bill_charges: billCharges,
+            tip_config: {
+              enabled: tipEnabled,
+              mode: tipMode,
+              percentage_options: tipPercentages.split(',').map(Number).filter(n => n > 0),
+              amount_options: tipAmounts.split(',').map(Number).filter(n => n > 0),
+            },
+          },
+        } as any)
+        .eq('id', restaurant.id);
+      if (error) throw error;
+      qc.invalidateQueries({ queryKey: ['admin', 'billing-settings'] });
+      qc.invalidateQueries({ queryKey: ['admin', 'restaurant'] });
+      toast({ title: 'Tax & Tip settings saved' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingTax(false);
+    }
+  };
+
+  const handleSavePayment = async () => {
+    if (!restaurant?.id) return;
+    setSavingPayment(true);
+    try {
+      const { error } = await supabase
+        .from('restaurants')
+        .update({
+          online_payments_enabled: payEnabled,
+          razorpay_key_id: razorpayKeyId.trim() || null,
+          razorpay_key_secret: razorpayKeySecret.trim() || null,
+        } as any)
+        .eq('id', restaurant.id);
+      if (error) throw error;
+      qc.invalidateQueries({ queryKey: ['admin', 'billing-settings'] });
+      qc.invalidateQueries({ queryKey: ['admin', 'restaurant'] });
+      toast({ title: 'Payment settings saved' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingPayment(false);
+    }
+  };
 
   // FIX: Was 2 sequential queries (subscription then plan). Now one embedded join.
   const subscriptionQuery = useQuery({
@@ -375,6 +486,180 @@ export default function RestaurantBilling() {
           </CardContent>
         </Card>
       </section>
+
+      {/* ─── Tax & Bill Charges ─── */}
+      <section className="space-y-1">
+        <h2 className="text-lg font-semibold tracking-tight flex items-center gap-2">
+          <DollarSign className="h-5 w-5 text-muted-foreground" /> Taxes & Bill Charges
+        </h2>
+        <p className="text-sm text-muted-foreground">Configure GST, service charges, packing fees shown on the customer bill.</p>
+      </section>
+
+      <section className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+        <Card className="shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-base">Primary Tax</CardTitle>
+            <CardDescription>Your main tax shown on all orders</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Label</Label>
+                <Input value={taxLabel} onChange={e => setTaxLabel(e.target.value)} placeholder="GST" className="h-8" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Rate (%)</Label>
+                <Input type="number" min={0} max={30} step={0.5} value={taxRate} onChange={e => setTaxRate(Number(e.target.value))} className="h-8" />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">Add extra charges below for CGST, SGST, service fees, etc.</p>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-base">Tip for Staff</CardTitle>
+            <CardDescription>Let customers tip your staff at checkout</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Enable Tips</Label>
+              <Switch checked={tipEnabled} onCheckedChange={setTipEnabled} />
+            </div>
+            {tipEnabled && (
+              <>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(['percentage', 'amount', 'both'] as const).map(m => (
+                    <button key={m} onClick={() => setTipMode(m)}
+                      className={`rounded-md border py-1.5 text-xs font-medium capitalize ${
+                        tipMode === m ? 'border-primary bg-primary/10 text-primary' : 'border-muted text-muted-foreground'
+                      }`}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
+                {(tipMode === 'percentage' || tipMode === 'both') && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">% Options (comma-separated)</Label>
+                    <Input value={tipPercentages} onChange={e => setTipPercentages(e.target.value)} placeholder="10,15,20" className="h-8" />
+                  </div>
+                )}
+                {(tipMode === 'amount' || tipMode === 'both') && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Amount Options ₹ (comma-separated)</Label>
+                    <Input value={tipAmounts} onChange={e => setTipAmounts(e.target.value)} placeholder="20,50,100" className="h-8" />
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* Additional charges */}
+      <Card className="shadow-sm">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base">Additional Bill Charges</CardTitle>
+              <CardDescription>CGST, SGST, service charge, packing fee, delivery fee, etc.</CardDescription>
+            </div>
+            <Button type="button" size="sm" variant="outline"
+              onClick={() => setBillCharges(prev => [...prev, { label: '', type: 'percentage', value: 0 }])}>
+              <Plus className="h-3.5 w-3.5 mr-1" /> Add Charge
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {billCharges.length === 0 && (
+            <p className="text-sm text-muted-foreground italic">No additional charges. Click "Add Charge" above.</p>
+          )}
+          {billCharges.map((charge, idx) => (
+            <div key={idx} className="flex items-end gap-2 border rounded-lg p-3 bg-muted/30">
+              <div className="flex-1 space-y-1">
+                <Label className="text-[11px]">Label</Label>
+                <Input value={charge.label}
+                  onChange={e => setBillCharges(prev => prev.map((c, i) => i === idx ? { ...c, label: e.target.value } : c))}
+                  placeholder="e.g. CGST, Service Charge" className="h-8 text-sm" />
+              </div>
+              <div className="w-28 space-y-1">
+                <Label className="text-[11px]">Type</Label>
+                <select value={charge.type}
+                  onChange={e => setBillCharges(prev => prev.map((c, i) => i === idx ? { ...c, type: e.target.value as any } : c))}
+                  className="flex h-8 w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm">
+                  <option value="percentage">%</option>
+                  <option value="flat">₹ Flat</option>
+                </select>
+              </div>
+              <div className="w-20 space-y-1">
+                <Label className="text-[11px]">{charge.type === 'percentage' ? 'Rate' : 'Amount'}</Label>
+                <Input type="number" min={0} step={charge.type === 'percentage' ? 0.5 : 1}
+                  value={charge.value}
+                  onChange={e => setBillCharges(prev => prev.map((c, i) => i === idx ? { ...c, value: Number(e.target.value) } : c))}
+                  className="h-8 text-sm" />
+              </div>
+              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-destructive"
+                onClick={() => setBillCharges(prev => prev.filter((_, i) => i !== idx))}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))}
+          <Button onClick={handleSaveTax} disabled={savingTax} className="w-full mt-2">
+            {savingTax ? 'Saving…' : 'Save Tax & Charges'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* ─── Payment Gateway ─── */}
+      <section className="space-y-1">
+        <h2 className="text-lg font-semibold tracking-tight flex items-center gap-2">
+          <CreditCard className="h-5 w-5 text-muted-foreground" /> Payment Gateway
+        </h2>
+        <p className="text-sm text-muted-foreground">Accept UPI, cards, and wallets via Razorpay.</p>
+      </section>
+
+      <Card className="shadow-sm">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base">Razorpay Integration</CardTitle>
+              <CardDescription>Enable online payments for your customers (UPI, cards, wallets)</CardDescription>
+            </div>
+            <Switch checked={payEnabled} onCheckedChange={setPayEnabled} />
+          </div>
+        </CardHeader>
+        {payEnabled && (
+          <CardContent className="space-y-3 border-t pt-4">
+            {razorpayKeyId.startsWith('rzp_test_') && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>Test Mode — no real charges will be made.</AlertDescription>
+              </Alert>
+            )}
+            <div className="space-y-1">
+              <Label className="text-sm">Razorpay Key ID</Label>
+              <Input value={razorpayKeyId} onChange={e => setRazorpayKeyId(e.target.value)}
+                placeholder="rzp_test_xxxxxxxxxxxx" className="font-mono text-sm" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-sm">Razorpay Key Secret</Label>
+              <Input type="password" value={razorpayKeySecret} onChange={e => setRazorpayKeySecret(e.target.value)}
+                placeholder="••••••••••••••••" className="font-mono text-sm" />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Get your keys from{' '}
+              <a href="https://dashboard.razorpay.com/app/keys" target="_blank" rel="noopener noreferrer" className="underline text-primary">
+                Razorpay Dashboard → Settings → API Keys
+              </a>
+            </p>
+          </CardContent>
+        )}
+        <CardContent className={payEnabled ? 'border-t pt-4' : ''}>
+          <Button onClick={handleSavePayment} disabled={savingPayment} variant="outline" className="w-full">
+            {savingPayment ? 'Saving…' : 'Save Payment Settings'}
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }

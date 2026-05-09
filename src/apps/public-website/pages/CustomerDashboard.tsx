@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { MapPin, Phone, Star, Package, LogOut, ArrowLeft, Loader2, ArrowRight, Edit2, Plus, Trash2 } from "lucide-react";
+import { MapPin, Phone, Star, Package, LogOut, ArrowLeft, Loader2, ArrowRight, Edit2, Plus, Trash2, Truck, Store, UtensilsCrossed } from "lucide-react";
 import { formatMoney } from "@/lib/formatting";
 import { Turnstile } from "@/components/security/Turnstile";
 
@@ -34,6 +34,12 @@ export default function CustomerDashboard() {
   const [isAddingAddress, setIsAddingAddress] = useState(false);
   const [newAddressLabel, setNewAddressLabel] = useState("");
   const [newAddressText, setNewAddressText] = useState("");
+
+  // Rating state
+  const [ratingOrderId, setRatingOrderId] = useState<string | null>(null);
+  const [ratingValue, setRatingValue] = useState(0);
+  const [ratingText, setRatingText] = useState("");
+  const [ratingLoading, setRatingLoading] = useState(false);
 
   // 1. Fetch Restaurant details
   const restaurantQuery = useQuery({
@@ -167,11 +173,11 @@ export default function CustomerDashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("id, status, total_cents, placed_at, order_items(name_snapshot, quantity, line_total_cents)")
+        .select("id, status, total_cents, placed_at, payment_method, order_type, order_token, rating, review_text, order_items(name_snapshot, quantity, line_total_cents)")
         .eq("customer_phone", phone)
         .eq("restaurant_id", restaurant!.id)
         .order("placed_at", { ascending: false })
-        .limit(10);
+        .limit(20);
       if (error) throw error;
       return data || [];
     },
@@ -253,6 +259,27 @@ export default function CustomerDashboard() {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSubmitRating = async (orderId: string, rating: number, text: string) => {
+    setRatingLoading(true);
+    try {
+      const { error } = await supabase
+        .from("orders")
+        .update({ rating, review_text: text || null, reviewed_at: new Date().toISOString() } as any)
+        .eq("id", orderId)
+        .eq("customer_phone", phone);
+      if (error) throw error;
+      toast({ title: "Thanks for your feedback! ⭐", description: "Your review helps us improve." });
+      setRatingOrderId(null);
+      setRatingValue(0);
+      setRatingText("");
+      ordersQuery.refetch();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setRatingLoading(false);
     }
   };
 
@@ -501,20 +528,50 @@ export default function CustomerDashboard() {
                 </Card>
               ) : (
                 <div className="grid gap-4">
-                  {ordersQuery.data?.map((order) => (
+                  {ordersQuery.data?.map((order) => {
+                    const isActive = ['pending', 'accepted', 'preparing', 'ready'].includes(order.status);
+                    const isCompleted = order.status === 'completed';
+                    const isRating = ratingOrderId === order.id;
+                    const orderTypeIcon = (order as any).order_type === 'delivery'
+                      ? <Truck className="h-3 w-3" />
+                      : (order as any).order_type === 'pickup'
+                      ? <Store className="h-3 w-3" />
+                      : <UtensilsCrossed className="h-3 w-3" />;
+                    const orderTypeLabel = (order as any).order_type === 'delivery' ? 'Delivery'
+                      : (order as any).order_type === 'pickup' ? 'Pickup' : 'Dine-In';
+
+                    return (
                     <Card key={order.id} className="overflow-hidden hover:shadow-md transition-shadow">
-                      <div className="p-4 border-b bg-muted/20 flex justify-between items-center">
+                      <div className="p-4 border-b bg-muted/20 flex justify-between items-start gap-2">
                         <div>
                           <p className="text-sm text-muted-foreground font-medium">
                             {new Date(order.placed_at).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} at {new Date(order.placed_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                           </p>
                           <p className="font-mono text-xs text-muted-foreground mt-0.5">#{order.id.slice(0, 8).toUpperCase()}</p>
+                          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-primary/10 text-primary uppercase tracking-wider">
+                              {order.status.replace("_", " ")}
+                            </span>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground border">
+                              {orderTypeIcon} {orderTypeLabel}
+                            </span>
+                            {(order as any).rating && (
+                              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                                {'⭐'.repeat((order as any).rating)}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right shrink-0">
                           <p className="font-bold text-lg">{formatMoney(order.total_cents, restaurant.currency_code)}</p>
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-primary/10 text-primary uppercase tracking-wider">
-                            {order.status.replace("_", " ")}
-                          </span>
+                          {isActive && (order as any).order_token && (
+                            <a
+                              href={`/track?token=${encodeURIComponent((order as any).order_token)}`}
+                              className="inline-block mt-1 text-[10px] font-semibold text-primary underline"
+                            >
+                              Track Order →
+                            </a>
+                          )}
                         </div>
                       </div>
                       <div className="p-4">
@@ -525,12 +582,69 @@ export default function CustomerDashboard() {
                                 <span className="font-medium text-muted-foreground">{item.quantity}x</span>
                                 <span>{item.name_snapshot}</span>
                               </span>
+                              {item.line_total_cents > 0 && (
+                                <span className="text-muted-foreground tabular-nums">{formatMoney(item.line_total_cents, restaurant.currency_code)}</span>
+                              )}
                             </li>
                           ))}
                         </ul>
+
+                        {/* Rating Section — shown for completed orders without rating */}
+                        {isCompleted && !(order as any).rating && (
+                          <div className="mt-3 pt-3 border-t">
+                            {!isRating ? (
+                              <button
+                                onClick={() => { setRatingOrderId(order.id); setRatingValue(0); setRatingText(""); }}
+                                className="text-xs text-primary font-medium flex items-center gap-1 hover:underline"
+                              >
+                                <Star className="h-3.5 w-3.5" /> Rate this order
+                              </button>
+                            ) : (
+                              <div className="space-y-2">
+                                <p className="text-xs font-medium">How was your experience?</p>
+                                <div className="flex gap-1">
+                                  {[1,2,3,4,5].map(star => (
+                                    <button
+                                      key={star}
+                                      onClick={() => setRatingValue(star)}
+                                      className="transition-transform hover:scale-110"
+                                    >
+                                      <Star className={`h-6 w-6 ${star <= ratingValue ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground'}`} />
+                                    </button>
+                                  ))}
+                                </div>
+                                <Input
+                                  placeholder="Add a comment (optional)"
+                                  value={ratingText}
+                                  onChange={e => setRatingText(e.target.value)}
+                                  className="h-8 text-sm"
+                                />
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    disabled={ratingValue === 0 || ratingLoading}
+                                    onClick={() => handleSubmitRating(order.id, ratingValue, ratingText)}
+                                    style={{ backgroundColor: themeColor }}
+                                  >
+                                    {ratingLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Submit'}
+                                  </Button>
+                                  <Button size="sm" variant="ghost" onClick={() => setRatingOrderId(null)}>Cancel</Button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Show existing review text */}
+                        {isCompleted && (order as any).review_text && (
+                          <p className="mt-2 text-xs text-muted-foreground italic border-t pt-2">
+                            "{(order as any).review_text}"
+                          </p>
+                        )}
                       </div>
                     </Card>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

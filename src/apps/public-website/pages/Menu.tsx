@@ -129,7 +129,13 @@ export default function PublicMenu() {
 
   // Payment method
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online' | 'upi'>('cash');
+  const [upiApp, setUpiApp] = useState<'google_pay' | 'phonepe' | 'paytm' | null>(null);
   const onlinePaymentsEnabled = !!(restaurantQuery.data as any)?.online_payments_enabled;
+
+  // Order type: dine_in locked when coming via table QR, else pickup/delivery
+  const [orderType, setOrderType] = useState<'dine_in' | 'pickup' | 'delivery'>(
+    tableLabel ? 'dine_in' : 'pickup'
+  );
 
   // Active coupons for offers banner
   const { data: menuCoupons } = useQuery({
@@ -410,6 +416,12 @@ export default function PublicMenu() {
       }
     }
 
+    // Delivery requires address
+    if (orderType === 'delivery' && !deliveryAddress.trim()) {
+      setCheckoutError("Please enter your delivery address.");
+      return;
+    }
+
     setPlacingOrder(true);
     setCheckoutError(null);
 
@@ -417,6 +429,8 @@ export default function PublicMenu() {
       const orderPayload = {
         restaurant_id: restaurantId,
         table_label: activeCart.tableLabel ?? undefined,
+        order_type: orderType,
+        delivery_address: orderType === 'delivery' ? deliveryAddress.trim() : undefined,
         items: activeCart.items.map((i) => ({
           menu_item_id: i.menu_item_id,
           quantity: i.quantity,
@@ -570,7 +584,11 @@ export default function PublicMenu() {
                   blocks: {
                     upi: {
                       name: 'Pay via UPI',
-                      instruments: [{ method: 'upi', flows: ['intent', 'collect', 'qrcode'], apps: ['google_pay', 'phonepe', 'paytm'] }],
+                      instruments: [{ 
+                        method: 'upi', 
+                        flows: ['intent', 'collect'], 
+                        apps: upiApp ? [upiApp] : ['google_pay', 'phonepe', 'paytm'] 
+                      }],
                     },
                   },
                   sequence: ['block.upi'],
@@ -1282,14 +1300,64 @@ export default function PublicMenu() {
                   )}
                 </div>
 
-                {/* Payment method selector */}
-                {onlinePaymentsEnabled && (
+                {/* Order Type Selector — hidden when from table QR (locked to dine-in) */}
+                {!tableLabel && (
                   <div className="border rounded-lg p-3 space-y-2 bg-muted/40">
-                    <p className="text-xs text-muted-foreground font-medium">Payment Method</p>
-                    <div className={`grid gap-2 ${onlinePaymentsEnabled ? 'grid-cols-3' : 'grid-cols-1'}`}>
+                    <p className="text-xs text-muted-foreground font-medium">Order Type</p>
+                    <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        onClick={() => setPaymentMethod('cash')}
+                        onClick={() => setOrderType('pickup')}
+                        className={`flex items-center justify-center gap-1.5 rounded-lg border-2 p-2.5 text-sm font-medium transition-colors ${
+                          orderType === 'pickup'
+                            ? 'border-primary bg-primary/5 text-primary'
+                            : 'border-muted bg-background text-muted-foreground hover:border-border'
+                        }`}
+                      >
+                        <Store className="h-4 w-4" /> Pickup
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOrderType('delivery')}
+                        className={`flex items-center justify-center gap-1.5 rounded-lg border-2 p-2.5 text-sm font-medium transition-colors ${
+                          orderType === 'delivery'
+                            ? 'border-primary bg-primary/5 text-primary'
+                            : 'border-muted bg-background text-muted-foreground hover:border-border'
+                        }`}
+                      >
+                        <Truck className="h-4 w-4" /> Delivery
+                      </button>
+                    </div>
+                    {orderType === 'delivery' && (
+                      <div className="space-y-1 pt-1">
+                        <Label className="text-xs">Delivery Address <span className="text-destructive">*</span></Label>
+                        <Input
+                          placeholder="Enter your full delivery address"
+                          value={deliveryAddress}
+                          onChange={e => setDeliveryAddress(e.target.value)}
+                          className={`h-8 text-sm ${!deliveryAddress.trim() ? 'border-destructive/50' : ''}`}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+                {tableLabel && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground border rounded-lg px-3 py-2 bg-muted/30">
+                    <User className="h-3.5 w-3.5" />
+                    <span>Dine-In · Table <strong>{tableLabel}</strong></span>
+                  </div>
+                )}
+
+                {/* Payment method selector */}
+                {onlinePaymentsEnabled && (
+                  <div className="border rounded-lg p-3 space-y-3 bg-muted/40">
+                    <p className="text-xs text-muted-foreground font-medium">Select Payment Method</p>
+                    
+                    {/* Main Methods */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setPaymentMethod('cash'); setUpiApp(null); }}
                         className={`flex items-center justify-center gap-1.5 rounded-lg border-2 p-2.5 text-sm font-medium transition-colors ${
                           paymentMethod === 'cash'
                             ? 'border-primary bg-primary/5 text-primary'
@@ -1298,37 +1366,67 @@ export default function PublicMenu() {
                       >
                         <Banknote className="h-4 w-4" /> Cash
                       </button>
-                      {onlinePaymentsEnabled && (
-                        <button
-                          type="button"
-                          onClick={() => setPaymentMethod('online')}
-                          className={`flex items-center justify-center gap-1.5 rounded-lg border-2 p-2.5 text-sm font-medium transition-colors ${
-                            paymentMethod === 'online'
-                              ? 'border-primary bg-primary/5 text-primary'
-                              : 'border-muted bg-background text-muted-foreground hover:border-border'
-                          }`}
-                        >
-                          <CreditCard className="h-4 w-4" /> Card
-                        </button>
-                      )}
-                      {onlinePaymentsEnabled && (
-                        <button
-                          type="button"
-                          onClick={() => setPaymentMethod('upi')}
-                          className={`flex items-center justify-center gap-1.5 rounded-lg border-2 p-2.5 text-sm font-medium transition-colors ${
-                            paymentMethod === 'upi'
-                              ? 'border-primary bg-primary/5 text-primary'
-                              : 'border-muted bg-background text-muted-foreground hover:border-border'
-                          }`}
-                        >
-                          <Smartphone className="h-4 w-4" /> UPI
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => { setPaymentMethod('online'); setUpiApp(null); }}
+                        className={`flex items-center justify-center gap-1.5 rounded-lg border-2 p-2.5 text-sm font-medium transition-colors ${
+                          paymentMethod === 'online'
+                            ? 'border-primary bg-primary/5 text-primary'
+                            : 'border-muted bg-background text-muted-foreground hover:border-border'
+                        }`}
+                      >
+                        <CreditCard className="h-4 w-4" /> Card
+                      </button>
                     </div>
+
+                    {/* Branded UPI Methods */}
+                    <div className="space-y-2">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold">Pay via UPI</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { setPaymentMethod('upi'); setUpiApp('google_pay'); }}
+                          className={`flex flex-col items-center justify-center gap-1 rounded-lg border-2 p-2 text-[10px] font-bold transition-all ${
+                            paymentMethod === 'upi' && upiApp === 'google_pay'
+                              ? 'border-[#4285F4] bg-[#4285F4]/10 text-[#4285F4]'
+                              : 'border-muted bg-background text-muted-foreground hover:border-border'
+                          }`}
+                        >
+                          <div className="h-5 w-5 rounded-full bg-[#4285F4] flex items-center justify-center text-white text-[8px]">G</div>
+                          GPay
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setPaymentMethod('upi'); setUpiApp('phonepe'); }}
+                          className={`flex flex-col items-center justify-center gap-1 rounded-lg border-2 p-2 text-[10px] font-bold transition-all ${
+                            paymentMethod === 'upi' && upiApp === 'phonepe'
+                              ? 'border-[#5f259f] bg-[#5f259f]/10 text-[#5f259f]'
+                              : 'border-muted bg-background text-muted-foreground hover:border-border'
+                          }`}
+                        >
+                          <div className="h-5 w-5 rounded-full bg-[#5f259f] flex items-center justify-center text-white text-[8px]">P</div>
+                          PhonePe
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setPaymentMethod('upi'); setUpiApp('paytm'); }}
+                          className={`flex flex-col items-center justify-center gap-1 rounded-lg border-2 p-2 text-[10px] font-bold transition-all ${
+                            paymentMethod === 'upi' && upiApp === 'paytm'
+                              ? 'border-[#00baf2] bg-[#00baf2]/10 text-[#00baf2]'
+                              : 'border-muted bg-background text-muted-foreground hover:border-border'
+                          }`}
+                        >
+                          <div className="h-5 w-5 rounded-full bg-[#00baf2] flex items-center justify-center text-white text-[8px]">Py</div>
+                          Paytm
+                        </button>
+                      </div>
+                    </div>
+
                     {paymentMethod === 'upi' && (
-                      <div className="mt-2 p-2 rounded-md bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 text-center space-y-1">
-                        <p className="text-xs text-blue-700 dark:text-blue-300 font-medium">Pay securely via UPI — auto-verified</p>
-                        <p className="text-[10px] text-blue-600 dark:text-blue-400">GPay • PhonePe • Paytm • BHIM</p>
+                      <div className="mt-1 p-2 rounded-md bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 text-center">
+                        <p className="text-[10px] text-blue-700 dark:text-blue-300 font-medium italic">
+                          Clicking "Place Order" will open your {upiApp === 'google_pay' ? 'Google Pay' : upiApp === 'phonepe' ? 'PhonePe' : 'Paytm'} app directly.
+                        </p>
                       </div>
                     )}
                   </div>
