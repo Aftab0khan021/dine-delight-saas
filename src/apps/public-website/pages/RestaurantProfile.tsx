@@ -168,6 +168,24 @@ export default function RestaurantProfile() {
     },
   });
 
+  // R8: Daily specials — items marked as Today's Special by admin
+  const { data: specials } = useQuery({
+    queryKey: ["public", "daily-specials", restaurant?.id],
+    enabled: !!restaurant?.id,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("menu_items")
+        .select("id, name, description, price_cents, image_url, food_type")
+        .eq("restaurant_id", restaurant!.id)
+        .eq("is_daily_special", true)
+        .eq("is_active", true)
+        .is("deleted_at", null)
+        .limit(6);
+      return data || [];
+    },
+  });
+
   // R7: Share handler
   const handleShare = useCallback(async () => {
     const shareData = { title: restaurant?.name || "Restaurant", text: restaurant?.description || `Check out ${restaurant?.name}!`, url: window.location.href };
@@ -207,23 +225,6 @@ export default function RestaurantProfile() {
   const openStatus = isOpenNow(restaurant.operating_hours);
   const hasSocial = Object.values(socialLinks).some((v: any) => !!v);
   const currencyCode = restaurant?.currency_code || "INR";
-  // R8: Daily specials — query items marked as Today's Special by admin
-  const { data: specials } = useQuery({
-    queryKey: ["public", "daily-specials", restaurant?.id],
-    enabled: !!restaurant?.id,
-    staleTime: 60_000,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("menu_items")
-        .select("id, name, description, price_cents, image_url, food_type")
-        .eq("restaurant_id", restaurant!.id)
-        .eq("is_daily_special", true)
-        .eq("is_active", true)
-        .is("deleted_at", null)
-        .limit(6);
-      return data || [];
-    },
-  });
 
   return (
     <div className="min-h-screen w-full bg-background flex flex-col">
