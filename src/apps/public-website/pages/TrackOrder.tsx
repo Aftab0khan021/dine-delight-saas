@@ -225,6 +225,26 @@ export default function TrackOrder() {
               </div>
             )}
 
+            {/* P3: Estimated time */}
+            {order.status === 'pending' || order.status === 'in_progress' ? (() => {
+              const placed = new Date(order.placed_at);
+              const isDelivery = order.order_type === 'delivery';
+              const estMins = isDelivery ? 40 : 20;
+              const estReady = new Date(placed.getTime() + estMins * 60000);
+              const minsLeft = Math.max(0, Math.round((estReady.getTime() - Date.now()) / 60000));
+              return (
+                <div className="flex items-center justify-center gap-2 text-sm bg-primary/5 rounded-lg py-3 px-4">
+                  <Clock className="h-4 w-4 text-primary" />
+                  <span>
+                    {minsLeft > 0
+                      ? `Estimated ${isDelivery ? 'delivery' : 'ready'} in ~${minsLeft} min`
+                      : `Should be ${isDelivery ? 'arriving' : 'ready'} any moment!`
+                    }
+                  </span>
+                </div>
+              );
+            })() : null}
+
           </CardContent>
         </Card>
 

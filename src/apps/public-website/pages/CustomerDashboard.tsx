@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { MapPin, Phone, Star, Package, LogOut, ArrowLeft, Loader2, ArrowRight, Edit2, Plus, Trash2, Truck, Store, UtensilsCrossed } from "lucide-react";
+import { MapPin, Phone, Star, Package, LogOut, ArrowLeft, Loader2, ArrowRight, Edit2, Plus, Trash2, Truck, Store, UtensilsCrossed, RefreshCw } from "lucide-react";
 import { formatMoney } from "@/lib/formatting";
 import { Turnstile } from "@/components/security/Turnstile";
 
@@ -588,6 +588,23 @@ export default function CustomerDashboard() {
                             </li>
                           ))}
                         </ul>
+
+                        {/* P1: Reorder button for completed orders */}
+                        {isCompleted && (
+                          <div className="mt-3 pt-3 border-t">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => {
+                                const itemIds = order.order_items?.map((oi: any) => `${oi.menu_item_id}:${oi.quantity}`).join(',') || '';
+                                window.location.href = `/r/${slug}/menu?reorder=${encodeURIComponent(itemIds)}`;
+                              }}
+                            >
+                              <RefreshCw className="h-3.5 w-3.5 mr-2" /> Reorder
+                            </Button>
+                          </div>
+                        )}
 
                         {/* Rating Section — shown for completed orders without rating */}
                         {isCompleted && !(order as any).rating && (

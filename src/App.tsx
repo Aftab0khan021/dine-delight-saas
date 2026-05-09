@@ -40,6 +40,9 @@ import AdminReservations from "./apps/admin-panel/pages/Reservations";
 import AdminInventory from "./apps/admin-panel/pages/Inventory";
 import AdminOTPSettings from "./apps/admin-panel/pages/OTPSettings";
 import AdminReviews from "./apps/admin-panel/pages/Reviews";
+import AdminCustomers from "./apps/admin-panel/pages/Customers";
+import AdminAnalytics from "./apps/admin-panel/pages/Analytics";
+import AdminDeliveryZones from "./apps/admin-panel/pages/DeliveryZones";
 
 // Super Admin
 import SuperAdminAuth from "./apps/super-admin/pages/Auth";
@@ -66,6 +69,9 @@ import SuperAdminAICostTracking from "./apps/super-admin/pages/AICostTracking";
 import SuperAdminAIUsageAnalytics from "./apps/super-admin/pages/AIUsageAnalytics";
 import SuperAdminRestaurantAIConfig from "./apps/super-admin/pages/RestaurantAIConfig";
 import SuperAdminWhatsAppManagement from "./apps/super-admin/pages/WhatsAppManagement";
+import SuperAdminAnnouncements from "./apps/super-admin/pages/Announcements";
+import SuperAdminAuditLog from "./apps/super-admin/pages/AuditLog";
+import SuperAdminWhiteLabel from "./apps/super-admin/pages/WhiteLabel";
 import AdminWhatsAppSettings from "./apps/admin-panel/pages/WhatsAppSettings";
 
 const queryClient = new QueryClient({
@@ -151,6 +157,10 @@ const App = () => (
             {/* WhatsApp bot settings (from dev merge) */}
             <Route path="whatsapp" element={<AdminWhatsAppSettings />} />
             <Route path="otp-settings" element={<AdminOTPSettings />} />
+            {/* Enhancement batch */}
+            <Route path="customers" element={<AdminCustomers />} />
+            <Route path="analytics" element={<AdminAnalytics />} />
+            <Route path="delivery-zones" element={<AdminDeliveryZones />} />
           </Route>
 
           {/* Super Admin Routes */}
@@ -181,6 +191,10 @@ const App = () => (
             <Route path="restaurants/:id/ai" element={<SuperAdminRestaurantAIConfig />} />
             {/* WhatsApp Bot Management (from dev merge) */}
             <Route path="whatsapp" element={<SuperAdminWhatsAppManagement />} />
+            {/* Enhancement batch */}
+            <Route path="announcements" element={<SuperAdminAnnouncements />} />
+            <Route path="audit-log" element={<SuperAdminAuditLog />} />
+            <Route path="white-label" element={<SuperAdminWhiteLabel />} />
           </Route>
 
           {/* Legacy redirects: /super-admin -> /superadmin */}

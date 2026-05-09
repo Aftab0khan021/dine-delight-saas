@@ -42,7 +42,35 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, differenceInDays } from "date-fns";
+
+// S2: Health score computation
+function computeHealth(r: Restaurant): number {
+  let score = 0;
+  // Active status = 30 pts
+  if (r.status === 'active') score += 30;
+  // Has subscription = 25 pts
+  if (r.subscription?.status === 'active') score += 25;
+  // Last active recently = up to 25 pts
+  if (r.last_active_at) {
+    const days = differenceInDays(new Date(), new Date(r.last_active_at));
+    if (days <= 1) score += 25;
+    else if (days <= 7) score += 20;
+    else if (days <= 30) score += 10;
+  }
+  // Account age bonus (established) = up to 20 pts
+  const ageDays = differenceInDays(new Date(), new Date(r.created_at));
+  if (ageDays >= 90) score += 20;
+  else if (ageDays >= 30) score += 15;
+  else if (ageDays >= 7) score += 10;
+  else score += 5;
+  return Math.min(score, 100);
+}
+
+function HealthBadge({ score }: { score: number }) {
+  const color = score >= 70 ? 'bg-emerald-500/15 text-emerald-700' : score >= 40 ? 'bg-amber-500/15 text-amber-700' : 'bg-red-500/15 text-red-700';
+  return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${color}`}>{score >= 70 ? '❤️' : score >= 40 ? '💛' : '💔'} {score}</span>;
+}
 
 type RestaurantStatus = 'active' | 'suspended' | 'terminated' | 'locked';
 
@@ -383,6 +411,7 @@ export default function Restaurants() {
               <TableRow>
                 <TableHead>Restaurant</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Health</TableHead>
                 <TableHead>Plan</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead>Last Active</TableHead>
@@ -415,6 +444,7 @@ export default function Restaurants() {
                       </div>
                     </TableCell>
                     <TableCell>{getStatusBadge(restaurant.status)}</TableCell>
+                    <TableCell><HealthBadge score={computeHealth(restaurant)} /></TableCell>
                     <TableCell>
                       {restaurant.subscription?.plan?.name || (
                         <span className="text-muted-foreground">No plan</span>

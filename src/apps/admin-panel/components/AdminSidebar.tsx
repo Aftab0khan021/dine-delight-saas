@@ -23,6 +23,9 @@ import {
   Package,
   Shield,
   Star,
+  UserCheck,
+  PieChart,
+  MapPin,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -51,12 +54,15 @@ const coreNavItems: NavItem[] = [
   { to: "/admin/reservations",     label: "Reservations",     icon: CalendarDays,   permission: PERMISSIONS.MANAGE_SETTINGS },
   { to: "/admin/reviews",          label: "Reviews",          icon: Star,           adminOnly: true },
   { to: "/admin/inventory",        label: "Inventory",        icon: Package,        permission: PERMISSIONS.VIEW_MENU },
+  { to: "/admin/customers",        label: "Customers",        icon: UserCheck,      adminOnly: true },
+  { to: "/admin/delivery-zones",   label: "Delivery Zones",   icon: MapPin,         adminOnly: true },
 ];
 
 // Growth pillar pages — shown under "Growth" separator, admin-only unless noted
 const growthNavItems: NavItem[] = [
   { to: "/admin/marketing",  label: "WhatsApp CRM",   icon: MessageCircle, adminOnly: true },
   { to: "/admin/insights",   label: "Menu Insights",  icon: BarChart3,     adminOnly: true },
+  { to: "/admin/analytics",  label: "Analytics",      icon: PieChart,      adminOnly: true },
   { to: "/admin/developer",  label: "Developer API",  icon: Code2,         adminOnly: true },
   { to: "/admin/whatsapp",   label: "WhatsApp Bot",   icon: Bot,           adminOnly: true },
   { to: "/admin/otp-settings", label: "OTP Settings", icon: Shield,        adminOnly: true },

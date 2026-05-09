@@ -15,6 +15,9 @@ import {
   Zap,
   BarChart3,
   DollarSign,
+  Megaphone,
+  ScrollText,
+  Paintbrush,
 } from "lucide-react";
 
 import { NavLink } from "@/components/NavLink";
@@ -56,6 +59,9 @@ const items = [
   { title: "AI Costs",       url: "/superadmin/ai/costs",          icon: DollarSign,      group: "AI" },
   // System
   { title: "Settings",       url: "/superadmin/settings",          icon: Settings,        group: "System" },
+  { title: "Announcements",  url: "/superadmin/announcements",     icon: Megaphone,       group: "System" },
+  { title: "Audit Log",      url: "/superadmin/audit-log",         icon: ScrollText,      group: "System" },
+  { title: "White Label",    url: "/superadmin/white-label",       icon: Paintbrush,      group: "System" },
 ];
 
 const groups = ["Platform", "Billing", "Features", "Operations", "AI", "System"] as const;

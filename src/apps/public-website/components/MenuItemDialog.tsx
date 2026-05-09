@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Minus, Plus } from "lucide-react";
+import { Loader2, Minus, Plus, Share2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatMoney } from "@/lib/formatting";
@@ -162,9 +162,25 @@ export function MenuItemDialog({ item, open, onOpenChange, onAddToCart, restaura
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>{item.name}</DialogTitle>
+                    <div className="flex items-start justify-between gap-2">
+                        <DialogTitle>{item.name}</DialogTitle>
+                        <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8" title="Share" onClick={async () => {
+                            const shareData = { title: item.name, text: `Check out ${item.name}!`, url: window.location.href };
+                            if (navigator.share) { try { await navigator.share(shareData); } catch {} }
+                            else { await navigator.clipboard.writeText(window.location.href); toast({ title: "Link copied!" }); }
+                        }}>
+                            <Share2 className="h-4 w-4" />
+                        </Button>
+                    </div>
                     {item.description && <p className="text-sm text-muted-foreground">{item.description}</p>}
                 </DialogHeader>
+
+                {/* P2: Item image */}
+                {item.image_url && (
+                    <div className="rounded-lg overflow-hidden border bg-muted -mt-2">
+                        <img src={item.image_url} alt={item.name} className="w-full h-48 object-cover" />
+                    </div>
+                )}
 
                 {isLoading ? (
                     <div className="py-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>

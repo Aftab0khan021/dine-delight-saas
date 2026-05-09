@@ -716,6 +716,48 @@ export default function RestaurantDetails() {
                 </Card>
             </div>
 
+            {/* S4: Onboarding Progress */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <CheckCircle className="h-5 w-5" />
+                        Onboarding Progress
+                    </CardTitle>
+                    <CardDescription>Setup completion checklist</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {(() => {
+                        const steps = [
+                            { label: "Logo uploaded", done: !!restaurant.logo_url },
+                            { label: "Menu items added", done: (stats?.totalMenuItems || 0) > 0 },
+                            { label: "Staff added", done: (restaurant.user_roles?.length || 0) > 1 },
+                            { label: "First order received", done: (stats?.totalOrders || 0) > 0 },
+                            { label: "Subscription active", done: subscription?.status === 'active' },
+                        ];
+                        const done = steps.filter(s => s.done).length;
+                        const pct = Math.round((done / steps.length) * 100);
+                        return (
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex-1 h-2.5 bg-muted rounded-full overflow-hidden">
+                                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: pct === 100 ? '#10b981' : pct >= 60 ? '#f59e0b' : '#6366f1' }} />
+                                    </div>
+                                    <span className="text-sm font-semibold">{pct}%</span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                    {steps.map((s, i) => (
+                                        <div key={i} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${s.done ? 'bg-emerald-500/10 text-emerald-700' : 'bg-muted text-muted-foreground'}`}>
+                                            {s.done ? <CheckCircle className="h-4 w-4" /> : <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30" />}
+                                            {s.label}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })()}
+                </CardContent>
+            </Card>
+
             {/* Feature Access */}
             <FeatureAccessMatrix restaurantId={id!} onOverride={handleFeatureOverride} />
 

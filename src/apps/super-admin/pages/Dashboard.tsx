@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Building2,
@@ -6,8 +6,12 @@ import {
   DollarSign,
   TrendingUp,
   AlertTriangle,
-  Activity
+  Activity,
+  PieChart as PieChartIcon
 } from "lucide-react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
 import { MetricCard } from "../components/MetricCard";
 import { RevenueChart } from "../components/RevenueChart";
 import { ActivityFeed } from "../components/ActivityFeed";
@@ -20,6 +24,8 @@ import {
   getGrowthMetrics,
 } from "../lib/analytics";
 
+const PIE_COLORS = ["#6366f1", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#3b82f6", "#ef4444"];
+
 export default function SuperAdminDashboard() {
   const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
 
@@ -27,35 +33,74 @@ export default function SuperAdminDashboard() {
   const { data: metrics, isLoading: metricsLoading } = useQuery({
     queryKey: ['platform-metrics'],
     queryFn: getPlatformMetrics,
-    refetchInterval: 60000, // Refetch every minute
+    refetchInterval: 60000,
   });
 
   // Fetch revenue trends
   const { data: revenueTrends, isLoading: revenueLoading } = useQuery({
     queryKey: ['revenue-trends'],
     queryFn: () => getRevenueTrends(6),
-    refetchInterval: 300000, // Refetch every 5 minutes
+    refetchInterval: 300000,
   });
 
   // Fetch recent activity
   const { data: recentActivity, isLoading: activityLoading } = useQuery({
     queryKey: ['recent-activity'],
     queryFn: () => getRecentActivity(20),
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 30000,
   });
 
   // Fetch system alerts
   const { data: systemAlerts, isLoading: alertsLoading } = useQuery({
     queryKey: ['system-alerts'],
     queryFn: getSystemAlerts,
-    refetchInterval: 60000, // Refetch every minute
+    refetchInterval: 60000,
   });
 
   // Fetch growth metrics
   const { data: growth } = useQuery({
     queryKey: ['growth-metrics'],
     queryFn: getGrowthMetrics,
-    refetchInterval: 300000, // Refetch every 5 minutes
+    refetchInterval: 300000,
+  });
+
+  // S1: Plan distribution for pie chart
+  const { data: planDist = [] } = useQuery({
+    queryKey: ['plan-distribution'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('subscriptions')
+        .select('plan_id, subscription_plans(name)')
+        .eq('status', 'active');
+      if (!data) return [];
+      const counts: Record<string, number> = {};
+      data.forEach((s: any) => {
+        const name = s.subscription_plans?.name || 'Unknown';
+        counts[name] = (counts[name] || 0) + 1;
+      });
+      return Object.entries(counts).map(([name, value]) => ({ name, value }));
+    },
+    refetchInterval: 300000,
+  });
+
+  // S1: Churn rate (cancelled in last 30d / active at start of month)
+  const { data: churnRate } = useQuery({
+    queryKey: ['churn-rate'],
+    queryFn: async () => {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+      const { count: cancelled } = await supabase
+        .from('subscriptions')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'cancelled')
+        .gte('updated_at', thirtyDaysAgo);
+      const { count: total } = await supabase
+        .from('subscriptions')
+        .select('id', { count: 'exact', head: true })
+        .in('status', ['active', 'cancelled']);
+      if (!total || total === 0) return 0;
+      return Math.round(((cancelled || 0) / total) * 1000) / 10;
+    },
+    refetchInterval: 300000,
   });
 
   // Filter out dismissed alerts
@@ -170,26 +215,50 @@ export default function SuperAdminDashboard() {
         </div>
       </div>
 
-      {/* Additional Metrics */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-        <MetricCard
-          title="Average Health Score"
-          value={metricsLoading ? "..." : "—"}
-          description="Coming soon"
-          icon={Activity}
-        />
-        <MetricCard
-          title="ARR"
-          value={metricsLoading ? "..." : formatCurrency((metrics?.mrr_cents || 0) * 12)}
-          description="Annual Run Rate"
-          icon={DollarSign}
-        />
-        <MetricCard
-          title="Churn Rate"
-          value={metricsLoading ? "..." : "—"}
-          description="Coming soon"
-          icon={TrendingUp}
-        />
+      {/* S1: Plan Distribution + Additional Metrics */}
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2"><PieChartIcon className="h-4 w-4" /> Plan Distribution</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {planDist.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={planDist} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, value }) => `${name} (${value})`}>
+                    {planDist.map((_: any, i: number) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-muted-foreground text-sm text-center py-8">No active subscriptions</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-4 grid-cols-1">
+          <MetricCard
+            title="ARR"
+            value={metricsLoading ? "..." : formatCurrency((metrics?.mrr_cents || 0) * 12)}
+            description="Annual Run Rate"
+            icon={DollarSign}
+          />
+          <MetricCard
+            title="Churn Rate (30d)"
+            value={churnRate != null ? `${churnRate}%` : "..."}
+            description={churnRate != null && churnRate > 5 ? "⚠️ Above 5% threshold" : "Healthy"}
+            icon={TrendingUp}
+            className={churnRate != null && churnRate > 5 ? "border-amber-500" : ""}
+          />
+          <MetricCard
+            title="Avg Revenue/Restaurant"
+            value={metricsLoading ? "..." : formatCurrency(Math.round((metrics?.mrr_cents || 0) / Math.max(metrics?.active_restaurants || 1, 1)))}
+            description="Per active restaurant"
+            icon={Activity}
+          />
+        </div>
       </div>
     </section>
   );

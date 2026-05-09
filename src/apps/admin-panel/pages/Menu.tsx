@@ -69,11 +69,13 @@ type MenuItemRow = {
   image_url: string | null;
   is_active: boolean;
   is_daily_special: boolean;
+  is_sold_out?: boolean;
   food_type: string | null;
   tags: string[] | null;
   spice_level: number | null;
   allergens: string[] | null;
   packaging_charge_cents: number | null;
+  translations?: Record<string, any>;
 };
 
 import { getCurrencyExample } from "@/lib/currency-utils";
@@ -486,12 +488,26 @@ export default function AdminMenu() {
                         <span className="text-xs font-mono text-muted-foreground">{formatMoney(item.price_cents, currencyCode)}</span>
                         {(item as any).spice_level > 0 && <span className="text-xs">{'🌶️'.repeat(Math.min((item as any).spice_level, 3))}</span>}
                         {((item as any).tags || []).slice(0, 2).map((t: string) => <Badge key={t} variant="outline" className="h-4 px-1 text-[9px]">{t}</Badge>)}
-                        {!item.is_active && <Badge variant="destructive" className="h-4 px-1 text-[10px]">Sold Out</Badge>}
+                        {!item.is_active && <Badge variant="destructive" className="h-4 px-1 text-[10px]">Hidden</Badge>}
+                        {(item as any).is_sold_out && <Badge variant="outline" className="h-4 px-1 text-[10px] border-red-400 text-red-600">Sold Out</Badge>}
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant={(item as any).is_sold_out ? "destructive" : "outline"}
+                      size="sm"
+                      className="text-xs h-7 px-2"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const next = !(item as any).is_sold_out;
+                        await supabase.from("menu_items").update({ is_sold_out: next }).eq("id", item.id);
+                        qc.invalidateQueries({ queryKey: ["admin", "menu"] });
+                      }}
+                    >
+                      {(item as any).is_sold_out ? "Restock" : "Sold Out"}
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => { setEditItem(item); setItemSheetOpen(true); }}>
                       Edit
                     </Button>
