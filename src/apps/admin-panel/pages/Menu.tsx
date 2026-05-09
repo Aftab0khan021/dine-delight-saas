@@ -11,7 +11,8 @@ import {
   RefreshCw,
   Pencil,
   GripVertical,
-  AlertCircle
+  AlertCircle,
+  Zap,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -67,6 +68,7 @@ type MenuItemRow = {
   category_id: string | null;
   image_url: string | null;
   is_active: boolean;
+  is_daily_special: boolean;
   food_type: string | null;
   tags: string[] | null;
   spice_level: number | null;
@@ -240,6 +242,7 @@ export default function AdminMenu() {
         category_id: values.category_id === "" ? null : values.category_id,
         image_url: values.image_url || null,
         is_active: values.is_active,
+        is_daily_special: values.is_daily_special ?? false,
         food_type: values.food_type || 'veg',
         tags: values.tags || [],
         spice_level: values.spice_level != null ? Number(values.spice_level) : null,
@@ -473,6 +476,11 @@ export default function AdminMenu() {
                       <div className="flex items-center gap-1.5">
                         <span className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${(item as any).food_type === 'nonveg' ? 'bg-red-500' : (item as any).food_type === 'egg' ? 'bg-yellow-500' : 'bg-green-500'}`} title={(item as any).food_type || 'veg'} />
                         <span className="truncate text-sm font-medium">{item.name}</span>
+                        {item.is_daily_special && (
+                          <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[9px] font-bold px-1.5 py-0.5 shrink-0">
+                            <Zap className="h-2.5 w-2.5" /> Special
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xs font-mono text-muted-foreground">{formatMoney(item.price_cents, currencyCode)}</span>
@@ -665,6 +673,7 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currenc
         category_id: data?.category_id || (categories && categories.length > 0 ? categories[0].id : ""),
         image_url: data?.image_url || "",
         is_active: data?.is_active ?? true,
+        is_daily_special: data?.is_daily_special ?? false,
         food_type: data?.food_type || 'veg',
         tags: data?.tags || [],
         spice_level: data?.spice_level ?? 0,
@@ -867,6 +876,24 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currenc
             <Switch
               checked={form.watch("is_active")}
               onCheckedChange={(v) => form.setValue("is_active", v)}
+            />
+          </div>
+
+          {/* Today's Special toggle */}
+          <div className={cn(
+            "flex items-center justify-between rounded-lg border p-3 shadow-sm transition-colors",
+            form.watch("is_daily_special") ? "border-amber-400 bg-amber-50 dark:bg-amber-950/30" : ""
+          )}>
+            <div className="space-y-0.5">
+              <Label className="flex items-center gap-1.5">
+                <Zap className="h-3.5 w-3.5 text-amber-500" />
+                Today's Special
+              </Label>
+              <div className="text-xs text-muted-foreground">Highlights this item on your public profile page</div>
+            </div>
+            <Switch
+              checked={form.watch("is_daily_special")}
+              onCheckedChange={(v) => form.setValue("is_daily_special", v)}
             />
           </div>
 
