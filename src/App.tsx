@@ -14,6 +14,8 @@ import RestaurantProfile from "./apps/public-website/pages/RestaurantProfile";
 import QrResolver from "./apps/public-website/pages/QrResolver";
 import CustomerDashboard from "./apps/public-website/pages/CustomerDashboard";
 import TableReservation from "./apps/public-website/pages/TableReservation";
+import PrivacyPolicy from "./apps/public-website/pages/PrivacyPolicy";
+import TermsOfService from "./apps/public-website/pages/TermsOfService";
 
 // Admin Panel
 import AdminAuth from "./apps/admin-panel/pages/Auth";
@@ -117,6 +119,8 @@ const App = () => (
           <Route path="/q/:code" element={<QrResolver />} />
           <Route path="/r/:restaurantSlug/menu" element={<PublicMenu />} />
           <Route path="/track" element={<TrackOrder />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<TermsOfService />} />
 
           {/* Admin Panel Routes */}
           <Route path="/admin/auth" element={<AdminAuth />} />

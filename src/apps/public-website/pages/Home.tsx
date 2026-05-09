@@ -374,6 +374,8 @@ export default function Home() {
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li><button onClick={() => scrollTo("faq")} className="hover:text-foreground transition-colors">FAQ</button></li>
                 <li><a href="mailto:support@dinedelight.com" className="hover:text-foreground transition-colors">Contact</a></li>
+                <li><Link to="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link></li>
+                <li><Link to="/terms" className="hover:text-foreground transition-colors">Terms of Service</Link></li>
               </ul>
             </div>
             <div>
@@ -384,8 +386,12 @@ export default function Home() {
               </ul>
             </div>
           </div>
-          <div className="border-t pt-6 text-center text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Dine Delight. All rights reserved.
+          <div className="border-t pt-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-muted-foreground">
+            <span>© {new Date().getFullYear()} Dine Delight. All rights reserved.</span>
+            <div className="flex gap-4">
+              <Link to="/privacy" className="hover:text-foreground transition-colors">Privacy</Link>
+              <Link to="/terms" className="hover:text-foreground transition-colors">Terms</Link>
+            </div>
           </div>
         </div>
       </footer>
