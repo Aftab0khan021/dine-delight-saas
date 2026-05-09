@@ -741,16 +741,26 @@ export default function PublicMenu() {
         {darkMode ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5" />}
       </button>
 
-      {/* Order Type Selector */}
+      {/* Order Type Selector — context-aware */}
       <div className="w-full max-w-3xl mx-auto px-4 pt-3">
-        <div className="flex gap-1 p-1 bg-muted rounded-lg">
-          {([['dine_in', 'Dine In', Store], ['pickup', 'Pickup', ShoppingBag], ['delivery', 'Delivery', Truck]] as const).map(([type, label, Icon]) => (
-            <button key={type} onClick={() => setOrderType(type as any)}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-sm font-medium transition-colors ${orderType === type ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-              <Icon className="h-3.5 w-3.5" />{label}
-            </button>
-          ))}
-        </div>
+        {tableLabel ? (
+          /* QR table scan → locked to Dine-In, no selector shown */
+          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground bg-muted rounded-lg px-4 py-2.5">
+            <Store className="h-4 w-4 shrink-0" />
+            <span>Dine-In · Table <strong className="text-foreground">{tableLabel}</strong></span>
+            <span className="ml-auto text-xs text-muted-foreground/70 font-normal">Order mode locked</span>
+          </div>
+        ) : (
+          /* Direct/website visit → Pickup or Delivery only, no Dine-In */
+          <div className="flex gap-1 p-1 bg-muted rounded-lg">
+            {([['pickup', 'Pickup', ShoppingBag], ['delivery', 'Delivery', Truck]] as const).map(([type, label, Icon]) => (
+              <button key={type} onClick={() => setOrderType(type as any)}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-sm font-medium transition-colors ${orderType === type ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                <Icon className="h-3.5 w-3.5" />{label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Offers Banner */}
