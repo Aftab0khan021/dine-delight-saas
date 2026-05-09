@@ -107,6 +107,17 @@ serve(async (req) => {
       return json({ error: "Table label is too long (max 20 chars)" }, 400);
     }
 
+    // Validate order_type if provided
+    const VALID_ORDER_TYPES = ['dine_in', 'pickup', 'delivery'];
+    if (order_type && !VALID_ORDER_TYPES.includes(order_type)) {
+      return json({ error: "Invalid order type. Must be dine_in, pickup, or delivery" }, 400);
+    }
+
+    // Validate delivery_address
+    if (order_type === 'delivery' && delivery_address && typeof delivery_address === 'string' && delivery_address.length > 500) {
+      return json({ error: "Delivery address is too long (max 500 chars)" }, 400);
+    }
+
     // Validate items array
     if (!Array.isArray(items)) {
       return json({ error: "Items must be an array" }, 400);

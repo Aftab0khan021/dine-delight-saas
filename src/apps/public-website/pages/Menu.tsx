@@ -1441,6 +1441,7 @@ export default function PublicMenu() {
                       placeholder="Enter your full delivery address..."
                       value={deliveryAddress}
                       onChange={e => setDeliveryAddress(e.target.value)}
+                      maxLength={500}
                       className="w-full rounded-lg border bg-background px-3 py-2 text-sm min-h-[60px] resize-none"
                     />
                   </div>

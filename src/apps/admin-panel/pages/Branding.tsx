@@ -114,7 +114,7 @@ export default function AdminBranding() {
     queryFn: async () => {
       const { data } = await supabase
         .from("restaurants")
-        .select("id, name, description, logo_url, slug, settings, operating_hours, is_holiday_mode, holiday_mode_message, max_variants_per_item, currency_code, online_payments_enabled, razorpay_key_id, razorpay_key_secret, cuisine_types")
+        .select("id, name, description, logo_url, slug, settings, operating_hours, is_holiday_mode, holiday_mode_message, max_variants_per_item, currency_code, online_payments_enabled, razorpay_key_id, cuisine_types")
         .eq("id", restaurant!.id)
         .single();
       return data;

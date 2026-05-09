@@ -316,14 +316,22 @@ export function AdminShell({ children }: PropsWithChildren) {
         }`}
       >
         <div className="relative h-full">
+          {/* Close button — pinned to top-right INSIDE the sidebar panel */}
           <button
-            className="absolute top-3 right-[-40px] z-10 flex h-8 w-8 items-center justify-center rounded-md bg-background border text-muted-foreground hover:bg-accent"
+            className="absolute top-3 right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-muted/80 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
             onClick={() => setMobileSidebarOpen(false)}
             aria-label="Close sidebar"
           >
             <X className="h-4 w-4" />
           </button>
-          <AdminSidebar />
+          <div onClick={(e) => {
+            // Auto-close sidebar when a nav link is clicked
+            if ((e.target as HTMLElement).closest('a')) {
+              setTimeout(() => setMobileSidebarOpen(false), 150);
+            }
+          }}>
+            <AdminSidebar />
+          </div>
         </div>
       </div>
 
@@ -492,7 +500,7 @@ export function AdminShell({ children }: PropsWithChildren) {
       </div>
 
       <div className="md:hidden">
-        <AdminBottomNav />
+        <AdminBottomNav onOpenSidebar={() => setMobileSidebarOpen(true)} />
       </div>
     </div>
   );

@@ -10,6 +10,17 @@ import { useToast } from "@/hooks/use-toast";
 import { useSEO } from "@/hooks/useSEO";
 import { formatMoney } from "@/lib/formatting";
 
+/** Escapes HTML to prevent XSS in receipt/print output */
+function escHtml(str: string | null | undefined): string {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // Types
 type OrderStatus = 'pending' | 'in_progress' | 'ready' | 'completed' | 'cancelled';
 
@@ -251,7 +262,7 @@ export default function TrackOrder() {
                 size="sm"
                 onClick={() => {
                   const receiptHtml = `
-<!DOCTYPE html><html><head><title>Receipt - ${order.restaurant?.name || 'Restaurant'}</title>
+<!DOCTYPE html><html><head><title>Receipt - ${escHtml(order.restaurant?.name || 'Restaurant')}</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 400px; margin: 0 auto; padding: 24px; color: #1a1a1a; }
@@ -268,12 +279,12 @@ export default function TrackOrder() {
   @media print { body { padding: 0; } }
 </style></head><body>
   <div class="header">
-    <h1>${order.restaurant?.name || 'Restaurant'}</h1>
+    <h1>${escHtml(order.restaurant?.name || 'Restaurant')}</h1>
     <p>Order Receipt</p>
   </div>
-  <div class="order-id">Order #${order.id.slice(0, 8).toUpperCase()} · ${new Date(order.placed_at).toLocaleString()}</div>
+  <div class="order-id">Order #${escHtml(order.id.slice(0, 8).toUpperCase())} &middot; ${escHtml(new Date(order.placed_at).toLocaleString())}</div>
   <div class="items">
-    ${items.map(i => `<div class="item"><div class="item-name"><span class="qty">${i.quantity}x</span><span>${i.name_snapshot}</span></div><span>${formatMoney(i.line_total_cents, order.currency_code)}</span></div>`).join('')}
+    ${items.map(i => `<div class="item"><div class="item-name"><span class="qty">${i.quantity}x</span><span>${escHtml(i.name_snapshot)}</span></div><span>${formatMoney(i.line_total_cents, order.currency_code)}</span></div>`).join('')}
   </div>
   <div class="total-row"><span>Total</span><span>${formatMoney(order.total_cents, order.currency_code)}</span></div>
   <div class="footer"><p>Thank you for your order!</p><p style="margin-top:4px">Powered by Dine Delight</p></div>
@@ -334,6 +345,7 @@ export default function TrackOrder() {
                     placeholder="Tell us about your experience (optional)"
                     value={reviewComment}
                     onChange={e => setReviewComment(e.target.value)}
+                    maxLength={1000}
                     className="w-full rounded-lg border bg-background px-3 py-2 text-sm min-h-[80px] resize-none"
                   />
                   <Button
@@ -342,13 +354,13 @@ export default function TrackOrder() {
                     onClick={async () => {
                       setSubmittingReview(true);
                       try {
-                        await supabase.from('order_reviews').insert({
-                          order_id: order.id,
-                          restaurant_id: order.restaurant_id,
-                          customer_phone: order.customer_phone || null,
-                          rating: reviewRating,
-                          comment: reviewComment || null,
-                        });
+                        await supabase.from('orders')
+                          .update({
+                            rating: reviewRating,
+                            review_text: reviewComment || null,
+                            reviewed_at: new Date().toISOString(),
+                          })
+                          .eq('id', order.id);
                         setReviewSubmitted(true);
                         toast({ title: "Thank you!", description: "Your review has been submitted." });
                       } catch {

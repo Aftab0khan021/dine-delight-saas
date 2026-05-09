@@ -4,7 +4,7 @@ import {
   ShoppingBag,
   ChefHat,
   QrCode,
-  Users,
+  MoreHorizontal,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 
@@ -14,10 +14,9 @@ const items = [
   { label: "Kitchen",   to: "/admin/kitchen",   icon: ChefHat },
   { label: "Menu",      to: "/admin/menu",      icon: Salad },
   { label: "QR",        to: "/admin/qr",        icon: QrCode },
-  { label: "Staff",     to: "/admin/staff",     icon: Users },
 ];
 
-export function AdminBottomNav() {
+export function AdminBottomNav({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
   return (
     <nav className="md:hidden fixed inset-x-0 bottom-0 border-t bg-background/95 backdrop-blur z-30">
       <div className="flex items-stretch justify-around gap-0 px-1 py-1">
@@ -33,6 +32,14 @@ export function AdminBottomNav() {
             <span className="truncate w-full text-center leading-tight">{item.label}</span>
           </NavLink>
         ))}
+        {/* More button opens sidebar with all navigation items */}
+        <button
+          onClick={onOpenSidebar}
+          className="flex flex-col items-center justify-center gap-0.5 rounded-md px-2 py-2 flex-1 min-w-0 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+        >
+          <MoreHorizontal className="h-5 w-5 shrink-0" />
+          <span className="truncate w-full text-center leading-tight">More</span>
+        </button>
       </div>
     </nav>
   );

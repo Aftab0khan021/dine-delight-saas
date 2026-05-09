@@ -94,7 +94,7 @@ export default function RestaurantBilling() {
     queryFn: async () => {
       const { data } = await supabase
         .from('restaurants')
-        .select('settings, online_payments_enabled, razorpay_key_id, razorpay_key_secret')
+        .select('settings, online_payments_enabled, razorpay_key_id')
         .eq('id', restaurant!.id)
         .single();
       return data;
@@ -113,7 +113,8 @@ export default function RestaurantBilling() {
     setTipAmounts((s.tip_config?.amount_options || [20, 50, 100]).join(','));
     setPayEnabled(!!(settingsQuery.data as any).online_payments_enabled);
     setRazorpayKeyId((settingsQuery.data as any).razorpay_key_id || '');
-    setRazorpayKeySecret((settingsQuery.data as any).razorpay_key_secret || '');
+    // Secret is write-only — never read back to client. Show placeholder if key_id exists.
+    setRazorpayKeySecret('');
   }, [settingsQuery.data]);
 
   const handleSaveTax = async () => {
@@ -153,13 +154,17 @@ export default function RestaurantBilling() {
     if (!restaurant?.id) return;
     setSavingPayment(true);
     try {
-      const { error } = await supabase
-        .from('restaurants')
-        .update({
+      const updatePayload: any = {
           online_payments_enabled: payEnabled,
           razorpay_key_id: razorpayKeyId.trim() || null,
-          razorpay_key_secret: razorpayKeySecret.trim() || null,
-        } as any)
+        };
+        // Only update secret if user entered a new value (not empty placeholder)
+        if (razorpayKeySecret.trim()) {
+          updatePayload.razorpay_key_secret = razorpayKeySecret.trim();
+        }
+        const { error } = await supabase
+        .from('restaurants')
+        .update(updatePayload)
         .eq('id', restaurant.id);
       if (error) throw error;
       qc.invalidateQueries({ queryKey: ['admin', 'billing-settings'] });
