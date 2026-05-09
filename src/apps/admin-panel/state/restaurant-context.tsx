@@ -24,6 +24,8 @@ type RestaurantContextValue = {
   // Multi-brand: allows switching the active brand without logging out
   selectedBrandId: string | null;
   setSelectedBrandId: (id: string | null) => void;
+  // The original restaurant from user_roles — never changes on brand switch
+  originalRestaurantId: string | null;
 };
 
 const RestaurantContext = createContext<RestaurantContextValue | null>(null);
@@ -167,8 +169,9 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       refresh: load,
       selectedBrandId,
       setSelectedBrandId,
+      originalRestaurantId: restaurant?.id ?? null,
     }),
-    [accessDenied, loading, effectiveRestaurant, role, staffCategory, isAdmin, load, selectedBrandId],
+    [accessDenied, loading, effectiveRestaurant, role, staffCategory, isAdmin, load, selectedBrandId, restaurant?.id],
   );
 
   return (

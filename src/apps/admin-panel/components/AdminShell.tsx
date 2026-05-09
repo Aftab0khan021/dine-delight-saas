@@ -63,7 +63,7 @@ function timeAgo(dateString: string) {
 
 export function AdminShell({ children }: PropsWithChildren) {
   const navigate = useNavigate();
-  const { loading, restaurant, role, staffCategory, accessDenied, refresh, selectedBrandId, setSelectedBrandId } = useRestaurantContext();
+  const { loading, restaurant, role, staffCategory, accessDenied, refresh, selectedBrandId, setSelectedBrandId, originalRestaurantId } = useRestaurantContext();
 
   const [userEmail, setUserEmail] = useState<string>("Admin");
   const [accountStatus, setAccountStatus] = useState<string | null>(null);
@@ -78,24 +78,35 @@ export function AdminShell({ children }: PropsWithChildren) {
   const { toast } = useToast();
 
   // Fetch sibling brands for cloud kitchen brand-switcher.
-  // This query uses columns added by 20260424_cloud_kitchen.sql.
-  // If that migration hasn't run yet, PostgREST returns 42703 (column not exist).
-  // We catch all errors and return [] so a missing migration NEVER crashes the shell.
+  // IMPORTANT: Always use originalRestaurantId (from user_roles) so the query
+  // stays stable even after switching to a child brand.
   const brandsQuery = useQuery({
-    queryKey: ["shell", "brands", restaurant?.id],
-    enabled: !!restaurant?.id,
-    retry: false,             // don't retry — if column missing it'll keep failing
-    throwOnError: false,      // CRITICAL: never let this bubble to Error Boundary
+    queryKey: ["shell", "brands", originalRestaurantId],
+    enabled: !!originalRestaurantId,
+    retry: false,
+    throwOnError: false,
     queryFn: async () => {
       try {
-        const restaurantIdSafe = restaurant?.id;
-        if (!restaurantIdSafe) return [];
-        const parentId = (restaurant as any)?.parent_kitchen_id ?? restaurantIdSafe;
+        if (!originalRestaurantId) return [];
+
+        // First, check if the original restaurant has a parent (is a child brand)
+        const { data: selfRow } = await supabase
+          .from("restaurants")
+          .select("id, parent_kitchen_id, is_cloud_kitchen")
+          .eq("id", originalRestaurantId)
+          .maybeSingle();
+
+        if (!selfRow) return [];
+
+        // Determine the root parent ID
+        const rootParentId = selfRow.parent_kitchen_id || originalRestaurantId;
+
+        // Fetch the entire family: parent + all children
         const { data, error } = await supabase
           .from("restaurants")
-          .select("id, name, brand_color, slug")
-          .or(`id.eq.${parentId},parent_kitchen_id.eq.${parentId}`);
-        // If migration not applied (42703, 400), return [] gracefully
+          .select("id, name, brand_color, slug, parent_kitchen_id")
+          .or(`id.eq.${rootParentId},parent_kitchen_id.eq.${rootParentId}`);
+
         if (error) return [];
         return data ?? [];
       } catch {
@@ -103,6 +114,15 @@ export function AdminShell({ children }: PropsWithChildren) {
       }
     },
   });
+
+  // Determine if the current user is the PARENT kitchen admin (can switch)
+  // or a CHILD brand admin (read-only view of siblings)
+  const isParentAdmin = useMemo(() => {
+    if (!brandsQuery.data || brandsQuery.data.length <= 1) return false;
+    // The user is a parent admin if their original restaurant has NO parent_kitchen_id
+    const selfBrand = brandsQuery.data.find((b: any) => b.id === originalRestaurantId);
+    return selfBrand && !selfBrand.parent_kitchen_id;
+  }, [brandsQuery.data, originalRestaurantId]);
 
   // Lock body scroll when mobile sidebar is open
   useEffect(() => {
@@ -375,33 +395,51 @@ export function AdminShell({ children }: PropsWithChildren) {
           <div className="min-w-0 flex-1 overflow-hidden">
             <div className="flex items-center gap-2">
               {brandsQuery.data && brandsQuery.data.length > 1 ? (
-                // Live brand switcher for cloud kitchens
-                <Select
-                  value={restaurant?.id ?? ""}
-                  onValueChange={(id) => {
-                    setSelectedBrandId(id);
-                    navigate("/admin/dashboard");
-                  }}
-                >
-                  <SelectTrigger className="h-9 w-auto min-w-0 max-w-[180px] sm:max-w-[260px] bg-transparent border-0 shadow-none hover:bg-accent/50 focus:ring-0 font-medium">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {(restaurant as any)?.brand_color && (
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: (restaurant as any).brand_color }} />
+                isParentAdmin ? (
+                  // Parent admin: interactive brand switcher
+                  <Select
+                    value={restaurant?.id ?? ""}
+                    onValueChange={(id) => {
+                      setSelectedBrandId(id);
+                      navigate("/admin/dashboard");
+                    }}
+                  >
+                    <SelectTrigger className="h-9 w-auto min-w-0 max-w-[180px] sm:max-w-[260px] bg-transparent border-0 shadow-none hover:bg-accent/50 focus:ring-0 font-medium">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {(restaurant as any)?.brand_color && (
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: (restaurant as any).brand_color }} />
+                        )}
+                        <SelectValue placeholder={restaurant?.name} />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {brandsQuery.data.map((b: any) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: b.brand_color || "#6366f1" }} />
+                            {b.name}
+                            {!b.parent_kitchen_id && <span className="text-xs text-muted-foreground ml-1">(Parent)</span>}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  // Child admin: read-only — show current brand name + sibling list as tooltip
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm truncate max-w-[160px] sm:max-w-[220px]">
+                      {restaurant?.name}
+                    </span>
+                    <div className="hidden sm:flex items-center gap-1 ml-1">
+                      {brandsQuery.data.filter((b: any) => b.id !== restaurant?.id).slice(0, 3).map((b: any) => (
+                        <span key={b.id} className="w-2 h-2 rounded-full" style={{ backgroundColor: b.brand_color || "#6366f1" }} title={b.name} />
+                      ))}
+                      {brandsQuery.data.length > 4 && (
+                        <span className="text-xs text-muted-foreground">+{brandsQuery.data.length - 4}</span>
                       )}
-                      <SelectValue placeholder={restaurant?.name} />
                     </div>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {brandsQuery.data.map((b: any) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        <div className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: b.brand_color || "#6366f1" }} />
-                          {b.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  </div>
+                )
               ) : (
                 // Single restaurant — show name only
                 <Select value={restaurant?.id} disabled>
