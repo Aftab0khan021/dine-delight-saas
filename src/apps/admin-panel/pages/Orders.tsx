@@ -132,7 +132,7 @@ function OrderCard({
           onClick={() => {
             const popup = window.open('', '_blank', 'width=400,height=600');
             if (popup) {
-              popup.document.write(generateKOTHtml(order));
+              popup.document.write(generateKOTHtml(order, restaurant?.name || 'Restaurant'));
               popup.document.close();
             }
           }}

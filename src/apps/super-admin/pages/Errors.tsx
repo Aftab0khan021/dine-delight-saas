@@ -27,7 +27,7 @@ import {
     CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
-import { RefreshCw, Download, ChevronDown, AlertTriangle, Shield, CreditCard, Server } from "lucide-react";
+import { RefreshCw, Download, ChevronDown, AlertTriangle, Shield, XCircle, Server } from "lucide-react";
 
 import {
     ErrorLog,
@@ -184,7 +184,7 @@ export default function SuperAdminErrors() {
                         <CardTitle className="text-sm font-medium text-muted-foreground">
                             Critical (New)
                         </CardTitle>
-                        <CreditCard className="h-4 w-4 text-red-600" />
+                        <XCircle className="h-4 w-4 text-red-600" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold text-red-600">{stats.critical}</div>

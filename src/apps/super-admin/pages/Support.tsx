@@ -69,6 +69,7 @@ export default function SuperAdminSupport() {
 
     // Create ticket modal
     const [createModalOpen, setCreateModalOpen] = useState(false);
+    const [selectedTicket, setSelectedTicket] = useState<TicketWithRestaurant | null>(null);
     const [newTicket, setNewTicket] = useState({
         subject: "",
         description: "",
@@ -383,7 +384,9 @@ export default function SuperAdminSupport() {
                                                             </Button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
-                                                            <DropdownMenuItem>View Details</DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => setSelectedTicket(ticket)}>
+                                                                View Details
+                                                            </DropdownMenuItem>
                                                             {ticket.status === "open" && (
                                                                 <DropdownMenuItem
                                                                     onClick={() =>
@@ -483,6 +486,69 @@ export default function SuperAdminSupport() {
                         <Button onClick={handleCreateTicket} disabled={createTicketMutation.isPending}>
                             {createTicketMutation.isPending ? "Creating..." : "Create Ticket"}
                         </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            {/* Ticket Detail Dialog */}
+            <Dialog open={!!selectedTicket} onOpenChange={(o) => !o && setSelectedTicket(null)}>
+                <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Badge className={getPriorityColor(selectedTicket?.priority ?? 'medium')}>
+                                {selectedTicket?.priority}
+                            </Badge>
+                            {selectedTicket?.subject}
+                        </DialogTitle>
+                        <DialogDescription>
+                            Ticket #{selectedTicket?.id?.slice(0, 8).toUpperCase()} · {selectedTicket?.restaurants?.name ?? 'General'}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="flex flex-wrap gap-2">
+                            <Badge className={getStatusColor(selectedTicket?.status ?? 'open')}>
+                                {getStatusLabel(selectedTicket?.status ?? 'open')}
+                            </Badge>
+                            {selectedTicket && <SLAIndicator ticket={selectedTicket} />}
+                        </div>
+                        {selectedTicket?.description && (
+                            <div>
+                                <p className="text-xs text-muted-foreground mb-1 font-medium uppercase tracking-wide">Description</p>
+                                <p className="text-sm bg-muted/40 rounded p-3 whitespace-pre-wrap">{selectedTicket.description}</p>
+                            </div>
+                        )}
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                                <p className="text-xs text-muted-foreground">Created</p>
+                                <p>{selectedTicket ? format(new Date(selectedTicket.created_at), 'PP p') : '—'}</p>
+                            </div>
+                            {selectedTicket?.resolved_at && (
+                                <div>
+                                    <p className="text-xs text-muted-foreground">Resolved</p>
+                                    <p>{format(new Date(selectedTicket.resolved_at), 'PP p')}</p>
+                                </div>
+                            )}
+                            {selectedTicket?.resolution_time_minutes && (
+                                <div>
+                                    <p className="text-xs text-muted-foreground">Resolution Time</p>
+                                    <p>{formatTimeRemaining(selectedTicket.resolution_time_minutes)}</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setSelectedTicket(null)}>Close</Button>
+                        {selectedTicket?.status === 'open' && (
+                            <Button onClick={() => {
+                                updateStatusMutation.mutate({ id: selectedTicket.id, status: 'in_progress' });
+                                setSelectedTicket(null);
+                            }}>Start Progress</Button>
+                        )}
+                        {selectedTicket?.status === 'in_progress' && (
+                            <Button onClick={() => {
+                                updateStatusMutation.mutate({ id: selectedTicket.id, status: 'resolved' });
+                                setSelectedTicket(null);
+                            }}>Mark Resolved</Button>
+                        )}
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

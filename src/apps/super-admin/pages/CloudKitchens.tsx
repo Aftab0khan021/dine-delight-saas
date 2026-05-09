@@ -224,12 +224,30 @@ export default function CloudKitchens() {
                 <SelectTrigger><SelectValue placeholder="Select brand to link" /></SelectTrigger>
                 <SelectContent>
                   {restaurants
-                    .filter((r: any) => !r.is_cloud_kitchen && !r.parent_kitchen_id && r.id !== selectedParent)
-                    .map((r: any) => (
-                      <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                    ))}
+                    .filter((r: any) => r.id !== selectedParent)
+                    .map((r: any) => {
+                      const currentParent = r.parent_kitchen_id
+                        ? restaurants.find((p: any) => p.id === r.parent_kitchen_id)?.name
+                        : null;
+                      return (
+                        <SelectItem key={r.id} value={r.id}>
+                          <div className="flex items-center gap-2">
+                            <span>{r.name}</span>
+                            {currentParent && (
+                              <span className="text-xs text-muted-foreground">(linked to {currentParent})</span>
+                            )}
+                            {r.is_cloud_kitchen && !r.parent_kitchen_id && (
+                              <span className="text-xs text-orange-500">(Kitchen)</span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
                 </SelectContent>
               </Select>
+              {restaurants.filter((r: any) => r.id !== selectedParent).length === 0 && (
+                <p className="text-xs text-muted-foreground">No other restaurants to link.</p>
+              )}
             </div>
           </div>
           <DialogFooter>

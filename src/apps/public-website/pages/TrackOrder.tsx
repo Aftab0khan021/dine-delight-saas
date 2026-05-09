@@ -30,6 +30,9 @@ interface OrderDetails {
   placed_at: string;
   total_cents: number;
   currency_code: string;
+  discount_cents?: number;
+  order_type?: string;
+  table_label?: string;
   restaurant?: {
     name: string;
     slug: string;
@@ -237,7 +240,7 @@ export default function TrackOrder() {
               {items.map((item) => (
                 <div key={item.id} className="flex justify-between text-sm">
                   <div className="flex gap-2">
-                    <span className="font-bold w-6 text-center bg-gray-100 rounded text-gray-600">{item.quantity}x</span>
+                    <span className="font-bold w-6 text-center bg-gray-100 dark:bg-muted rounded text-gray-600 dark:text-muted-foreground">{item.quantity}x</span>
                     <span>{item.name_snapshot}</span>
                   </div>
                   <span className="text-muted-foreground">{formatMoney(item.line_total_cents, order.currency_code)}</span>
@@ -247,10 +250,31 @@ export default function TrackOrder() {
 
             <Separator />
 
-            <div className="flex justify-between font-bold text-lg">
-              <span>Total</span>
-              <span>{formatMoney(order.total_cents, order.currency_code)}</span>
-            </div>
+            {/* Subtotal + discount breakdown */}
+            {(() => {
+              const subtotal = items.reduce((s, i) => s + i.line_total_cents, 0);
+              const discount = order.discount_cents ?? 0;
+              return (
+                <div className="space-y-1 text-sm">
+                  {discount > 0 && (
+                    <>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Subtotal</span>
+                        <span>{formatMoney(subtotal, order.currency_code)}</span>
+                      </div>
+                      <div className="flex justify-between text-green-600 font-medium">
+                        <span>Discount</span>
+                        <span>−{formatMoney(discount, order.currency_code)}</span>
+                      </div>
+                    </>
+                  )}
+                  <div className="flex justify-between font-bold text-lg pt-1">
+                    <span>Total</span>
+                    <span>{formatMoney(order.total_cents, order.currency_code)}</span>
+                  </div>
+                </div>
+              );
+            })()}
             <div className="text-xs text-muted-foreground text-center pt-2">
               Placed at {new Date(order.placed_at).toLocaleString()}
             </div>
@@ -261,34 +285,62 @@ export default function TrackOrder() {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  const receiptHtml = `
-<!DOCTYPE html><html><head><title>Receipt - ${escHtml(order.restaurant?.name || 'Restaurant')}</title>
+                  const receiptHtml = (() => {
+                    const subtotalCents = items.reduce((s, i) => s + i.line_total_cents, 0);
+                    const discountCents = order.discount_cents ?? 0;
+                    const orderTypeLabel =
+                      order.order_type === 'delivery' ? 'Delivery'
+                      : order.order_type === 'pickup' ? 'Pickup'
+                      : order.table_label ? `Dine-In · Table ${order.table_label}`
+                      : 'Dine-In';
+                    const placedAt = new Date(order.placed_at).toLocaleString();
+
+                    return `<!DOCTYPE html><html><head><title>Receipt - ${escHtml(order.restaurant?.name || 'Restaurant')}</title>
+<meta charset="utf-8">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 400px; margin: 0 auto; padding: 24px; color: #1a1a1a; }
-  .header { text-align: center; border-bottom: 2px dashed #ddd; padding-bottom: 16px; margin-bottom: 16px; }
-  .header h1 { font-size: 20px; margin-bottom: 4px; }
-  .header p { color: #666; font-size: 12px; }
-  .order-id { background: #f5f5f5; padding: 8px 12px; border-radius: 6px; font-size: 12px; text-align: center; margin-bottom: 16px; }
-  .items { margin-bottom: 16px; }
-  .item { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; border-bottom: 1px solid #f0f0f0; }
-  .item-name { display: flex; gap: 8px; }
-  .qty { background: #f0f0f0; border-radius: 4px; padding: 1px 6px; font-weight: 700; font-size: 12px; }
-  .total-row { display: flex; justify-content: space-between; font-weight: 700; font-size: 18px; padding-top: 12px; border-top: 2px solid #1a1a1a; }
-  .footer { text-align: center; margin-top: 20px; font-size: 11px; color: #999; border-top: 2px dashed #ddd; padding-top: 16px; }
-  @media print { body { padding: 0; } }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 420px; margin: 0 auto; padding: 24px; color: #1a1a1a; }
+  .top-bar { display:flex; justify-content:space-between; font-size:11px; color:#888; margin-bottom:12px; }
+  .header { text-align:center; border-bottom:2px dashed #ddd; padding-bottom:16px; margin-bottom:16px; }
+  .header h1 { font-size:22px; font-weight:700; margin-bottom:4px; }
+  .header p { color:#666; font-size:12px; }
+  .order-meta { background:#f5f5f5; border-radius:6px; padding:8px 12px; font-size:12px; text-align:center; margin-bottom:16px; line-height:1.6; }
+  .items { margin-bottom:12px; }
+  .item { display:flex; justify-content:space-between; padding:7px 0; font-size:14px; border-bottom:1px solid #f0f0f0; }
+  .item-left { display:flex; gap:8px; align-items:center; }
+  .qty { background:#efefef; border-radius:4px; padding:1px 6px; font-weight:700; font-size:12px; white-space:nowrap; }
+  .bill-row { display:flex; justify-content:space-between; font-size:13px; padding:4px 0; color:#555; }
+  .bill-row.discount { color:#16a34a; font-weight:600; }
+  .bill-row.total { font-size:18px; font-weight:700; color:#1a1a1a; border-top:2px solid #1a1a1a; padding-top:10px; margin-top:6px; }
+  .footer { text-align:center; margin-top:20px; font-size:11px; color:#999; border-top:2px dashed #ddd; padding-top:16px; line-height:1.8; }
+  @media print { body { padding:0; } }
 </style></head><body>
+  <div class="top-bar">
+    <span>${escHtml(placedAt)}</span>
+    <span>Receipt · ${escHtml(order.restaurant?.name || 'Restaurant')}</span>
+  </div>
   <div class="header">
     <h1>${escHtml(order.restaurant?.name || 'Restaurant')}</h1>
     <p>Order Receipt</p>
   </div>
-  <div class="order-id">Order #${escHtml(order.id.slice(0, 8).toUpperCase())} &middot; ${escHtml(new Date(order.placed_at).toLocaleString())}</div>
-  <div class="items">
-    ${items.map(i => `<div class="item"><div class="item-name"><span class="qty">${i.quantity}x</span><span>${escHtml(i.name_snapshot)}</span></div><span>${formatMoney(i.line_total_cents, order.currency_code)}</span></div>`).join('')}
+  <div class="order-meta">
+    Order #${escHtml(order.id.slice(0, 8).toUpperCase())}<br>
+    ${escHtml(placedAt)}<br>
+    <strong>${escHtml(orderTypeLabel)}</strong>
   </div>
-  <div class="total-row"><span>Total</span><span>${formatMoney(order.total_cents, order.currency_code)}</span></div>
-  <div class="footer"><p>Thank you for your order!</p><p style="margin-top:4px">Powered by Dine Delight</p></div>
+  <div class="items">
+    ${items.map(i => `<div class="item"><div class="item-left"><span class="qty">${i.quantity}x</span><span>${escHtml(i.name_snapshot)}</span></div><span>${formatMoney(i.line_total_cents, order.currency_code)}</span></div>`).join('')}
+  </div>
+  <div class="bill-summary">
+    ${discountCents > 0 ? `
+      <div class="bill-row"><span>Subtotal</span><span>${formatMoney(subtotalCents, order.currency_code)}</span></div>
+      <div class="bill-row discount"><span>Discount</span><span>−${formatMoney(discountCents, order.currency_code)}</span></div>
+    ` : ''}
+    <div class="bill-row total"><span>Total</span><span>${formatMoney(order.total_cents, order.currency_code)}</span></div>
+  </div>
+  <div class="footer"><p>Thank you for your order!</p><p style="margin-top:4px;color:#f97316">Powered by Dine Delight</p></div>
 </body></html>`;
+                  })();
                   const w = window.open('', '_blank');
                   if (w) { w.document.write(receiptHtml); w.document.close(); w.focus(); w.print(); }
                 }}
