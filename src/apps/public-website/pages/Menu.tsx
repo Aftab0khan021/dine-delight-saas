@@ -1168,12 +1168,10 @@ export default function PublicMenu() {
                         flyToCart(e, item.image_url); // M3 fly animation
                         if (!hasVariants) {
                           activeCart.addItem({
-                            cart_id: `${item.id}-${Date.now()}`,
                             menu_item_id: item.id,
                             name: item.name,
-                            quantity: 1,
-                            unit_price_cents: item.price_cents,
                             price_cents: item.price_cents,
+                            addons: [],
                           });
                         } else {
                           setSelectedItem(item);

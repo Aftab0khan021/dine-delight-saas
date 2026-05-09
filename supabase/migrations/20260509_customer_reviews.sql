@@ -35,6 +35,6 @@ CREATE POLICY "Admin can update reviews"
     restaurant_id IN (
       SELECT restaurant_id FROM user_roles
       WHERE user_id = auth.uid()
-      AND role IN ('admin', 'owner')
+      AND role = 'restaurant_admin'::app_role
     )
   );
