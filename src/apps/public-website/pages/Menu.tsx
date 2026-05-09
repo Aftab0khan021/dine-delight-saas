@@ -205,8 +205,7 @@ export default function PublicMenu() {
       ? (tipPercent > 0 ? Math.round((activeCart.subtotalCents * tipPercent) / 100) : tipAmount * 100)
       : Math.round((activeCart.subtotalCents * tipPercent) / 100);
 
-  // Order type
-  const [orderType, setOrderType] = useState<'dine_in' | 'pickup' | 'delivery'>('dine_in');
+
 
   // Tax & Bill Charges — dynamic from restaurant settings
   const taxSettings = useMemo(() => {
