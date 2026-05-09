@@ -136,7 +136,7 @@ export function AdminSidebar() {
       </div>
 
       {/* 2. Scrollable Nav Area */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain py-4" style={{ touchAction: 'pan-y' }}>
         <ul className="space-y-1 px-3">
           {navItems.filter(i => coreNavItems.some(c => c.to === i.to)).map((item) => (
             <NavItem key={item.to} item={item} isCollapsed={isCollapsed} />

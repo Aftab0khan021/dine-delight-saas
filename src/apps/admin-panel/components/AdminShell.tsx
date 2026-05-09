@@ -104,6 +104,21 @@ export function AdminShell({ children }: PropsWithChildren) {
     },
   });
 
+  // Lock body scroll when mobile sidebar is open
+  useEffect(() => {
+    if (mobileSidebarOpen) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+    } else {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    };
+  }, [mobileSidebarOpen]);
+
   // Close sidebar on escape key
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -314,8 +329,13 @@ export function AdminShell({ children }: PropsWithChildren) {
         className={`fixed inset-y-0 left-0 z-50 md:hidden transform transition-transform duration-300 ease-in-out ${
           mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
+        style={{ WebkitOverflowScrolling: 'touch' }}
       >
-        <div className="relative h-full">
+        {/* Inner wrapper: fixed height = full screen, own scroll context */}
+        <div
+          className="relative h-full flex flex-col"
+          onTouchMove={e => e.stopPropagation()}
+        >
           {/* Close button — pinned to top-right INSIDE the sidebar panel */}
           <button
             className="absolute top-3 right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-muted/80 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
@@ -324,12 +344,15 @@ export function AdminShell({ children }: PropsWithChildren) {
           >
             <X className="h-4 w-4" />
           </button>
-          <div onClick={(e) => {
-            // Auto-close sidebar when a nav link is clicked
-            if ((e.target as HTMLElement).closest('a')) {
-              setTimeout(() => setMobileSidebarOpen(false), 150);
-            }
-          }}>
+          <div
+            className="h-full overflow-y-auto overscroll-contain"
+            onClick={(e) => {
+              // Auto-close sidebar when a nav link is clicked
+              if ((e.target as HTMLElement).closest('a')) {
+                setTimeout(() => setMobileSidebarOpen(false), 150);
+              }
+            }}
+          >
             <AdminSidebar />
           </div>
         </div>
