@@ -39,6 +39,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AdminSidebar } from "./AdminSidebar";
 import { AdminBottomNav } from "./AdminBottomNav";
 import { PendingApprovalScreen } from "./PendingApprovalScreen";
+import { AnnouncementBanner } from "./AnnouncementBanner";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
 
@@ -553,6 +554,7 @@ export function AdminShell({ children }: PropsWithChildren) {
         </div>
 
         <main className="flex-1 min-w-0 w-full p-4 sm:p-6 lg:p-8 pb-20 md:pb-8 overflow-y-auto h-[calc(100vh-3.5rem)]">
+          <AnnouncementBanner />
           {children}
         </main>
       </div>

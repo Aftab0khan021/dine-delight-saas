@@ -8,7 +8,7 @@ export async function getPlatformMetrics(): Promise<PlatformMetrics | null> {
     const { data, error } = await supabase
         .from('platform_metrics')
         .select('*')
-        .single();
+        .maybeSingle();
 
     if (error) {
         console.error('Error fetching platform metrics:', error);
@@ -161,24 +161,28 @@ export async function getSystemAlerts() {
         });
     }
 
-    // Check for low health scores
-    const { data: unhealthy } = await supabase
-        .from('restaurant_health_scores')
-        .select('id, name, health_score')
-        .lt('health_score', 50);
+    // Check for low health scores (view may not exist)
+    try {
+        const { data: unhealthy } = await supabase
+            .from('restaurant_health_scores')
+            .select('id, name, health_score')
+            .lt('health_score', 50);
 
-    if (unhealthy && unhealthy.length > 0) {
-        alerts.push({
-            id: 'unhealthy-restaurants',
-            title: 'Low Health Score Alert',
-            description: `${unhealthy.length} restaurant(s) with health score below 50`,
-            severity: 'warning' as const,
-            timestamp: new Date().toISOString(),
-            action: {
-                label: 'View Details',
-                path: '/superadmin/restaurants',
-            },
-        });
+        if (unhealthy && unhealthy.length > 0) {
+            alerts.push({
+                id: 'unhealthy-restaurants',
+                title: 'Low Health Score Alert',
+                description: `${unhealthy.length} restaurant(s) with health score below 50`,
+                severity: 'warning' as const,
+                timestamp: new Date().toISOString(),
+                action: {
+                    label: 'View Details',
+                    path: '/superadmin/restaurants',
+                },
+            });
+        }
+    } catch {
+        // View may not exist — skip this alert
     }
 
     // Check for expiring trials

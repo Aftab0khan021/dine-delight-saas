@@ -16,6 +16,7 @@ import { MetricCard } from "../components/MetricCard";
 import { RevenueChart } from "../components/RevenueChart";
 import { ActivityFeed } from "../components/ActivityFeed";
 import { AlertsList } from "../components/AlertsList";
+import { formatMoney } from "@/lib/formatting";
 import {
   getPlatformMetrics,
   getRevenueTrends,
@@ -112,15 +113,10 @@ export default function SuperAdminDashboard() {
     setDismissedAlerts((prev) => [...prev, id]);
   };
 
-  // Format currency
+  // Format currency — uses INR as platform default, override per restaurant where needed
   const formatCurrency = (cents: number | undefined) => {
     if (!cents) return '₹0';
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(cents / 100);
+    return formatMoney(cents, 'INR');
   };
 
   return (

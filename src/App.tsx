@@ -176,7 +176,7 @@ const App = () => (
             <Route path="features" element={<SuperAdminFeatureFlags />} />
             <Route path="features/access" element={<SuperAdminFeatureAccess />} />
             <Route path="invoices" element={<SuperAdminInvoices />} />
-            <Route path="activity" element={<SuperAdminActivity />} />
+            <Route path="activity" element={<Navigate to="/superadmin/audit-log" replace />} />
             <Route path="abuse" element={<SuperAdminAbuse />} />
             <Route path="support" element={<SuperAdminSupport />} />
             <Route path="errors" element={<SuperAdminErrors />} />

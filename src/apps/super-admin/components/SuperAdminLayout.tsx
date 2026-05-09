@@ -7,11 +7,13 @@ import { useToast } from "@/hooks/use-toast";
 import { Menu, X } from "lucide-react";
 import { SuperAdminSidebar } from "./SuperAdminSidebar";
 import { SuperAdminProvider, useSuperAdminContext } from "../state/super-admin-context";
+import { usePlatformBranding } from "@/hooks/usePlatformBranding";
 
 function SuperAdminShell() {
   const { toast } = useToast();
   const { loading, accessDenied, userEmail } = useSuperAdminContext();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  usePlatformBranding();
 
   // Close sidebar on Escape key
   useEffect(() => {

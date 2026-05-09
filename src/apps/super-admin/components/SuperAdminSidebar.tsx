@@ -1,5 +1,7 @@
 import {
-  Activity,
+  Bug,
+  ChefHat,
+  Cpu,
   CreditCard,
   LayoutDashboard,
   Receipt,
@@ -46,15 +48,14 @@ const items = [
   // Features
   { title: "Feature Flags",  url: "/superadmin/features",          icon: Flag,            group: "Features" },
   { title: "Feature Access", url: "/superadmin/features/access",   icon: Zap,             group: "Features" },
-  { title: "Cloud Kitchens", url: "/superadmin/cloud-kitchens",    icon: BarChart3,       group: "Features" },
+  { title: "Cloud Kitchens", url: "/superadmin/cloud-kitchens",    icon: ChefHat,         group: "Features" },
   // Operations
-  { title: "Activity",       url: "/superadmin/activity",          icon: Activity,        group: "Operations" },
   { title: "Abuse",          url: "/superadmin/abuse",             icon: AlertTriangle,   group: "Operations" },
   { title: "Support",        url: "/superadmin/support",           icon: LifeBuoy,        group: "Operations" },
-  { title: "Errors",         url: "/superadmin/errors",            icon: AlertTriangle,   group: "Operations" },
+  { title: "Errors",         url: "/superadmin/errors",            icon: Bug,             group: "Operations" },
   // AI & Integrations
   { title: "WhatsApp Bot",   url: "/superadmin/whatsapp",          icon: MessageSquare,   group: "AI" },
-  { title: "AI Providers",   url: "/superadmin/ai/providers",      icon: Zap,             group: "AI" },
+  { title: "AI Providers",   url: "/superadmin/ai/providers",      icon: Cpu,             group: "AI" },
   { title: "AI Usage",       url: "/superadmin/ai/usage",          icon: BarChart3,       group: "AI" },
   { title: "AI Costs",       url: "/superadmin/ai/costs",          icon: DollarSign,      group: "AI" },
   // System
