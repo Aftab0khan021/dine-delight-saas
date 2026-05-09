@@ -5,10 +5,10 @@
 CREATE TABLE IF NOT EXISTS customer_reviews (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   restaurant_id uuid NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
-  customer_name text NOT NULL,
-  customer_phone text,
+  customer_name text NOT NULL CHECK (char_length(customer_name) BETWEEN 1 AND 100),
+  customer_phone text CHECK (customer_phone IS NULL OR char_length(customer_phone) <= 20),
   rating integer NOT NULL CHECK (rating BETWEEN 1 AND 5),
-  review_text text,
+  review_text text CHECK (review_text IS NULL OR char_length(review_text) <= 1000),
   is_approved boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -23,7 +23,7 @@ CREATE POLICY "Public read approved reviews"
   ON customer_reviews FOR SELECT
   USING (is_approved = true);
 
--- Anyone can submit a review
+-- Anyone can submit a review (rate limited by Turnstile on frontend)
 CREATE POLICY "Anyone can insert a review"
   ON customer_reviews FOR INSERT
   WITH CHECK (true);

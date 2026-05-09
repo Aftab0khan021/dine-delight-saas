@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { formatMoney } from "@/lib/formatting";
+import { Turnstile } from "@/components/security/Turnstile";
 
 function normalizeSettings(settings: any | null) {
   return settings && typeof settings === "object" && !Array.isArray(settings) ? settings : {};
@@ -210,9 +211,12 @@ export default function RestaurantProfile() {
   const [reviewText, setReviewText] = useState("");
   const [reviewHover, setReviewHover] = useState(0);
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewTurnstileToken, setReviewTurnstileToken] = useState<string | null>(null);
 
   const submitReview = useCallback(async () => {
     if (!restaurant?.id || !reviewName.trim() || reviewRating < 1) return;
+    if (reviewName.trim().length > 100) { toast({ title: "Name too long", description: "Max 100 characters.", variant: "destructive" }); return; }
+    if (reviewText.trim().length > 1000) { toast({ title: "Review too long", description: "Max 1000 characters.", variant: "destructive" }); return; }
     setReviewSubmitting(true);
     try {
       const { error } = await supabase.from("customer_reviews").insert({
@@ -661,7 +665,7 @@ export default function RestaurantProfile() {
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label htmlFor="rev-name" className="text-xs">Your Name *</Label>
-              <Input id="rev-name" placeholder="Your name" value={reviewName} onChange={e => setReviewName(e.target.value)} />
+              <Input id="rev-name" placeholder="Your name" maxLength={100} value={reviewName} onChange={e => setReviewName(e.target.value)} />
             </div>
             <div className="space-y-1">
               <Label htmlFor="rev-phone" className="text-xs">Phone (optional)</Label>
@@ -682,8 +686,12 @@ export default function RestaurantProfile() {
             onChange={e => setReviewText(e.target.value)}
             rows={3}
             className="w-full rounded-lg border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+            maxLength={1000}
           />
-          <Button className="w-full" disabled={!reviewName.trim() || reviewRating < 1 || reviewSubmitting} onClick={submitReview}>
+          <div className="flex justify-center">
+            <Turnstile onVerify={setReviewTurnstileToken} />
+          </div>
+          <Button className="w-full" disabled={!reviewName.trim() || reviewRating < 1 || reviewSubmitting || !reviewTurnstileToken} onClick={submitReview}>
             {reviewSubmitting ? "Submitting..." : "Submit Review"}
           </Button>
         </div>
