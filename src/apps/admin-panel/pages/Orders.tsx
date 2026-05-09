@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addDays, startOfDay, subHours, subDays, subMonths, subQuarters, subYears } from "date-fns";
-import { Search, Lock, Bell, BellOff, Printer, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Lock, Bell, BellOff, Printer, ChevronLeft, ChevronRight, Store, Truck, ShoppingBag, Star } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
@@ -69,6 +69,9 @@ type OrderData = {
   total_cents: number;
   items_summary: string;
   item_details: any[];
+  order_type: string | null;
+  rating: number | null;
+  delivery_address: string | null;
 };
 
 // --- Subcomponent: Order Card (Repo A Style) ---
@@ -103,6 +106,21 @@ function OrderCard({
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
             {formatTime(order.placed_at)} • {order.table_label || "Takeaway"}
+          </div>
+          {/* Order Type Badge */}
+          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+            {order.order_type === 'dine_in' && (
+              <Badge variant="outline" className="text-[10px] h-5 px-1.5 gap-0.5"><Store className="h-3 w-3" /> Dine-In</Badge>
+            )}
+            {order.order_type === 'pickup' && (
+              <Badge variant="outline" className="text-[10px] h-5 px-1.5 gap-0.5"><ShoppingBag className="h-3 w-3" /> Pickup</Badge>
+            )}
+            {order.order_type === 'delivery' && (
+              <Badge variant="outline" className="text-[10px] h-5 px-1.5 gap-0.5"><Truck className="h-3 w-3" /> Delivery</Badge>
+            )}
+            {order.rating && (
+              <Badge variant="secondary" className="text-[10px] h-5 px-1.5 gap-0.5"><Star className="h-3 w-3 text-amber-500" /> {order.rating}/5</Badge>
+            )}
           </div>
         </div>
 
@@ -140,6 +158,13 @@ function OrderCard({
           </Badge>
         )}
       </div>
+
+      {/* Delivery address */}
+      {order.order_type === 'delivery' && order.delivery_address && (
+        <div className="mt-1 text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1">
+          📍 {order.delivery_address}
+        </div>
+      )}
 
       <div className="mt-3 grid gap-2">
         {order.status === "pending" && (
@@ -316,7 +341,7 @@ export default function AdminOrders() {
       // Fetch Orders with pagination
       const { data: orders, error, count } = await supabase
         .from("orders")
-        .select("id, status, placed_at, table_label, discount_cents, discount_type, discount_reason, payment_method, payment_status, total_cents", { count: 'exact' })
+        .select("id, status, placed_at, table_label, discount_cents, discount_type, discount_reason, payment_method, payment_status, total_cents, order_type, rating, delivery_address", { count: 'exact' })
         .eq("restaurant_id", restaurant!.id)
         .gte("placed_at", startISO)
         .lt("placed_at", endISO)

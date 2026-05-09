@@ -1309,53 +1309,12 @@ export default function PublicMenu() {
                   )}
                 </div>
 
-                {/* Order Type Selector — hidden when from table QR (locked to dine-in) */}
-                {!tableLabel && (
-                  <div className="border rounded-lg p-3 space-y-2 bg-muted/40">
-                    <p className="text-xs text-muted-foreground font-medium">Order Type</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setOrderType('pickup')}
-                        className={`flex items-center justify-center gap-1.5 rounded-lg border-2 p-2.5 text-sm font-medium transition-colors ${
-                          orderType === 'pickup'
-                            ? 'border-primary bg-primary/5 text-primary'
-                            : 'border-muted bg-background text-muted-foreground hover:border-border'
-                        }`}
-                      >
-                        <Store className="h-4 w-4" /> Pickup
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setOrderType('delivery')}
-                        className={`flex items-center justify-center gap-1.5 rounded-lg border-2 p-2.5 text-sm font-medium transition-colors ${
-                          orderType === 'delivery'
-                            ? 'border-primary bg-primary/5 text-primary'
-                            : 'border-muted bg-background text-muted-foreground hover:border-border'
-                        }`}
-                      >
-                        <Truck className="h-4 w-4" /> Delivery
-                      </button>
-                    </div>
-                    {orderType === 'delivery' && (
-                      <div className="space-y-1 pt-1">
-                        <Label className="text-xs">Delivery Address <span className="text-destructive">*</span></Label>
-                        <Input
-                          placeholder="Enter your full delivery address"
-                          value={deliveryAddress}
-                          onChange={e => setDeliveryAddress(e.target.value)}
-                          className={`h-8 text-sm ${!deliveryAddress.trim() ? 'border-destructive/50' : ''}`}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-                {tableLabel && (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground border rounded-lg px-3 py-2 bg-muted/30">
-                    <User className="h-3.5 w-3.5" />
-                    <span>Dine-In · Table <strong>{tableLabel}</strong></span>
-                  </div>
-                )}
+                {/* Order mode summary (read-only — selected via top-of-page selector) */}
+                <div className="flex items-center gap-2 text-xs text-muted-foreground border rounded-lg px-3 py-2 bg-muted/30">
+                  {orderType === 'dine_in' && <><Store className="h-3.5 w-3.5" /><span>Dine-In · Table <strong>{tableLabel}</strong></span></>}
+                  {orderType === 'pickup' && <><ShoppingBag className="h-3.5 w-3.5" /><span>Pickup Order</span></>}
+                  {orderType === 'delivery' && <><Truck className="h-3.5 w-3.5" /><span>Delivery Order</span></>}
+                </div>
 
                 {/* Payment method selector */}
                 {onlinePaymentsEnabled && (

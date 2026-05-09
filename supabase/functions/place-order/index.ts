@@ -57,7 +57,7 @@ serve(async (req) => {
       return json({ error: "Invalid JSON" }, 400);
     }
 
-    const { restaurant_id, items, table_label, turnstileToken, customer_phone, customer_name, payment_method, payment_verified } = payload;
+    const { restaurant_id, items, table_label, turnstileToken, customer_phone, customer_name, payment_method, payment_verified, order_type, delivery_address } = payload;
 
     // Resolve Turnstile secret key strictly from environment variables.
     // Prefer TURNSTILE_SECRET_KEY_PROD, fall back to TURNSTILE_SECRET_KEY_DEV.
@@ -322,6 +322,8 @@ serve(async (req) => {
         payment_method: payment_method || 'cash',
         customer_phone: customer_phone || null,
         customer_name: customer_name || null,
+        order_type: order_type || (table_label ? 'dine_in' : 'pickup'),
+        delivery_address: order_type === 'delivery' && delivery_address ? delivery_address : null,
       })
       .select()
       .single();

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, ExternalLink, Globe, Image as ImageIcon, Palette, Save, Store, X, Phone, Mail, Clock, DollarSign, Upload, Loader2, MapPin, Instagram, Facebook, Twitter, Youtube, MessageCircle, Star, Plus, Trash2, CalendarDays, Filter, Users, Link2, RefreshCw, CheckCircle, AlertTriangle } from "lucide-react";
+import { Copy, ExternalLink, Globe, Image as ImageIcon, Palette, Save, Store, X, Phone, Mail, Clock, Upload, Loader2, MapPin, Instagram, Facebook, Twitter, Youtube, MessageCircle, Plus, Trash2, CalendarDays, Filter, Link2, RefreshCw, CheckCircle, AlertTriangle } from "lucide-react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 

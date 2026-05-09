@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { RefreshCw, ChefHat, Clock, Store, Filter } from "lucide-react";
+import { RefreshCw, ChefHat, Clock, Store, Filter, Truck, ShoppingBag } from "lucide-react";
 import { formatMoney } from "@/lib/formatting";
 import { shortId } from "@/lib/formatting";
 import { useQueryClient } from "@tanstack/react-query";
@@ -75,7 +75,7 @@ export default function KitchenDashboard() {
       let q = supabase
         .from("orders")
         .select(`
-          id, status, table_label, placed_at, total_cents, currency_code, restaurant_id,
+          id, status, table_label, placed_at, total_cents, currency_code, restaurant_id, order_type, delivery_address,
           restaurants(name, brand_color),
           order_items(name_snapshot, quantity)
         `)
@@ -260,6 +260,12 @@ function OrderKOTCard({ order, brandMap, currency, qc }: {
               <span className="ml-1">· {order.table_label}</span>
             )}
           </div>
+          {/* Order Type */}
+          <div className="flex gap-1 mt-0.5">
+            {order.order_type === 'dine_in' && <Badge variant="outline" className="text-[9px] h-4 px-1 gap-0.5"><Store className="h-2.5 w-2.5" /> Dine-In</Badge>}
+            {order.order_type === 'pickup' && <Badge variant="outline" className="text-[9px] h-4 px-1 gap-0.5"><ShoppingBag className="h-2.5 w-2.5" /> Pickup</Badge>}
+            {order.order_type === 'delivery' && <Badge variant="outline" className="text-[9px] h-4 px-1 gap-0.5"><Truck className="h-2.5 w-2.5" /> Delivery</Badge>}
+          </div>
         </div>
         <Badge variant="outline" className="text-xs shrink-0">
           {STATUS_LABELS[order.status]}
@@ -274,6 +280,13 @@ function OrderKOTCard({ order, brandMap, currency, qc }: {
           </div>
         ))}
       </div>
+
+      {/* Delivery address */}
+      {order.order_type === 'delivery' && order.delivery_address && (
+        <div className="text-[10px] text-muted-foreground bg-muted/50 rounded px-2 py-0.5">
+          📍 {order.delivery_address}
+        </div>
+      )}
 
       <div className="flex items-center justify-between pt-1 border-t border-border/50">
         <span className="text-sm font-medium">{formatMoney(order.total_cents, currency)}</span>

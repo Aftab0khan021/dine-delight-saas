@@ -51,7 +51,13 @@ export function generateKOTHtml(order: any, restaurantName: string = "Restaurant
           ${escHtml(restaurantName)}<br>
           Order #${escHtml(order.id.slice(0, 4))}<br>
           ${format(new Date(order.placed_at), "MMM d, h:mm a")}<br>
-          <strong>${order.table_label ? `Table: ${escHtml(order.table_label)}` : "TAKEAWAY"}</strong>
+          <strong>${
+            order.order_type === 'delivery' ? 'DELIVERY'
+            : order.order_type === 'pickup' ? 'PICKUP'
+            : order.table_label ? `Table: ${escHtml(order.table_label)}`
+            : 'DINE-IN'
+          }</strong>
+          ${order.order_type === 'delivery' && order.delivery_address ? `<br><small>📍 ${escHtml(order.delivery_address)}</small>` : ''}
         </div>
       </div>
       
