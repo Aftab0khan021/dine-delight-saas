@@ -186,6 +186,60 @@ export default function RestaurantProfile() {
     },
   });
 
+  // Customer Reviews — query approved reviews
+  const { data: customerReviews, refetch: refetchReviews } = useQuery({
+    queryKey: ["public", "customer-reviews", restaurant?.id],
+    enabled: !!restaurant?.id,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("customer_reviews")
+        .select("id, customer_name, rating, review_text, created_at")
+        .eq("restaurant_id", restaurant!.id)
+        .eq("is_approved", true)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      return data || [];
+    },
+  });
+
+  // Review form state
+  const [reviewName, setReviewName] = useState("");
+  const [reviewPhone, setReviewPhone] = useState("");
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewText, setReviewText] = useState("");
+  const [reviewHover, setReviewHover] = useState(0);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+
+  const submitReview = useCallback(async () => {
+    if (!restaurant?.id || !reviewName.trim() || reviewRating < 1) return;
+    setReviewSubmitting(true);
+    try {
+      const { error } = await supabase.from("customer_reviews").insert({
+        restaurant_id: restaurant.id,
+        customer_name: reviewName.trim(),
+        customer_phone: reviewPhone.trim() || null,
+        rating: reviewRating,
+        review_text: reviewText.trim() || null,
+      });
+      if (error) throw error;
+      toast({ title: "Review submitted! ⭐", description: "Thank you for your feedback!" });
+      setReviewName(""); setReviewPhone(""); setReviewRating(0); setReviewText("");
+      refetchReviews();
+    } catch (e: any) {
+      toast({ title: "Error", description: e?.message || "Could not submit review.", variant: "destructive" });
+    } finally {
+      setReviewSubmitting(false);
+    }
+  }, [restaurant?.id, reviewName, reviewPhone, reviewRating, reviewText, toast, refetchReviews]);
+
+  // Computed avg from customer reviews
+  const customerAvgRating = useMemo(() => {
+    if (!customerReviews || customerReviews.length === 0) return null;
+    const sum = customerReviews.reduce((s, r) => s + r.rating, 0);
+    return { avg: Math.round((sum / customerReviews.length) * 10) / 10, count: customerReviews.length };
+  }, [customerReviews]);
+
   // R7: Share handler
   const handleShare = useCallback(async () => {
     const shareData = { title: restaurant?.name || "Restaurant", text: restaurant?.description || `Check out ${restaurant?.name}!`, url: window.location.href };
@@ -567,6 +621,73 @@ export default function RestaurantProfile() {
           </section>
         )}
       </div>
+
+      {/* ───── Customer Reviews & Ratings ───── */}
+      <AnimatedSection className="max-w-5xl mx-auto px-4 py-12">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold tracking-tight">Customer Reviews</h2>
+          {(customerAvgRating || ratingData) && (
+            <div className="mt-2 flex items-center justify-center gap-3">
+              {customerAvgRating && (
+                <div className="flex items-center gap-1.5">
+                  <div className="flex">{Array.from({ length: 5 }).map((_, i) => <Star key={i} className={`h-5 w-5 ${i < Math.round(customerAvgRating.avg) ? 'text-amber-400 fill-amber-400' : 'text-gray-300'}`} />)}</div>
+                  <span className="font-semibold text-lg">{customerAvgRating.avg}</span>
+                  <span className="text-sm text-muted-foreground">({customerAvgRating.count} reviews)</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Review Cards */}
+        {customerReviews && customerReviews.length > 0 && (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-10">
+            {customerReviews.slice(0, 9).map((r) => (
+              <div key={r.id} className="rounded-xl border bg-card p-5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="font-semibold text-sm">{r.customer_name}</p>
+                  <span className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleDateString()}</span>
+                </div>
+                <div className="flex">{Array.from({ length: 5 }).map((_, i) => <Star key={i} className={`h-4 w-4 ${i < r.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-300'}`} />)}</div>
+                {r.review_text && <p className="text-sm text-muted-foreground">{r.review_text}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Submit Review Form */}
+        <div className="max-w-lg mx-auto rounded-xl border bg-card p-6 space-y-4">
+          <h3 className="font-semibold text-lg text-center">Leave a Review</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor="rev-name" className="text-xs">Your Name *</Label>
+              <Input id="rev-name" placeholder="Your name" value={reviewName} onChange={e => setReviewName(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="rev-phone" className="text-xs">Phone (optional)</Label>
+              <Input id="rev-phone" type="tel" placeholder="Phone number" value={reviewPhone} onChange={e => setReviewPhone(e.target.value)} />
+            </div>
+          </div>
+          {/* Star picker */}
+          <div className="flex items-center justify-center gap-1">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <button key={i} type="button" className="p-0.5" onClick={() => setReviewRating(i + 1)} onMouseEnter={() => setReviewHover(i + 1)} onMouseLeave={() => setReviewHover(0)}>
+                <Star className={`h-7 w-7 transition-colors ${(reviewHover || reviewRating) > i ? 'text-amber-400 fill-amber-400' : 'text-gray-300'}`} />
+              </button>
+            ))}
+          </div>
+          <textarea
+            placeholder="Write your review (optional)..."
+            value={reviewText}
+            onChange={e => setReviewText(e.target.value)}
+            rows={3}
+            className="w-full rounded-lg border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          <Button className="w-full" disabled={!reviewName.trim() || reviewRating < 1 || reviewSubmitting} onClick={submitReview}>
+            {reviewSubmitting ? "Submitting..." : "Submit Review"}
+          </Button>
+        </div>
+      </AnimatedSection>
 
       {/* Schema.org Structured Data */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({

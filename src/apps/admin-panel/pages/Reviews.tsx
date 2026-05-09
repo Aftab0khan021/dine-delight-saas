@@ -1,0 +1,176 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useRestaurantContext } from "../state/restaurant-context";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Star, Eye, EyeOff, Trash2, RotateCcw } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+
+export default function Reviews() {
+  const { restaurant } = useRestaurantContext();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  const reviewsQuery = useQuery({
+    queryKey: ["admin", "reviews", restaurant?.id],
+    enabled: !!restaurant?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("customer_reviews")
+        .select("*")
+        .eq("restaurant_id", restaurant!.id)
+        .order("created_at", { ascending: false });
+      if (error) return [];
+      return data ?? [];
+    },
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: async ({ id, is_approved }: { id: string; is_approved: boolean }) => {
+      const { error } = await supabase
+        .from("customer_reviews")
+        .update({ is_approved })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "reviews", restaurant?.id] });
+      toast({ title: "Review updated" });
+    },
+    onError: (e: any) => {
+      toast({ title: "Error", description: e?.message || "Failed to update", variant: "destructive" });
+    },
+  });
+
+  const reviews = reviewsQuery.data ?? [];
+  const approvedCount = reviews.filter(r => r.is_approved).length;
+  const hiddenCount = reviews.filter(r => !r.is_approved).length;
+  const avgRating = reviews.length > 0
+    ? Math.round((reviews.reduce((s, r) => s + r.rating, 0) / reviews.length) * 10) / 10
+    : 0;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Customer Reviews</h1>
+        <p className="text-muted-foreground mt-1">Manage reviews left by customers on your restaurant profile.</p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid gap-4 sm:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-2"><CardDescription>Total Reviews</CardDescription></CardHeader>
+          <CardContent><p className="text-2xl font-bold">{reviews.length}</p></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardDescription>Avg Rating</CardDescription></CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-1.5">
+              <p className="text-2xl font-bold">{avgRating}</p>
+              <Star className="h-5 w-5 text-amber-400 fill-amber-400" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardDescription>Visible</CardDescription></CardHeader>
+          <CardContent><p className="text-2xl font-bold text-green-600">{approvedCount}</p></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardDescription>Hidden</CardDescription></CardHeader>
+          <CardContent><p className="text-2xl font-bold text-amber-600">{hiddenCount}</p></CardContent>
+        </Card>
+      </div>
+
+      {/* Reviews Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>All Reviews</CardTitle>
+          <CardDescription>Toggle visibility to show or hide reviews on your public profile.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {reviewsQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">Loading reviews…</p>
+          ) : reviews.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">No reviews yet. They'll appear here once customers leave feedback.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Rating</TableHead>
+                    <TableHead className="min-w-[200px]">Review</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {reviews.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium text-sm">{r.customer_name}</p>
+                          {r.customer_phone && <p className="text-xs text-muted-foreground">{r.customer_phone}</p>}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-0.5">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star key={i} className={`h-3.5 w-3.5 ${i < r.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-300'}`} />
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <p className="text-sm text-muted-foreground line-clamp-2">{r.review_text || "—"}</p>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                          {new Date(r.created_at).toLocaleDateString()}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={r.is_approved ? "default" : "secondary"}>
+                          {r.is_approved ? "Visible" : "Hidden"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center gap-1 justify-end">
+                          {r.is_approved ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-amber-600 hover:text-amber-700 gap-1"
+                              onClick={() => toggleMutation.mutate({ id: r.id, is_approved: false })}
+                              disabled={toggleMutation.isPending}
+                              title="Hide review"
+                            >
+                              <EyeOff className="h-3.5 w-3.5" /> Hide
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-green-600 hover:text-green-700 gap-1"
+                              onClick={() => toggleMutation.mutate({ id: r.id, is_approved: true })}
+                              disabled={toggleMutation.isPending}
+                              title="Show review"
+                            >
+                              <Eye className="h-3.5 w-3.5" /> Show
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

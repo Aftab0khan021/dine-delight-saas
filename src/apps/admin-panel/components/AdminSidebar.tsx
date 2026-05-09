@@ -22,6 +22,7 @@ import {
   CalendarDays,
   Package,
   Shield,
+  Star,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,7 @@ const coreNavItems: NavItem[] = [
   { to: "/admin/billing",          label: "Billing",          icon: CreditCard,     adminOnly: true },
   { to: "/admin/coupons",          label: "Coupons",          icon: Ticket,         permission: PERMISSIONS.VIEW_COUPONS },
   { to: "/admin/reservations",     label: "Reservations",     icon: CalendarDays,   permission: PERMISSIONS.MANAGE_SETTINGS },
+  { to: "/admin/reviews",          label: "Reviews",          icon: Star,           adminOnly: true },
   { to: "/admin/inventory",        label: "Inventory",        icon: Package,        permission: PERMISSIONS.VIEW_MENU },
 ];
 

@@ -39,6 +39,7 @@ import AdminKitchenDashboard from "./apps/admin-panel/pages/KitchenDashboard";
 import AdminReservations from "./apps/admin-panel/pages/Reservations";
 import AdminInventory from "./apps/admin-panel/pages/Inventory";
 import AdminOTPSettings from "./apps/admin-panel/pages/OTPSettings";
+import AdminReviews from "./apps/admin-panel/pages/Reviews";
 
 // Super Admin
 import SuperAdminAuth from "./apps/super-admin/pages/Auth";
@@ -141,6 +142,7 @@ const App = () => (
             <Route path="billing" element={<AdminBilling />} />
             <Route path="coupons" element={<AdminCoupons />} />
             <Route path="marketing" element={<AdminMarketing />} />
+            <Route path="reviews" element={<AdminReviews />} />
             <Route path="insights" element={<AdminMenuInsights />} />
             <Route path="developer" element={<AdminDeveloperAPI />} />
             <Route path="kitchen" element={<AdminKitchenDashboard />} />

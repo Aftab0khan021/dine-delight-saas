@@ -21,7 +21,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useSEO } from "@/hooks/useSEO";
 import { CopyButton } from "@/apps/admin-panel/components/qr/CopyButton";
-import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote, ShieldAlert, Moon, Sun, Truck, Store, User, Tag, CheckCircle2, Smartphone, Copy, Split } from "lucide-react";
+import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote, ShieldAlert, Moon, Sun, Truck, Store, User, Tag, CheckCircle2, Smartphone, Copy, Split, Home, Grid2x2, List, Share2, Wifi, WifiOff, Zap, Star } from "lucide-react";
 import { useRestaurantCart } from "../hooks/useRestaurantCart";
 import { useCollaborativeCart } from "../hooks/useCollaborativeCart";
 import { MenuItemDialog } from "../components/MenuItemDialog";
@@ -30,6 +30,7 @@ import { SplitBillView } from "../components/SplitBillView";
 import { Turnstile } from "@/components/security/Turnstile";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 import { formatMoney } from "@/lib/formatting";
+import confetti from "canvas-confetti";
 
 type RestaurantRow = Tables<"restaurants">;
 type CategoryRow = Tables<"categories">;
@@ -84,6 +85,40 @@ export default function PublicMenu() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const categoryBarRef = useRef<HTMLDivElement>(null);
+  const cartBtnRef = useRef<HTMLButtonElement>(null);
+
+  // M1: Grid / List view mode
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() =>
+    (localStorage.getItem('dd-menu-view') as 'list' | 'grid') || 'list'
+  );
+  const setView = (m: 'list' | 'grid') => { setViewMode(m); localStorage.setItem('dd-menu-view', m); };
+
+  // M3: Fly-to-cart animation
+  const [flyAnim, setFlyAnim] = useState<{ x: number; y: number; src: string } | null>(null);
+  const [cartBounce, setCartBounce] = useState(false);
+
+  // M18: Offline banner
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  useEffect(() => {
+    const on = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+  }, []);
+
+  // M10: Availability countdown
+  const [nowTime, setNowTime] = useState(() => {
+    const n = new Date();
+    return `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+  });
+  useEffect(() => {
+    const t = setInterval(() => {
+      const n = new Date();
+      setNowTime(`${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`);
+    }, 30_000);
+    return () => clearInterval(t);
+  }, []);
 
   const [placingOrder, setPlacingOrder] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
@@ -621,6 +656,7 @@ export default function PublicMenu() {
       setPlacedOrderToken(data.order_token);
       activeCart.clear();
       setCartOpen(true);
+      fireConfetti(); // M15
       toast({
         title: (paymentMethod === 'online' || (paymentMethod === 'upi' && onlinePaymentsEnabled)) ? "Payment successful! 🎉" : "Order placed! 🎉",
         description: (paymentMethod === 'online' || (paymentMethod === 'upi' && onlinePaymentsEnabled))
@@ -634,6 +670,70 @@ export default function PublicMenu() {
       setPlacingOrder(false);
     }
   };
+
+  // M7: Cart restore toast
+  const cartRestoreShown = useRef(false);
+  useEffect(() => {
+    if (cartRestoreShown.current) return;
+    const timer = setTimeout(() => {
+      if (activeCart.itemCount > 0 && !placedOrderToken) {
+        cartRestoreShown.current = true;
+        toast({
+          title: `🛒 You have ${activeCart.itemCount} item${activeCart.itemCount > 1 ? 's' : ''} in your cart`,
+          description: "Ready to complete your order?",
+          action: <button onClick={() => setCartOpen(true)} className="text-xs font-semibold underline">View Cart</button> as any,
+        });
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [activeCart.itemCount]);
+
+  // M17: '/' keyboard shortcut for search
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // M3: Fly-to-cart handler
+  const flyToCart = useCallback((e: React.MouseEvent, imgSrc?: string | null) => {
+    const fromRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const toRect = cartBtnRef.current?.getBoundingClientRect();
+    if (!toRect) return;
+    setFlyAnim({
+      x: fromRect.left + fromRect.width / 2,
+      y: fromRect.top + fromRect.height / 2,
+      src: imgSrc || '',
+    });
+    setCartBounce(true);
+    setTimeout(() => { setFlyAnim(null); setCartBounce(false); }, 700);
+  }, []);
+
+  // M15: Confetti on first order
+  const fireConfetti = useCallback(() => {
+    if (localStorage.getItem('dd-ordered-before')) return;
+    localStorage.setItem('dd-ordered-before', '1');
+    confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 }, colors: ['#f97316','#eab308','#22c55e','#3b82f6'] });
+  }, []);
+
+  // M9: Fuzzy search helper
+  const fuzzyMatch = useCallback((text: string, query: string): boolean => {
+    const t = text.toLowerCase();
+    const q = query.toLowerCase();
+    if (t.includes(q)) return true;
+    let ti = 0;
+    for (let qi = 0; qi < q.length; qi++) {
+      const idx = t.indexOf(q[qi], ti);
+      if (idx === -1) return false;
+      ti = idx + 1;
+    }
+    return true;
+  }, []);
 
   useEffect(() => {
     const name = restaurantQuery.data?.name;
@@ -699,65 +799,112 @@ export default function PublicMenu() {
   return (
     <main className="min-h-screen w-full bg-background">
       <PWAInstallPrompt />
+
+      {/* M3: Fly-to-cart overlay */}
+      {flyAnim && (
+        <div
+          className="fly-to-cart-dot"
+          style={{
+            position: 'fixed',
+            left: flyAnim.x - 20,
+            top: flyAnim.y - 20,
+            width: 40,
+            height: 40,
+            borderRadius: '50%',
+            background: flyAnim.src ? `url(${flyAnim.src}) center/cover` : 'hsl(var(--primary))',
+            border: '2px solid hsl(var(--primary))',
+            zIndex: 9999,
+            pointerEvents: 'none',
+            animation: 'flyToCart 0.65s cubic-bezier(0.25,0.46,0.45,0.94) forwards',
+            '--tx': `${(cartBtnRef.current?.getBoundingClientRect().left ?? 0) + 24 - flyAnim.x}px`,
+            '--ty': `${(cartBtnRef.current?.getBoundingClientRect().top ?? 0) + 24 - flyAnim.y}px`,
+          } as React.CSSProperties}
+        />
+      )}
+
+      {/* M18: Offline banner */}
+      {!isOnline && (
+        <div className="w-full bg-amber-500 text-white text-xs font-medium text-center py-1.5 flex items-center justify-center gap-1.5">
+          <WifiOff className="h-3.5 w-3.5" /> You're offline — showing cached menu. Cart is saved locally.
+        </div>
+      )}
+
       <header className="border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
-        <div className="w-full max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4 min-w-0">
+        <div className="w-full max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
+          {/* Home button */}
+          {slug && (
+            <Link to={`/r/${slug}`} className="h-9 w-9 shrink-0 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors" title="Restaurant Home">
+              <Home className="h-4 w-4" />
+            </Link>
+          )}
+
+          {/* Logo + name */}
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             {restaurantQuery.data?.logo_url ? (
-              <img
-                src={restaurantQuery.data.logo_url}
-                alt={`${restaurantQuery.data.name} logo`}
-                className="h-12 w-12 rounded-md object-cover border shrink-0"
-                loading="lazy"
-              />
+              <img src={restaurantQuery.data.logo_url} alt={`${restaurantQuery.data.name} logo`} className="h-10 w-10 rounded-md object-cover border shrink-0" loading="lazy" />
             ) : (
-              <div
-                className="h-12 w-12 rounded-md border bg-muted shrink-0"
-                aria-hidden="true"
-              />
+              <div className="h-10 w-10 rounded-md border bg-muted shrink-0" aria-hidden="true" />
             )}
             <div className="min-w-0">
-              <h1 className="text-xl font-semibold tracking-tight truncate">
-                {restaurantQuery.data?.name ?? "Menu"}
-              </h1>
+              <h1 className="text-base font-semibold tracking-tight truncate">{restaurantQuery.data?.name ?? "Menu"}</h1>
               {restaurantQuery.data?.description ? (
-                <p className="text-sm text-muted-foreground line-clamp-2">
-                  {restaurantQuery.data.description}
-                </p>
+                <p className="text-xs text-muted-foreground line-clamp-1">{restaurantQuery.data.description}</p>
               ) : null}
             </div>
           </div>
-          {restaurantQuery.data?.slug && (
-            <Link
-              to={`/r/${restaurantQuery.data.slug}/account`}
-              className="h-10 w-10 shrink-0 rounded-full bg-muted/50 flex items-center justify-center text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
-              title="My Account"
-            >
-              <User className="h-5 w-5" />
-            </Link>
-          )}
-          {/* Dark mode toggle — inline with profile icon to avoid overlap */}
-          <button
-            onClick={() => setDarkMode(!darkMode)}
-            className="h-10 w-10 shrink-0 rounded-full bg-card border shadow-sm flex items-center justify-center hover:scale-110 transition-transform"
-            aria-label="Toggle dark mode"
-          >
-            {darkMode ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5" />}
-          </button>
+
+          {/* Right actions */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* M1: Grid/List toggle */}
+            <button onClick={() => setView(viewMode === 'list' ? 'grid' : 'list')} className="h-9 w-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-accent transition-colors" title={viewMode === 'list' ? 'Grid view' : 'List view'}>
+              {viewMode === 'list' ? <Grid2x2 className="h-4 w-4" /> : <List className="h-4 w-4" />}
+            </button>
+            {/* M11: My Orders */}
+            {restaurantQuery.data?.slug && localStorage.getItem('dd-phone') && (
+              <Link to={`/r/${restaurantQuery.data.slug}/account`} className="h-9 w-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors" title="My Orders">
+                <ShoppingBag className="h-4 w-4" />
+              </Link>
+            )}
+            {/* Account */}
+            {restaurantQuery.data?.slug && !localStorage.getItem('dd-phone') && (
+              <Link to={`/r/${restaurantQuery.data.slug}/account`} className="h-9 w-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors" title="My Account">
+                <User className="h-4 w-4" />
+              </Link>
+            )}
+            {/* Dark mode */}
+            <button onClick={() => setDarkMode(!darkMode)} className="h-9 w-9 rounded-full bg-card border shadow-sm flex items-center justify-center hover:scale-110 transition-transform" aria-label="Toggle dark mode">
+              {darkMode ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
       </header>
 
 
-      {/* Order Type Selector — context-aware */}
+      {/* M6: Prep/Delivery time */}
+      {(() => {
+        const s = restaurantQuery.data?.settings as any;
+        const prep = s?.prep_time_minutes;
+        const del = s?.delivery_time_minutes;
+        if (!prep && !del) return null;
+        return (
+          <div className="w-full max-w-3xl mx-auto px-4 pt-2">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              {prep && <span className="flex items-center gap-1">🕐 Pickup ready in ~{prep} min</span>}
+              {del && <span className="flex items-center gap-1">🚚 Delivery ~{del} min</span>}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Order Type Selector */}
       <div className="w-full max-w-3xl mx-auto px-4 pt-3">
         {tableLabel ? (
-          /* QR table scan → locked to Dine-In, no selector shown */
           <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground bg-muted rounded-lg px-4 py-2.5">
             <Store className="h-4 w-4 shrink-0" />
             <span>Dine-In · Table <strong className="text-foreground">{tableLabel}</strong></span>
             <span className="ml-auto text-xs text-muted-foreground/70 font-normal">Order mode locked</span>
           </div>
         ) : (
-          /* Direct/website visit → Pickup or Delivery only, no Dine-In */
           <div className="flex gap-1 p-1 bg-muted rounded-lg">
             {([['pickup', 'Pickup', ShoppingBag], ['delivery', 'Delivery', Truck]] as const).map(([type, label, Icon]) => (
               <button key={type} onClick={() => setOrderType(type as any)}
@@ -905,21 +1052,24 @@ export default function PublicMenu() {
         </div>
       )}
 
-      <div className="w-full max-w-3xl mx-auto px-4 py-8 pb-28">
+      <div className="w-full max-w-3xl mx-auto px-4 py-6 pb-28">
+        {/* M13: Skeleton loaders */}
         {loading ? (
-          <Card className="p-6">
-            <p className="text-sm text-muted-foreground">Loading menu…</p>
-          </Card>
+          <div className={`gap-3 ${viewMode === 'grid' ? 'grid grid-cols-2' : 'space-y-3'}`}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className={`rounded-xl border bg-card animate-pulse ${viewMode === 'grid' ? 'p-3 space-y-2' : 'p-4 flex gap-4'}`}>
+                {viewMode === 'grid' ? (
+                  <><div className="h-32 rounded-lg bg-muted" /><div className="h-4 bg-muted rounded w-3/4" /><div className="h-3 bg-muted rounded w-1/2" /><div className="h-8 bg-muted rounded" /></>
+                ) : (
+                  <><div className="h-20 w-20 rounded-md bg-muted shrink-0" /><div className="flex-1 space-y-2"><div className="h-4 bg-muted rounded w-3/4" /><div className="h-3 bg-muted rounded w-full" /><div className="h-8 bg-muted rounded w-20 ml-auto" /></div></>
+                )}
+              </div>
+            ))}
+          </div>
         ) : errorMessage ? (
-          <Card className="p-6">
-            <p className="text-sm text-destructive">{errorMessage}</p>
-          </Card>
+          <Card className="p-6"><p className="text-sm text-destructive">{errorMessage}</p></Card>
         ) : categoriesWithItems.length === 0 ? (
-          <Card className="p-6">
-            <p className="text-sm text-muted-foreground">
-              No active menu items yet.
-            </p>
-          </Card>
+          <Card className="p-6"><p className="text-sm text-muted-foreground">No active menu items yet.</p></Card>
         ) : (
           <div className="space-y-6">
             {/* Dietary Filters */}
@@ -959,16 +1109,14 @@ export default function PublicMenu() {
             })()}
 
             {categoriesWithItems.map((category) => {
-              // Apply search filter
+              // M9: Fuzzy search filter
               let filteredItems = category.items;
               if (menuSearch.trim()) {
-                const q = menuSearch.toLowerCase();
                 filteredItems = filteredItems.filter((item: any) =>
-                  (item.name || '').toLowerCase().includes(q) ||
-                  (item.description || '').toLowerCase().includes(q)
+                  fuzzyMatch(item.name || '', menuSearch) ||
+                  fuzzyMatch(item.description || '', menuSearch)
                 );
               }
-              // Apply dietary filter
               if (dietaryFilter !== 'all') {
                 filteredItems = filteredItems.filter((item: any) => {
                   const ft = item.food_type || 'veg';
@@ -977,107 +1125,169 @@ export default function PublicMenu() {
                   return true;
                 });
               }
-              // Apply allergen exclusion filter
               if (excludeAllergens.length > 0) {
                 filteredItems = filteredItems.filter((item: any) => {
-                  const itemAllergens: string[] = Array.isArray(item.allergens) ? item.allergens : [];
-                  return !excludeAllergens.some(a => itemAllergens.includes(a));
+                  const ia: string[] = Array.isArray(item.allergens) ? item.allergens : [];
+                  return !excludeAllergens.some(a => ia.includes(a));
                 });
               }
               if (filteredItems.length === 0) return null;
+
+              // M10: Availability countdown
+              const cat = category as any;
+              let countdownLabel: string | null = null;
+              if (cat.available_from && cat.available_to) {
+                const [eh, em] = cat.available_to.split(':').map(Number);
+                const [nh, nm] = nowTime.split(':').map(Number);
+                const minsLeft = (eh * 60 + em) - (nh * 60 + nm);
+                if (minsLeft > 0 && minsLeft <= 60) countdownLabel = `⏳ Ends in ${minsLeft} min`;
+                else if (minsLeft > 60) countdownLabel = `🕐 Available till ${cat.available_to}`;
+              }
+
               return (
-              <section key={category.id} id={`section-${category.id}`} data-category-id={category.id} aria-labelledby={`cat-${category.id}`}>
-                <div className="flex items-baseline justify-between gap-3">
-                  <div className="min-w-0">
-                    <h2
-                      id={`cat-${category.id}`}
-                      className="text-lg font-semibold tracking-tight"
-                    >
-                      {category.name}
-                    </h2>
-                    {category.description ? (
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {category.description}
-                      </p>
-                    ) : null}
+                <section key={category.id} id={`section-${category.id}`} data-category-id={category.id} aria-labelledby={`cat-${category.id}`}>
+                  <div className="flex items-baseline justify-between gap-3 mb-4">
+                    <div className="min-w-0">
+                      <h2 id={`cat-${category.id}`} className="text-lg font-semibold tracking-tight">{category.name}</h2>
+                      {category.description && <p className="mt-0.5 text-sm text-muted-foreground">{category.description}</p>}
+                      {countdownLabel && <span className="text-xs text-amber-600 font-medium">{countdownLabel}</span>}
+                    </div>
                   </div>
-                </div>
 
-                <div className="mt-4 grid gap-3">
-                  {filteredItems.map((item) => (
-                    <Card key={item.id} className="p-4">
-                      <div className="flex gap-4">
-                        {item.image_url ? (
-                          <img
-                            src={item.image_url}
-                            alt={item.name}
-                            className="h-20 w-20 rounded-md object-cover border cursor-pointer hover:opacity-80 transition-opacity"
-                            loading="lazy"
-                            onClick={() => setLightboxImg(item.image_url)}
-                          />
-                        ) : null}
+                  {/* M1: Grid or List layout */}
+                  <div className={viewMode === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-3'}>
+                    {filteredItems.map((item) => {
+                      const inCart = activeCart.items.find(i => i.menu_item_id === item.id);
+                      const isNew = item.created_at && (Date.now() - new Date(item.created_at).getTime()) < 7 * 86400_000;
+                      const isSpecial = (item as any).is_daily_special;
+                      const isBestseller = popularIds.includes(item.id);
+                      const hasVariants = !!(item as any).variants?.length || !!(item as any).addons?.length;
 
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                          <p className="font-medium truncate flex items-center gap-1.5">
-                            <span className={`inline-block h-2.5 w-2.5 rounded-sm shrink-0 border ${
-                              item.food_type === 'nonveg' ? 'bg-red-500 border-red-600'
-                              : item.food_type === 'egg' ? 'bg-yellow-500 border-yellow-600'
-                              : 'bg-green-500 border-green-600'
-                            }`} />
-                            {item.name}
-                            {popularIds.includes(item.id) && (
-                              <span className="ml-1 inline-flex items-center gap-0.5 text-xs text-orange-500">
-                                <Flame className="h-3 w-3" /> Hot
-                              </span>
+                      const handleAdd = (e: React.MouseEvent) => {
+                        navigator.vibrate?.(30); // M14 haptic
+                        flyToCart(e, item.image_url); // M3 fly animation
+                        if (!hasVariants) {
+                          activeCart.addItem({
+                            cart_id: `${item.id}-${Date.now()}`,
+                            menu_item_id: item.id,
+                            name: item.name,
+                            quantity: 1,
+                            unit_price_cents: item.price_cents,
+                            price_cents: item.price_cents,
+                          });
+                        } else {
+                          setSelectedItem(item);
+                          setItemDialogOpen(true);
+                        }
+                      };
+
+                      // M16: Share dish
+                      const handleShare = (e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        const url = `${window.location.origin}/r/${slug}/menu?item=${item.id}`;
+                        if (navigator.share) navigator.share({ title: item.name, url });
+                        else { navigator.clipboard.writeText(url); toast({ title: 'Link copied!' }); }
+                      };
+
+                      if (viewMode === 'grid') {
+                        return (
+                          <div key={item.id} className="relative rounded-xl border bg-card overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow">
+                            {/* Badges */}
+                            <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+                              {isBestseller && <span className="inline-flex items-center gap-0.5 text-[9px] font-bold bg-orange-500 text-white px-1.5 py-0.5 rounded-full">🔥 Bestseller</span>}
+                              {isSpecial && <span className="inline-flex items-center gap-0.5 text-[9px] font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded-full">⚡ Special</span>}
+                              {isNew && <span className="inline-flex items-center gap-0.5 text-[9px] font-bold bg-green-500 text-white px-1.5 py-0.5 rounded-full">🆕 New</span>}
+                            </div>
+                            <button className="absolute top-2 right-2 z-10 h-6 w-6 rounded-full bg-black/40 flex items-center justify-center" onClick={handleShare}><Share2 className="h-3 w-3 text-white" /></button>
+                            {item.image_url ? (
+                              <img src={item.image_url} alt={item.name} className="h-36 w-full object-cover cursor-pointer" onClick={() => setLightboxImg(item.image_url)} />
+                            ) : (
+                              <div className="h-36 bg-muted flex items-center justify-center text-3xl">
+                                {item.food_type === 'nonveg' ? '🍗' : item.food_type === 'egg' ? '🥚' : '🥗'}
+                              </div>
                             )}
-                            {(item.spice_level > 0) && <span className="text-xs">{'🌶️'.repeat(Math.min(item.spice_level, 3))}</span>}
-                          </p>
-                              {item.description ? (
-                                <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
-                                  {item.description}
-                                </p>
+                            <div className="p-3 flex flex-col flex-1">
+                              <div className="flex items-center gap-1 mb-1">
+                                <span className={`h-2 w-2 rounded-sm shrink-0 ${item.food_type === 'nonveg' ? 'bg-red-500' : item.food_type === 'egg' ? 'bg-yellow-500' : 'bg-green-500'}`} />
+                                <p className="text-sm font-semibold truncate flex-1">{item.name}</p>
+                              </div>
+                              {item.description && <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{item.description}</p>}
+                              <div className="mt-auto flex items-center justify-between gap-2">
+                                <p className="text-sm font-bold">{formatMoney(item.price_cents, currencyCode)}</p>
+                                {inCart ? (
+                                  <div className="flex items-center gap-1">
+                                    <button onClick={() => { navigator.vibrate?.(20); activeCart.decrement(inCart.cart_id); }} className="h-7 w-7 rounded-full border flex items-center justify-center text-sm font-bold hover:bg-muted"><Minus className="h-3 w-3" /></button>
+                                    <span className="w-5 text-center text-sm font-semibold">{inCart.quantity}</span>
+                                    <button onClick={handleAdd} className="h-7 w-7 rounded-full border flex items-center justify-center text-sm font-bold hover:bg-muted"><Plus className="h-3 w-3" /></button>
+                                  </div>
+                                ) : (
+                                  <button onClick={handleAdd} className="h-8 px-3 rounded-full bg-primary text-primary-foreground text-xs font-bold hover:opacity-90 transition-opacity">+ Add</button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // List card
+                      return (
+                        <Card key={item.id} className="p-4">
+                          <div className="flex gap-4">
+                            <div className="relative shrink-0">
+                              {item.image_url ? (
+                                <img src={item.image_url} alt={item.name} className="h-20 w-20 rounded-md object-cover border cursor-pointer hover:opacity-80 transition-opacity" loading="lazy" onClick={() => setLightboxImg(item.image_url)} />
                               ) : null}
-                              {(item.tags && item.tags.length > 0) && (
-                                <div className="mt-1 flex gap-1 flex-wrap">
-                                  {item.tags.slice(0, 3).map((t: string) => (
-                                    <span key={t} className="text-[10px] bg-muted text-muted-foreground rounded-full px-1.5 py-0.5">{t}</span>
-                                  ))}
+                              {/* M5: Badges */}
+                              {(isBestseller || isSpecial || isNew) && (
+                                <div className="absolute -top-1 -left-1 flex flex-col gap-0.5">
+                                  {isBestseller && <span className="text-[8px] font-bold bg-orange-500 text-white px-1 py-0.5 rounded">🔥</span>}
+                                  {isSpecial && <span className="text-[8px] font-bold bg-amber-500 text-white px-1 py-0.5 rounded">⚡</span>}
+                                  {isNew && <span className="text-[8px] font-bold bg-green-500 text-white px-1 py-0.5 rounded">🆕</span>}
                                 </div>
                               )}
                             </div>
-                            <p className="font-medium tabular-nums whitespace-nowrap">
-                              {formatMoney(item.price_cents, restaurantQuery.data?.currency_code)}
-                            </p>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium truncate flex items-center gap-1.5">
+                                    <span className={`inline-block h-2.5 w-2.5 rounded-sm shrink-0 border ${item.food_type === 'nonveg' ? 'bg-red-500 border-red-600' : item.food_type === 'egg' ? 'bg-yellow-500 border-yellow-600' : 'bg-green-500 border-green-600'}`} />
+                                    {item.name}
+                                    {isBestseller && <span className="text-xs text-orange-500 flex items-center gap-0.5"><Flame className="h-3 w-3" />Hot</span>}
+                                    {isSpecial && <span className="text-xs text-amber-500 flex items-center gap-0.5"><Zap className="h-3 w-3" />Special</span>}
+                                    {item.spice_level > 0 && <span className="text-xs">{'🌶️'.repeat(Math.min(item.spice_level, 3))}</span>}
+                                  </p>
+                                  {item.description && <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{item.description}</p>}
+                                  {item.tags && item.tags.length > 0 && (
+                                    <div className="mt-1 flex gap-1 flex-wrap">
+                                      {item.tags.slice(0, 3).map((t: string) => <span key={t} className="text-[10px] bg-muted text-muted-foreground rounded-full px-1.5 py-0.5">{t}</span>)}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <p className="font-medium tabular-nums whitespace-nowrap">{formatMoney(item.price_cents, currencyCode)}</p>
+                                  {/* M16: Share */}
+                                  <button onClick={handleShare} className="mt-1 text-muted-foreground hover:text-primary transition-colors"><Share2 className="h-3.5 w-3.5" /></button>
+                                </div>
+                              </div>
+                              <div className="mt-3 flex items-center justify-end">
+                                {/* M3: Inline qty OR Add button */}
+                                {inCart ? (
+                                  <div className="flex items-center gap-2">
+                                    <button onClick={() => { navigator.vibrate?.(20); activeCart.decrement(inCart.cart_id); }} className="h-8 w-8 rounded-full border flex items-center justify-center hover:bg-muted"><Minus className="h-4 w-4" /></button>
+                                    <span className="min-w-6 text-center font-semibold">{inCart.quantity}</span>
+                                    <button onClick={handleAdd} className="h-8 w-8 rounded-full border flex items-center justify-center hover:bg-muted"><Plus className="h-4 w-4" /></button>
+                                  </div>
+                                ) : (
+                                  <Button size="sm" variant="secondary" onClick={handleAdd}>Add</Button>
+                                )}
+                              </div>
+                            </div>
                           </div>
-
-                          <div className="mt-3 flex items-center justify-between gap-3">
-                            {item.sku ? (
-                              <p className="text-xs text-muted-foreground font-mono truncate">
-                                {item.sku}
-                              </p>
-                            ) : (
-                              <span />
-                            )}
-
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => {
-                                setSelectedItem(item);
-                                setItemDialogOpen(true);
-                              }}
-                            >
-                              Add
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              </section>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </section>
               );
             })}
           </div>
@@ -1088,8 +1298,9 @@ export default function PublicMenu() {
       <Drawer open={cartOpen} onOpenChange={setCartOpen}>
         <DrawerTrigger asChild>
           <button
+            ref={cartBtnRef}
             type="button"
-            className="fixed bottom-4 right-4 z-40"
+            className={`fixed bottom-4 right-4 z-40 transition-transform duration-150 ${cartBounce ? 'scale-125' : 'scale-100'}`}
             aria-label="Open cart"
             onClick={() => setCartOpen(true)}
           >
@@ -1099,12 +1310,12 @@ export default function PublicMenu() {
                 Cart
               </Button>
               {activeCart.itemCount > 0 ? (
-              <span className="absolute -top-2 -right-2">
-                <Badge variant="secondary" className="min-w-6 justify-center">
-                  {activeCart.itemCount}
-                </Badge>
-              </span>
-            ) : null}
+                <span className="absolute -top-2 -right-2">
+                  <Badge variant="secondary" className="min-w-6 justify-center">
+                    {activeCart.itemCount}
+                  </Badge>
+                </span>
+              ) : null}
             </div>
           </button>
         </DrawerTrigger>
@@ -1127,21 +1338,33 @@ export default function PublicMenu() {
             )}
             {activeCart.items.length === 0 ? (
               placedOrderToken ? (
-                <Card className="p-6">
-                  <p className="text-sm text-muted-foreground">Order placed</p>
-                  <p className="mt-2 font-mono text-sm break-all">{placedOrderToken}</p>
-                  <div className="mt-4 flex flex-wrap gap-2">
+                <Card className="p-6 text-center space-y-3">
+                  <div className="text-3xl">🎉</div>
+                  <p className="font-semibold text-lg">Order Placed!</p>
+                  <p className="font-mono text-xs text-muted-foreground break-all bg-muted rounded p-2">{placedOrderToken}</p>
+                  <div className="flex flex-wrap gap-2 justify-center">
                     <CopyButton value={placedOrderToken} label="Copy token" />
                     {trackUrl ? <CopyButton value={trackUrl} label="Copy tracking link" /> : null}
-                    {placedOrderToken ? (
+                    {placedOrderToken && (
                       <Link to={`/track?token=${encodeURIComponent(placedOrderToken)}`}>
-                        <Button variant="secondary" size="sm">Track</Button>
+                        <Button variant="secondary" size="sm">Track Order</Button>
                       </Link>
-                    ) : null}
+                    )}
+                    {/* M12: WhatsApp deep link */}
+                    {(() => {
+                      const wp = (restaurantQuery.data?.settings as any)?.whatsapp_number;
+                      if (!wp) return null;
+                      const msg = encodeURIComponent(`My order token: ${placedOrderToken}`);
+                      return (
+                        <a href={`https://wa.me/${wp.replace(/\D/g,'')}?text=${msg}`} target="_blank" rel="noopener noreferrer">
+                          <Button variant="outline" size="sm" className="gap-1.5 text-green-600 border-green-200">
+                            <MessageCircle className="h-3.5 w-3.5" /> View on WhatsApp
+                          </Button>
+                        </a>
+                      );
+                    })()}
                   </div>
-                  {checkoutError ? (
-                    <p className="mt-3 text-sm text-destructive">{checkoutError}</p>
-                  ) : null}
+                  {checkoutError && <p className="text-sm text-destructive">{checkoutError}</p>}
                 </Card>
               ) : (
                 <Card className="p-6">

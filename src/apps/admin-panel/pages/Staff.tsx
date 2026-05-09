@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { MoreHorizontal, RefreshCw, Shield, UserPlus, UserX, AlertCircle, Trash2 } from "lucide-react";
+import { MoreHorizontal, RefreshCw, Shield, UserPlus, UserX, AlertCircle } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
@@ -83,7 +83,6 @@ export default function AdminStaff() {
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [roleTarget, setRoleTarget] = useState<{ id: string; name: string; role: string } | null>(null);
   const [newRole, setNewRole] = useState<StaffRole>("user");
-  const [newCategoryId, setNewCategoryId] = useState<string | null>(null);
 
   // --- 1. Data Queries (From Repo B) ---
   const staffQuery = useQuery({
@@ -178,14 +177,8 @@ export default function AdminStaff() {
     mutationFn: async () => {
       if (!restaurant?.id || !roleTarget) throw new Error("Missing data");
 
-      // If categories exist, update the staff_category_id; otherwise update the role enum
-      const hasCats = categoriesQuery.data && categoriesQuery.data.length > 0;
-      const updatePayload = hasCats
-        ? { staff_category_id: newCategoryId }
-        : { role: newRole };
-
       const { error } = await supabase.from("user_roles")
-        .update(updatePayload)
+        .update({ role: newRole })
         .eq("restaurant_id", restaurant.id)
         .eq("user_id", roleTarget.id);
 
@@ -208,11 +201,7 @@ export default function AdminStaff() {
     },
     onSuccess: () => {
       setRoleDialogOpen(false);
-      const hasCats = categoriesQuery.data && categoriesQuery.data.length > 0;
-      const label = hasCats
-        ? (categoriesQuery.data?.find(c => c.id === newCategoryId)?.name ?? newCategoryId)
-        : newRole;
-      toast({ title: "Role updated", description: `${roleTarget?.name} is now ${label}` });
+      toast({ title: "Role updated", description: `${roleTarget?.name} is now ${newRole}` });
       qc.invalidateQueries({ queryKey: ["admin", "staff"] });
     },
     onError: (error: Error) => {
@@ -253,10 +242,9 @@ export default function AdminStaff() {
 
       const { data, error } = await supabase.functions.invoke("invite-staff", {
         body: {
-          email,
-          restaurantId: restaurant.id,
+          email: email,
+          restaurant_id: restaurant.id,
           action: "resend",
-          inviteId: id,
         },
       });
 
@@ -272,39 +260,6 @@ export default function AdminStaff() {
       toast({
         title: "Error",
         description: error.message || "Failed to resend invitation.",
-        variant: "destructive"
-      });
-    }
-  });
-
-  const cancelInviteMutation = useMutation({
-    mutationFn: async ({ id, email }: { id: string; email: string }) => {
-      if (!restaurant?.id) throw new Error("Missing restaurant");
-
-      // Delete the staff_invites row
-      const { error: deleteError } = await supabase
-        .from("staff_invites")
-        .delete()
-        .eq("id", id);
-
-      if (deleteError) throw deleteError;
-
-      // Also expire any matching invitation tokens
-      await supabase
-        .from("invitation_tokens")
-        .update({ used_at: new Date().toISOString() })
-        .eq("email", email)
-        .eq("restaurant_id", restaurant.id)
-        .is("used_at", null);
-    },
-    onSuccess: (_, variables) => {
-      toast({ title: "Invitation cancelled", description: `Revoked invite for ${variables.email}` });
-      qc.invalidateQueries({ queryKey: ["admin", "staff"] });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to cancel invitation.",
         variant: "destructive"
       });
     }
@@ -338,7 +293,7 @@ export default function AdminStaff() {
   }, [staffQuery.data, invitesQuery.data]);
 
   return (
-    <div className="flex flex-col gap-4 w-full">
+    <div className="space-y-6">
       <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Staff Management</h1>
@@ -353,11 +308,9 @@ export default function AdminStaff() {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button disabled={isAtLimit} onClick={() => setInviteOpen(true)}>
-            <UserPlus className="mr-2 h-4 w-4" /> Invite staff
-          </Button>
-        </div>
+        <Button disabled={isAtLimit} onClick={() => setInviteOpen(true)}>
+          <UserPlus className="mr-2 h-4 w-4" /> Invite staff
+        </Button>
 
         <InviteStaffDialog
           open={inviteOpen}
@@ -393,7 +346,7 @@ export default function AdminStaff() {
               <div className="text-center py-8 text-muted-foreground border-dashed border rounded-lg">No staff found. Invite someone!</div>
             ) : (
               <div className="rounded-xl border border-border bg-background overflow-x-auto">
-                <Table className="min-w-[560px]">
+                <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Staff</TableHead>
@@ -458,17 +411,9 @@ export default function AdminStaff() {
 
                               {/* Actions for INVITED users */}
                               {s.type === 'invited' && (
-                                <>
-                                  <DropdownMenuItem onClick={() => resendInviteMutation.mutate({ id: s.id, email: s.contact })}>
-                                    <RefreshCw className="mr-2 h-4 w-4" /> Resend invite
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    className="text-destructive"
-                                    onClick={() => cancelInviteMutation.mutate({ id: s.id, email: s.contact })}
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4" /> Cancel invite
-                                  </DropdownMenuItem>
-                                </>
+                                <DropdownMenuItem onClick={() => resendInviteMutation.mutate({ id: s.id, email: s.contact })}>
+                                  <RefreshCw className="mr-2 h-4 w-4" /> Resend invite
+                                </DropdownMenuItem>
                               )}
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -510,16 +455,7 @@ export default function AdminStaff() {
             </div>
             <div className="space-y-2">
               <Label>{categoriesQuery.data && categoriesQuery.data.length > 0 ? "Staff Category" : "Role"}</Label>
-              <Select
-                value={categoriesQuery.data && categoriesQuery.data.length > 0 ? (newCategoryId ?? "") : newRole}
-                onValueChange={(v) => {
-                  if (categoriesQuery.data && categoriesQuery.data.length > 0) {
-                    setNewCategoryId(v);
-                  } else {
-                    setNewRole(v as StaffRole);
-                  }
-                }}
-              >
+              <Select value={newRole} onValueChange={(v) => setNewRole(v as StaffRole)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {categoriesQuery.data && categoriesQuery.data.length > 0 ? (

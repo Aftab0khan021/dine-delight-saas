@@ -124,3 +124,19 @@ All colors MUST be HSL.
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* M3: Fly-to-cart animation */
+@keyframes flyToCart {
+  0% {
+    transform: scale(1) translate(0, 0);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.6) translate(calc(var(--tx) * 0.5), calc(var(--ty) * 0.5 - 40px));
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(0.2) translate(var(--tx), var(--ty));
+    opacity: 0;
+  }
+}
