@@ -63,7 +63,7 @@ function timeAgo(dateString: string) {
 
 export function AdminShell({ children }: PropsWithChildren) {
   const navigate = useNavigate();
-  const { loading, restaurant, role, staffCategory, accessDenied, refresh } = useRestaurantContext();
+  const { loading, restaurant, role, staffCategory, accessDenied, refresh, selectedBrandId, setSelectedBrandId } = useRestaurantContext();
 
   const [userEmail, setUserEmail] = useState<string>("Admin");
   const [accountStatus, setAccountStatus] = useState<string | null>(null);
@@ -377,13 +377,10 @@ export function AdminShell({ children }: PropsWithChildren) {
               {brandsQuery.data && brandsQuery.data.length > 1 ? (
                 // Live brand switcher for cloud kitchens
                 <Select
-                  value={restaurant?.id}
+                  value={restaurant?.id ?? ""}
                   onValueChange={(id) => {
-                    const brand = brandsQuery.data?.find((b: any) => b.id === id);
-                    if (brand) {
-                      // Navigate to kitchen dashboard of selected brand
-                      navigate("/admin/kitchen");
-                    }
+                    setSelectedBrandId(id);
+                    navigate("/admin/dashboard");
                   }}
                 >
                   <SelectTrigger className="h-9 w-auto min-w-0 max-w-[180px] sm:max-w-[260px] bg-transparent border-0 shadow-none hover:bg-accent/50 focus:ring-0 font-medium">

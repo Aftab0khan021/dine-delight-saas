@@ -21,6 +21,9 @@ type RestaurantContextValue = {
   isAdmin: boolean;
   accessDenied: boolean;
   refresh: () => Promise<void>;
+  // Multi-brand: allows switching the active brand without logging out
+  selectedBrandId: string | null;
+  setSelectedBrandId: (id: string | null) => void;
 };
 
 const RestaurantContext = createContext<RestaurantContextValue | null>(null);
@@ -32,6 +35,9 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
   const [role, setRole] = useState<StaffRole | null>(null);
   const [staffCategory, setStaffCategory] = useState<StaffCategory | null>(null);
   const [accessDenied, setAccessDenied] = useState(false);
+  // Multi-brand switcher: null means use the default restaurant from user_roles
+  const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
+  const [brandOverride, setBrandOverride] = useState<CurrentRestaurant | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -131,17 +137,38 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
     return role === "restaurant_admin" || role === "super_admin";
   }, [role]);
 
+  // When selectedBrandId changes, fetch that brand's details and override
+  useEffect(() => {
+    if (!selectedBrandId) {
+      setBrandOverride(null);
+      return;
+    }
+    supabase
+      .from("restaurants")
+      .select("id, name, slug, currency_code")
+      .eq("id", selectedBrandId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setBrandOverride(data as CurrentRestaurant);
+      });
+  }, [selectedBrandId]);
+
+  // Effective restaurant: brand override if switching, else the default
+  const effectiveRestaurant = brandOverride ?? restaurant;
+
   const value = useMemo<RestaurantContextValue>(
     () => ({
       loading,
-      restaurant,
+      restaurant: effectiveRestaurant,
       role,
       staffCategory,
       isAdmin,
       accessDenied,
       refresh: load,
+      selectedBrandId,
+      setSelectedBrandId,
     }),
-    [accessDenied, loading, restaurant, role, staffCategory, isAdmin, load],
+    [accessDenied, loading, effectiveRestaurant, role, staffCategory, isAdmin, load, selectedBrandId],
   );
 
   return (

@@ -21,7 +21,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useSEO } from "@/hooks/useSEO";
 import { CopyButton } from "@/apps/admin-panel/components/qr/CopyButton";
-import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote, ShieldAlert, Moon, Sun, Truck, Store, User, Tag, CheckCircle2, Smartphone, Copy } from "lucide-react";
+import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote, ShieldAlert, Moon, Sun, Truck, Store, User, Tag, CheckCircle2, Smartphone, Copy, Split } from "lucide-react";
 import { useRestaurantCart } from "../hooks/useRestaurantCart";
 import { useCollaborativeCart } from "../hooks/useCollaborativeCart";
 import { MenuItemDialog } from "../components/MenuItemDialog";
@@ -76,6 +76,8 @@ export default function PublicMenu() {
   const [cartOpen, setCartOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MenuItemRow | null>(null);
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
+  const [splitPeople, setSplitPeople] = useState(2);
+  const [showSplitCalc, setShowSplitCalc] = useState(false);
 
   // Search + Category Jump
   const [menuSearch, setMenuSearch] = useState("");
@@ -1307,6 +1309,59 @@ export default function PublicMenu() {
                   {activeCart.discountCents > 0 && (
                     <p className="text-xs text-green-600 text-right font-medium">🎉 You save {formatMoney(activeCart.discountCents, currencyCode)}!</p>
                   )}
+
+                  {/* ── Split Bill Calculator ── */}
+                  <div className="border-t pt-3 mt-1">
+                    <button
+                      onClick={() => setShowSplitCalc(v => !v)}
+                      className="flex items-center justify-between w-full text-sm text-muted-foreground hover:text-foreground transition-colors group"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <Split className="h-3.5 w-3.5" />
+                        Split Bill
+                      </span>
+                      <span className="text-xs text-primary group-hover:underline">
+                        {showSplitCalc ? 'Hide' : 'Calculate'}
+                      </span>
+                    </button>
+
+                    {showSplitCalc && (
+                      <div className="mt-3 rounded-lg border bg-muted/40 p-3 space-y-3">
+                        <p className="text-xs text-muted-foreground">How many people are splitting the bill?</p>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => setSplitPeople(p => Math.max(2, p - 1))}
+                            className="h-8 w-8 rounded-full border flex items-center justify-center text-muted-foreground hover:bg-accent transition-colors"
+                          >
+                            <Minus className="h-3.5 w-3.5" />
+                          </button>
+                          <span className="flex-1 text-center font-bold text-lg tabular-nums">{splitPeople}</span>
+                          <button
+                            onClick={() => setSplitPeople(p => Math.min(20, p + 1))}
+                            className="h-8 w-8 rounded-full border flex items-center justify-center text-muted-foreground hover:bg-accent transition-colors"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <Separator />
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+                            <User className="h-3.5 w-3.5" /> Per person
+                          </span>
+                          <span className="text-base font-bold text-primary tabular-nums">
+                            {formatMoney(
+                              Math.ceil((activeCart.totalCents + gstCents + totalExtraChargesCents + tipCents) / splitPeople),
+                              currencyCode
+                            )}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground text-center">
+                          Total {formatMoney(activeCart.totalCents + gstCents + totalExtraChargesCents + tipCents, currencyCode)} ÷ {splitPeople} people
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
                 </div>
 
                 {/* Order mode summary (read-only — selected via top-of-page selector) */}
