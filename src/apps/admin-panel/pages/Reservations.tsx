@@ -4,6 +4,7 @@ import { CalendarDays, Clock, Users, Check, X, Phone, ChevronDown } from "lucide
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
+import { FeatureGate } from "../components/FeatureGate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,14 @@ const STATUS_COLORS: Record<string, string> = {
 const STATUSES = ["pending", "confirmed", "seated", "completed", "cancelled", "no_show"];
 
 export default function AdminReservations() {
+  return (
+    <FeatureGate featureKey="table_reservations" featureName="Table Reservations" description="Allow customers to reserve tables online. Manage bookings, confirm or decline reservations, and track seating.">
+      <ReservationsContent />
+    </FeatureGate>
+  );
+}
+
+function ReservationsContent() {
   const { restaurant } = useRestaurantContext();
   const qc = useQueryClient();
   const { toast } = useToast();

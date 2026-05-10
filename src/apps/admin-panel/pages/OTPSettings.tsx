@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { FeatureGate } from "../components/FeatureGate";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +16,14 @@ function normalizeSettings(s: any) {
 }
 
 export default function OTPSettings() {
+  return (
+    <FeatureGate featureKey="otp_verification" featureName="OTP Verification" description="Phone number verification via SMS or WhatsApp OTP before checkout.">
+      <OTPSettingsContent />
+    </FeatureGate>
+  );
+}
+
+function OTPSettingsContent() {
   const { restaurant } = useRestaurantContext();
   const { toast } = useToast();
   const qc = useQueryClient();

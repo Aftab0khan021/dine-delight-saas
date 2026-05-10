@@ -12,14 +12,14 @@ export interface FeatureDefinition {
 }
 
 export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
-    // Core Features
+    // Core Features (all default OFF — enabled via subscription or override)
     {
         key: 'online_ordering',
         name: 'Online Ordering',
         description: 'Allow customers to place orders online through the restaurant website',
         type: 'boolean',
         category: 'core',
-        defaultValue: true,
+        defaultValue: false,
     },
     {
         key: 'qr_menu',
@@ -27,7 +27,7 @@ export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
         description: 'Enable QR code menu access for contactless dining',
         type: 'boolean',
         category: 'core',
-        defaultValue: true,
+        defaultValue: false,
     },
     {
         key: 'analytics',
@@ -35,7 +35,47 @@ export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
         description: 'Access to detailed analytics and reporting dashboard',
         type: 'boolean',
         category: 'core',
-        defaultValue: true,
+        defaultValue: false,
+    },
+    {
+        key: 'kitchen_display',
+        name: 'Kitchen Display',
+        description: 'Kitchen display system for order preparation tracking',
+        type: 'boolean',
+        category: 'core',
+        defaultValue: false,
+    },
+    {
+        key: 'coupons',
+        name: 'Coupons & Discounts',
+        description: 'Create and manage promo codes and discount campaigns',
+        type: 'boolean',
+        category: 'core',
+        defaultValue: false,
+    },
+    {
+        key: 'reviews',
+        name: 'Customer Reviews',
+        description: 'View and manage customer reviews and ratings',
+        type: 'boolean',
+        category: 'core',
+        defaultValue: false,
+    },
+    {
+        key: 'customer_management',
+        name: 'Customer Management',
+        description: 'CRM database for customer profiles, order history, and insights',
+        type: 'boolean',
+        category: 'core',
+        defaultValue: false,
+    },
+    {
+        key: 'delivery_zones',
+        name: 'Delivery Zones',
+        description: 'Configure delivery areas and zone-based pricing',
+        type: 'boolean',
+        category: 'core',
+        defaultValue: false,
     },
 
     // Limits
@@ -96,6 +136,38 @@ export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
         key: 'white_label',
         name: 'White Label',
         description: 'Remove platform branding and use your own branding',
+        type: 'boolean',
+        category: 'premium',
+        defaultValue: false,
+    },
+    {
+        key: 'menu_insights',
+        name: 'Menu Insights',
+        description: 'AI-powered menu performance analytics and recommendations',
+        type: 'boolean',
+        category: 'premium',
+        defaultValue: false,
+    },
+    {
+        key: 'whatsapp_crm',
+        name: 'WhatsApp CRM',
+        description: 'WhatsApp marketing and customer communication tools',
+        type: 'boolean',
+        category: 'premium',
+        defaultValue: false,
+    },
+    {
+        key: 'whatsapp_bot',
+        name: 'WhatsApp Bot',
+        description: 'Automated WhatsApp ordering bot for customers',
+        type: 'boolean',
+        category: 'premium',
+        defaultValue: false,
+    },
+    {
+        key: 'otp_verification',
+        name: 'OTP Verification',
+        description: 'Phone number verification via SMS/WhatsApp OTP',
         type: 'boolean',
         category: 'premium',
         defaultValue: false,

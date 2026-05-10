@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
+import { FeatureGate } from "../components/FeatureGate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +37,14 @@ type StockMovement = {
 };
 
 export default function Inventory() {
+  return (
+    <FeatureGate featureKey="inventory_management" featureName="Inventory Management" description="Track ingredients, manage stock levels, and auto-disable menu items when ingredients run out.">
+      <InventoryContent />
+    </FeatureGate>
+  );
+}
+
+function InventoryContent() {
   const { restaurant } = useRestaurantContext();
   const { toast } = useToast();
   const qc = useQueryClient();

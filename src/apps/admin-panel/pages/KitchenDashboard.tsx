@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
+import { FeatureGate } from "../components/FeatureGate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -32,6 +33,14 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function KitchenDashboard() {
+  return (
+    <FeatureGate featureKey="kitchen_display" featureName="Kitchen Display" description="Live kitchen order board with Kanban-style columns, real-time updates, and inventory impact previews.">
+      <KitchenDashboardContent />
+    </FeatureGate>
+  );
+}
+
+function KitchenDashboardContent() {
   const { restaurant } = useRestaurantContext();
   const qc = useQueryClient();
   const [brandFilter, setBrandFilter] = useState<string>("all");

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
+import { FeatureGate } from "../components/FeatureGate";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { BarChart3, TrendingUp, Clock, Users, Star } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
@@ -12,6 +13,14 @@ const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const HOUR_LABELS = Array.from({ length: 24 }, (_, i) => `${i}:00`);
 
 export default function Analytics() {
+  return (
+    <FeatureGate featureKey="analytics" featureName="Advanced Analytics" description="Revenue trends, peak hours heatmap, customer retention, and top items analysis over 90 days.">
+      <AnalyticsContent />
+    </FeatureGate>
+  );
+}
+
+function AnalyticsContent() {
   const { restaurant } = useRestaurantContext();
   const cc = restaurant?.currency_code || "INR";
 

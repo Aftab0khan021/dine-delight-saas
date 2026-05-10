@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
+import { FeatureGate } from "../components/FeatureGate";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,6 +19,14 @@ type PopularItem = {
 };
 
 export default function MenuInsights() {
+  return (
+    <FeatureGate featureKey="menu_insights" featureName="Menu Insights" description="AI-powered menu performance analytics, item popularity rankings, and frequently ordered together recommendations.">
+      <MenuInsightsContent />
+    </FeatureGate>
+  );
+}
+
+function MenuInsightsContent() {
   const { restaurant } = useRestaurantContext();
   const [view, setView] = useState<"popularity" | "pairs">("popularity");
 

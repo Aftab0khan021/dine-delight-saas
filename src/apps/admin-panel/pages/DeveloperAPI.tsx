@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
+import { FeatureGate } from "../components/FeatureGate";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,14 @@ async function hashKey(key: string): Promise<string> {
 }
 
 export default function DeveloperAPI() {
+  return (
+    <FeatureGate featureKey="api_access" featureName="Developer API" description="REST API access for headless POS integration — manage API keys, webhooks, and view documentation.">
+      <DeveloperAPIContent />
+    </FeatureGate>
+  );
+}
+
+function DeveloperAPIContent() {
   const { restaurant } = useRestaurantContext();
   const { toast } = useToast();
   const qc = useQueryClient();

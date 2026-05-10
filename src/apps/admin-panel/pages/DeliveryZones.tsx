@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
+import { FeatureGate } from "../components/FeatureGate";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,14 @@ import { MapPin, Plus, Trash2, Edit2, Save, X } from "lucide-react";
 import { formatMoney } from "@/lib/formatting";
 
 export default function DeliveryZones() {
+  return (
+    <FeatureGate featureKey="delivery_zones" featureName="Delivery Zones" description="Configure delivery areas, zone-based pricing, minimum order values, and estimated delivery times.">
+      <DeliveryZonesContent />
+    </FeatureGate>
+  );
+}
+
+function DeliveryZonesContent() {
   const { restaurant } = useRestaurantContext();
   const { toast } = useToast();
   const qc = useQueryClient();

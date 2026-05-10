@@ -30,6 +30,8 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { usePermissionContext } from "../state/permission-context";
+import { useRestaurantContext } from "../state/restaurant-context";
+import { useFeatureAccess } from "../hooks/useFeatureAccess";
 import { PERMISSIONS } from "./staff/staff-utils";
 
 type NavItem = {
@@ -38,34 +40,35 @@ type NavItem = {
   icon: any;
   permission?: string; // Optional permission code required to view
   adminOnly?: boolean; // Only visible to admins
+  featureKey?: string; // Feature flag key — item hidden when feature is disabled
 };
 
 const coreNavItems: NavItem[] = [
   { to: "/admin/dashboard",        label: "Dashboard",        icon: LayoutDashboard },
   { to: "/admin/orders",           label: "Orders",           icon: ReceiptText,    permission: PERMISSIONS.VIEW_ORDERS },
-  { to: "/admin/kitchen",          label: "Kitchen Board",    icon: ChefHat,        permission: PERMISSIONS.VIEW_ORDERS },
+  { to: "/admin/kitchen",          label: "Kitchen Board",    icon: ChefHat,        permission: PERMISSIONS.VIEW_ORDERS, featureKey: "kitchen_display" },
   { to: "/admin/menu",             label: "Menu",             icon: Salad,          permission: PERMISSIONS.VIEW_MENU },
   { to: "/admin/qr",               label: "QR Menu",          icon: QrCode,         permission: PERMISSIONS.VIEW_QR },
   { to: "/admin/staff",            label: "Staff",            icon: Users,          permission: PERMISSIONS.VIEW_STAFF },
   { to: "/admin/staff-categories", label: "Staff Categories", icon: Settings,       permission: PERMISSIONS.MANAGE_CATEGORIES_STAFF, adminOnly: true },
   { to: "/admin/branding",         label: "Branding",         icon: Palette,        permission: PERMISSIONS.MANAGE_SETTINGS },
   { to: "/admin/billing",          label: "Billing",          icon: CreditCard,     adminOnly: true },
-  { to: "/admin/coupons",          label: "Coupons",          icon: Ticket,         permission: PERMISSIONS.VIEW_COUPONS },
-  { to: "/admin/reservations",     label: "Reservations",     icon: CalendarDays,   permission: PERMISSIONS.MANAGE_SETTINGS },
-  { to: "/admin/reviews",          label: "Reviews",          icon: Star,           adminOnly: true },
-  { to: "/admin/inventory",        label: "Inventory",        icon: Package,        permission: PERMISSIONS.VIEW_MENU },
-  { to: "/admin/customers",        label: "Customers",        icon: UserCheck,      adminOnly: true },
-  { to: "/admin/delivery-zones",   label: "Delivery Zones",   icon: MapPin,         adminOnly: true },
+  { to: "/admin/coupons",          label: "Coupons",          icon: Ticket,         permission: PERMISSIONS.VIEW_COUPONS, featureKey: "coupons" },
+  { to: "/admin/reservations",     label: "Reservations",     icon: CalendarDays,   permission: PERMISSIONS.MANAGE_SETTINGS, featureKey: "table_reservations" },
+  { to: "/admin/reviews",          label: "Reviews",          icon: Star,           adminOnly: true, featureKey: "reviews" },
+  { to: "/admin/inventory",        label: "Inventory",        icon: Package,        permission: PERMISSIONS.VIEW_MENU, featureKey: "inventory_management" },
+  { to: "/admin/customers",        label: "Customers",        icon: UserCheck,      adminOnly: true, featureKey: "customer_management" },
+  { to: "/admin/delivery-zones",   label: "Delivery Zones",   icon: MapPin,         adminOnly: true, featureKey: "delivery_zones" },
 ];
 
 // Growth pillar pages — shown under "Growth" separator, admin-only unless noted
 const growthNavItems: NavItem[] = [
-  { to: "/admin/marketing",  label: "WhatsApp CRM",   icon: MessageCircle, adminOnly: true },
-  { to: "/admin/insights",   label: "Menu Insights",  icon: BarChart3,     adminOnly: true },
-  { to: "/admin/analytics",  label: "Analytics",      icon: PieChart,      adminOnly: true },
-  { to: "/admin/developer",  label: "Developer API",  icon: Code2,         adminOnly: true },
-  { to: "/admin/whatsapp",   label: "WhatsApp Bot",   icon: Bot,           adminOnly: true },
-  { to: "/admin/otp-settings", label: "OTP Settings", icon: Shield,        adminOnly: true },
+  { to: "/admin/marketing",  label: "WhatsApp CRM",   icon: MessageCircle, adminOnly: true, featureKey: "whatsapp_crm" },
+  { to: "/admin/insights",   label: "Menu Insights",  icon: BarChart3,     adminOnly: true, featureKey: "menu_insights" },
+  { to: "/admin/analytics",  label: "Analytics",      icon: PieChart,      adminOnly: true, featureKey: "analytics" },
+  { to: "/admin/developer",  label: "Developer API",  icon: Code2,         adminOnly: true, featureKey: "api_access" },
+  { to: "/admin/whatsapp",   label: "WhatsApp Bot",   icon: Bot,           adminOnly: true, featureKey: "whatsapp_bot" },
+  { to: "/admin/otp-settings", label: "OTP Settings", icon: Shield,        adminOnly: true, featureKey: "otp_verification" },
 ];
 
 
@@ -101,8 +104,10 @@ function NavItem({ item, isCollapsed }: { item: NavItem; isCollapsed: boolean })
 export function AdminSidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { hasPermission, isAdmin } = usePermissionContext();
+  const { restaurant } = useRestaurantContext();
+  const { isFeatureEnabled, isLoading: featuresLoading } = useFeatureAccess(restaurant?.id);
 
-  // Filter nav items based on permissions
+  // Filter nav items based on permissions AND feature flags
   const navItems = useMemo(() => {
     return allNavItems.filter(item => {
       // Admin-only items
@@ -111,10 +116,14 @@ export function AdminSidebar() {
       // Permission-based items
       if (item.permission && !hasPermission(item.permission as any)) return false;
 
+      // Feature flag gating — hide items when feature is disabled
+      // While features are loading, show all items to avoid flash
+      if (item.featureKey && !featuresLoading && !isFeatureEnabled(item.featureKey)) return false;
+
       // No restrictions, show it
       return true;
     });
-  }, [hasPermission, isAdmin]);
+  }, [hasPermission, isAdmin, isFeatureEnabled, featuresLoading]);
 
   return (
     <aside

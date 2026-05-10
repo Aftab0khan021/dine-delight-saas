@@ -1,11 +1,23 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
+import { FeatureGate } from "../components/FeatureGate";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { MessageCircle, CheckCircle, XCircle, Clock, TrendingUp, Users } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
+
+export default function Marketing() {
+  return (
+    <FeatureGate featureKey="whatsapp_crm" featureName="WhatsApp CRM" description="Send marketing campaigns, view delivery stats, and manage WhatsApp communication with customers.">
+      <MarketingContent />
+    </FeatureGate>
+  );
+}
+
+function MarketingContent() {
+  const { restaurant } = useRestaurantContext();
 
 const STATUS_COLORS: Record<string, string> = {
   sent: "default",
@@ -19,9 +31,6 @@ const TYPE_LABELS: Record<string, string> = {
   reengagement: "Re-engagement",
   custom: "Custom",
 };
-
-export default function Marketing() {
-  const { restaurant } = useRestaurantContext();
 
   const campaignsQuery = useQuery({
     queryKey: ["marketing", "campaigns", restaurant?.id],

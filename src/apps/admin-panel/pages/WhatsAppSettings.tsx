@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
+import { FeatureGate } from "../components/FeatureGate";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,14 @@ import { MessageSquare, Settings, BarChart3, MessageCircle, CheckCircle2, AlertC
 import { formatMoney } from "@/lib/formatting";
 
 export default function WhatsAppSettings() {
+    return (
+        <FeatureGate featureKey="whatsapp_bot" featureName="WhatsApp Bot" description="Automated WhatsApp ordering bot — manage bot settings, menu visibility, and view conversations.">
+            <WhatsAppSettingsContent />
+        </FeatureGate>
+    );
+}
+
+function WhatsAppSettingsContent() {
     const { restaurant } = useRestaurantContext();
     const { toast } = useToast();
     const qc = useQueryClient();

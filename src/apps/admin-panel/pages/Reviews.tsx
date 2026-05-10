@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
+import { FeatureGate } from "../components/FeatureGate";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,14 @@ import { Star, Eye, EyeOff, Trash2, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Reviews() {
+  return (
+    <FeatureGate featureKey="reviews" featureName="Customer Reviews" description="View and manage customer reviews and ratings on your restaurant profile.">
+      <ReviewsContent />
+    </FeatureGate>
+  );
+}
+
+function ReviewsContent() {
   const { restaurant } = useRestaurantContext();
   const { toast } = useToast();
   const qc = useQueryClient();

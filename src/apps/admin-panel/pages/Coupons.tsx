@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/formatting";
 import { getCurrencySymbol } from "@/lib/currency-utils";
+import { FeatureGate } from "../components/FeatureGate";
 
 // UI Components
 import { Badge } from "@/components/ui/badge";
@@ -87,6 +88,14 @@ const couponSchema = z.object({
 type CouponForm = z.infer<typeof couponSchema>;
 
 export default function AdminCoupons() {
+    return (
+        <FeatureGate featureKey="coupons" featureName="Coupons & Discounts" description="Create and manage promo codes, discount campaigns, loyalty points, and referral programs.">
+            <CouponsContent />
+        </FeatureGate>
+    );
+}
+
+function CouponsContent() {
     const { restaurant } = useRestaurantContext();
     const qc = useQueryClient();
     const { toast } = useToast();
@@ -395,7 +404,8 @@ export default function AdminCoupons() {
                 </CardContent>
             </Card>
 
-            {/* Loyalty Program */}
+            {/* Loyalty Program — gated by loyalty_program flag */}
+            <FeatureGate featureKey="loyalty_program" featureName="Loyalty Program" description="Reward repeat customers with loyalty points and referral bonuses." hideWhenDisabled>
             <Card className="shadow-sm">
                 <CardHeader>
                     <div className="flex items-center justify-between">
@@ -461,6 +471,7 @@ export default function AdminCoupons() {
             <Button onClick={handleSaveLoyalty} disabled={savingLoyalty} className="w-full">
                 {savingLoyalty ? "Saving…" : "Save Loyalty & Referral Settings"}
             </Button>
+            </FeatureGate>
 
             {/* Create/Edit Dialog */}
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

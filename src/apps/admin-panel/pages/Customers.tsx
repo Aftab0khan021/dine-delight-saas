@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
+import { FeatureGate } from "../components/FeatureGate";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,14 @@ import { formatMoney } from "@/lib/formatting";
 import { format, formatDistanceToNow } from "date-fns";
 
 export default function Customers() {
+  return (
+    <FeatureGate featureKey="customer_management" featureName="Customer Management" description="CRM database for customer profiles, order history, lifetime value tracking, and loyalty points.">
+      <CustomersContent />
+    </FeatureGate>
+  );
+}
+
+function CustomersContent() {
   const { restaurant } = useRestaurantContext();
   const [search, setSearch] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);

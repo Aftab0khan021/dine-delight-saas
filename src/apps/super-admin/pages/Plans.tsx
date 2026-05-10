@@ -33,7 +33,18 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Check, X, Code } from "lucide-react";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Plus, Edit, Check, X, Code, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { SubscriptionPlan, PlanFeatures } from "../types/super-admin";
@@ -112,6 +123,30 @@ export default function Plans() {
             toast({
                 title: "Error",
                 description: error.message,
+                variant: "destructive",
+            });
+        },
+    });
+
+    // Delete mutation
+    const deletePlanMutation = useMutation({
+        mutationFn: async (planId: string) => {
+            const { error } = await supabase
+                .from('subscription_plans')
+                .delete()
+                .eq('id', planId);
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['subscription-plans'] });
+            toast({ title: "Plan deleted", description: "The plan has been permanently removed." });
+        },
+        onError: (error: Error) => {
+            toast({
+                title: "Cannot delete plan",
+                description: error.message.includes('foreign key') || error.message.includes('constraint')
+                    ? "This plan has active subscriptions. Deactivate it instead."
+                    : error.message,
                 variant: "destructive",
             });
         },
@@ -466,13 +501,39 @@ export default function Plans() {
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => handleOpenDialog(plan)}
-                                            >
-                                                <Edit className="h-4 w-4" />
-                                            </Button>
+                                            <div className="flex items-center gap-1">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleOpenDialog(plan)}
+                                                >
+                                                    <Edit className="h-4 w-4" />
+                                                </Button>
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>Delete "{plan.name}" plan?</AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                This will permanently delete this plan. If any restaurants have active subscriptions on this plan, the deletion will fail — deactivate the plan instead.
+                                                            </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                            <AlertDialogAction
+                                                                onClick={() => deletePlanMutation.mutate(plan.id)}
+                                                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                                            >
+                                                                Delete Plan
+                                                            </AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 ))
@@ -483,40 +544,35 @@ export default function Plans() {
                 </CardContent>
             </Card>
 
-            {/* Feature Reference */}
+            {/* Feature Reference — auto-generated from FEATURE_DEFINITIONS */}
             <Card>
                 <CardHeader>
                     <CardTitle className="text-base">Feature Reference</CardTitle>
                     <CardDescription>
-                        Common features you can configure in plans
+                        All {FEATURE_DEFINITIONS.length} configurable features available for plans
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="grid gap-2 md:grid-cols-2 text-sm">
-                        <div>
-                            <code className="bg-muted px-2 py-1 rounded">online_ordering</code>
-                            <span className="text-muted-foreground ml-2">- Enable online orders</span>
-                        </div>
-                        <div>
-                            <code className="bg-muted px-2 py-1 rounded">qr_menu</code>
-                            <span className="text-muted-foreground ml-2">- QR code menu access</span>
-                        </div>
-                        <div>
-                            <code className="bg-muted px-2 py-1 rounded">staff_limit</code>
-                            <span className="text-muted-foreground ml-2">- Max staff (use -1 for unlimited)</span>
-                        </div>
-                        <div>
-                            <code className="bg-muted px-2 py-1 rounded">custom_domain</code>
-                            <span className="text-muted-foreground ml-2">- Custom domain support</span>
-                        </div>
-                        <div>
-                            <code className="bg-muted px-2 py-1 rounded">analytics</code>
-                            <span className="text-muted-foreground ml-2">- Analytics dashboard</span>
-                        </div>
-                        <div>
-                            <code className="bg-muted px-2 py-1 rounded">api_access</code>
-                            <span className="text-muted-foreground ml-2">- REST API access</span>
-                        </div>
+                    <div className="space-y-4">
+                        {FEATURE_CATEGORIES.map((cat) => {
+                            const features = FEATURE_DEFINITIONS.filter(f => f.category === cat.key);
+                            if (features.length === 0) return null;
+                            return (
+                                <div key={cat.key}>
+                                    <h4 className="text-sm font-semibold mb-2">{cat.label}</h4>
+                                    <div className="grid gap-1.5 md:grid-cols-2 text-sm">
+                                        {features.map((f) => (
+                                            <div key={f.key} className="flex items-center gap-2">
+                                                <code className="bg-muted px-2 py-0.5 rounded text-xs shrink-0">{f.key}</code>
+                                                <span className="text-muted-foreground truncate">
+                                                    {f.name}{f.type === 'limit' ? ` (${f.unit})` : ''}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </CardContent>
             </Card>
