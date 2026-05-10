@@ -214,6 +214,38 @@ export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
         category: 'advanced',
         defaultValue: false,
     },
+    {
+        key: 'smart_ranking',
+        name: 'Smart Menu Ranking',
+        description: 'Auto-sort menu items by popularity so best-sellers appear first',
+        type: 'boolean',
+        category: 'core',
+        defaultValue: false,
+    },
+    {
+        key: 'order_heatmap',
+        name: 'Order Heatmap',
+        description: 'Visual heatmap showing busiest ordering hours and days',
+        type: 'boolean',
+        category: 'core',
+        defaultValue: false,
+    },
+    {
+        key: 'ai_descriptions',
+        name: 'AI Menu Descriptions',
+        description: 'AI-generated appetizing menu item descriptions (free template + paid GPT)',
+        type: 'boolean',
+        category: 'premium',
+        defaultValue: false,
+    },
+    {
+        key: 'sentiment_analysis',
+        name: 'Review Sentiment',
+        description: 'Auto-classify reviews as positive/neutral/negative with sentiment badges',
+        type: 'boolean',
+        category: 'premium',
+        defaultValue: false,
+    },
 ];
 
 // Helper functions

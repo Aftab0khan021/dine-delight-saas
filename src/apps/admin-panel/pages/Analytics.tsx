@@ -8,6 +8,7 @@ import { BarChart3, TrendingUp, Clock, Users, Star } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { formatMoney } from "@/lib/formatting";
 import { format, subDays, startOfDay, getHours, getDay } from "date-fns";
+import OrderHeatmap from "../components/OrderHeatmap";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const HOUR_LABELS = Array.from({ length: 24 }, (_, i) => `${i}:00`);
@@ -213,6 +214,9 @@ function AnalyticsContent() {
           </ResponsiveContainer>
         </CardContent>
       </Card>
+
+      {/* Full-Width Order Heatmap */}
+      <OrderHeatmap orders={orders} />
     </section>
   );
 }

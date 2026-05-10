@@ -13,12 +13,14 @@ import {
   GripVertical,
   AlertCircle,
   Zap,
+  Sparkles,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
 import { useFeatureLimit } from "../hooks/useFeatureAccess";
+import { generateDescriptionFree, getStaleLabel } from "../lib/ai-utils";
 
 // UI Components
 import { Badge } from "@/components/ui/badge";
@@ -137,6 +139,26 @@ export default function AdminMenu() {
 
   const categories = categoriesQuery.data ?? [];
   const items = itemsQuery.data ?? [];
+
+  // Fetch stale item data from menu_item_popularity view
+  const { data: popularityData } = useQuery({
+    queryKey: ["admin", "menu", restaurant?.id, "popularity"],
+    enabled: !!restaurant?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("menu_item_popularity")
+        .select("menu_item_id, last_ordered_at")
+        .eq("restaurant_id", restaurant!.id);
+      return data || [];
+    },
+  });
+
+  // Build a map: menu_item_id -> last_ordered_at
+  const lastOrderedMap = useMemo(() => {
+    const map = new Map<string, string | null>();
+    (popularityData || []).forEach((p: any) => map.set(p.menu_item_id, p.last_ordered_at));
+    return map;
+  }, [popularityData]);
 
   // --- Derived Data ---
   const itemCountByCat = useMemo(() => {
@@ -490,6 +512,15 @@ export default function AdminMenu() {
                         {((item as any).tags || []).slice(0, 2).map((t: string) => <Badge key={t} variant="outline" className="h-4 px-1 text-[9px]">{t}</Badge>)}
                         {!item.is_active && <Badge variant="destructive" className="h-4 px-1 text-[10px]">Hidden</Badge>}
                         {(item as any).is_sold_out && <Badge variant="outline" className="h-4 px-1 text-[10px] border-red-400 text-red-600">Sold Out</Badge>}
+                        {(() => {
+                          const stale = getStaleLabel(lastOrderedMap.get(item.id) || null);
+                          if (!stale.variant) return null;
+                          return (
+                            <Badge variant="outline" className={`h-4 px-1 text-[9px] ${stale.variant === 'danger' ? 'border-red-400 text-red-500' : 'border-amber-400 text-amber-600'}`}>
+                              ⚠ {stale.text}
+                            </Badge>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -641,6 +672,7 @@ function CategorySheet({ open, onOpenChange, data, onSave, onDelete, categories 
 function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currencyCode, onSave, onDelete }: any) {
   const form = useForm();
   const [uploading, setUploading] = useState(false);
+  const [generatingDesc, setGeneratingDesc] = useState(false);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, upsert = false) => {
     if (!e.target.files?.length) return;
@@ -765,8 +797,30 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currenc
           </div>
 
           <div className="space-y-2">
-            <Label>Description</Label>
-            <Textarea {...form.register("description")} />
+            <div className="flex items-center justify-between">
+              <Label>Description</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1.5"
+                disabled={generatingDesc || !form.watch("name")}
+                onClick={() => {
+                  setGeneratingDesc(true);
+                  const name = form.watch("name");
+                  const catId = form.watch("category_id");
+                  const cat = (categories || []).find((c: any) => c.id === catId);
+                  const price = Number(form.watch("price_cents"));
+                  const desc = generateDescriptionFree(name, cat?.name, price);
+                  form.setValue("description", desc, { shouldDirty: true });
+                  setGeneratingDesc(false);
+                }}
+              >
+                <Sparkles className="h-3 w-3" />
+                {generatingDesc ? "Generating..." : "✨ AI Generate"}
+              </Button>
+            </div>
+            <Textarea {...form.register("description")} placeholder="Add a tasty description... or let AI generate one" />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

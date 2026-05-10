@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Star, Eye, EyeOff, Trash2, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { analyzeSentimentFree } from "../lib/ai-utils";
 
 export default function Reviews() {
   return (
@@ -60,6 +61,16 @@ function ReviewsContent() {
     ? Math.round((reviews.reduce((s, r) => s + r.rating, 0) / reviews.length) * 10) / 10
     : 0;
 
+  // Compute sentiment stats
+  const sentimentStats = reviews.reduce(
+    (acc, r) => {
+      const s = analyzeSentimentFree(r.review_text || "", r.rating);
+      acc[s.label]++;
+      return acc;
+    },
+    { positive: 0, neutral: 0, negative: 0 }
+  );
+
   return (
     <div className="space-y-6">
       <div>
@@ -90,6 +101,16 @@ function ReviewsContent() {
           <CardHeader className="pb-2"><CardDescription>Hidden</CardDescription></CardHeader>
           <CardContent><p className="text-2xl font-bold text-amber-600">{hiddenCount}</p></CardContent>
         </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardDescription>Sentiment</CardDescription></CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-green-600">😊 {sentimentStats.positive}</span>
+              <span className="text-amber-500">😐 {sentimentStats.neutral}</span>
+              <span className="text-red-500">😞 {sentimentStats.negative}</span>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Reviews Table */}
@@ -110,6 +131,7 @@ function ReviewsContent() {
                   <TableRow>
                     <TableHead>Customer</TableHead>
                     <TableHead>Rating</TableHead>
+                    <TableHead>Sentiment</TableHead>
                     <TableHead className="min-w-[200px]">Review</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Status</TableHead>
@@ -131,6 +153,16 @@ function ReviewsContent() {
                             <Star key={i} className={`h-3.5 w-3.5 ${i < r.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-300'}`} />
                           ))}
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const s = analyzeSentimentFree(r.review_text || "", r.rating);
+                          return (
+                            <Badge variant="outline" className={`gap-1 ${s.color}`}>
+                              {s.emoji} {s.label}
+                            </Badge>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <p className="text-sm text-muted-foreground line-clamp-2">{r.review_text || "—"}</p>

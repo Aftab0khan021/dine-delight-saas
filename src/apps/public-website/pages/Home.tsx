@@ -79,6 +79,10 @@ const FEATURE_LABELS: Record<string, string> = {
   staff_limit: "Staff Limit",
   menu_items_limit: "Menu Items Limit",
   api_rate_limit: "API Rate Limit",
+  smart_ranking: "Smart Menu Ranking",
+  order_heatmap: "Order Heatmap",
+  ai_descriptions: "AI Menu Descriptions",
+  sentiment_analysis: "Review Sentiment",
 };
 
 const HOW_IT_WORKS = [
