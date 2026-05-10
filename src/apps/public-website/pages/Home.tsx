@@ -50,6 +50,36 @@ const FAQS = [
   { q: "Can I use it for multiple restaurants?", a: "Currently each restaurant gets its own account. Multi-outlet management from a single dashboard is on our roadmap and coming soon." },
 ];
 
+/* Feature key → Human-readable label (for pricing cards) */
+const FEATURE_LABELS: Record<string, string> = {
+  online_ordering: "Online Ordering",
+  qr_menu: "QR Code Menu",
+  table_ordering: "Table Ordering",
+  analytics: "Analytics Dashboard",
+  multi_language: "Multi-Language",
+  kitchen_display: "Kitchen Display",
+  coupons: "Coupons & Discounts",
+  reviews: "Customer Reviews",
+  customer_management: "Customer CRM",
+  delivery_zones: "Delivery Zones",
+  table_reservations: "Table Reservations",
+  inventory_management: "Inventory Tracking",
+  loyalty_program: "Loyalty Program",
+  email_marketing: "Email Marketing",
+  multi_location: "Multi-Location",
+  custom_domain: "Custom Domain",
+  api_access: "API Access",
+  priority_support: "Priority Support",
+  white_label: "White Label",
+  menu_insights: "Menu Insights (AI)",
+  whatsapp_crm: "WhatsApp CRM",
+  whatsapp_bot: "WhatsApp Bot",
+  otp_verification: "OTP Verification",
+  staff_limit: "Staff Limit",
+  menu_items_limit: "Menu Items Limit",
+  api_rate_limit: "API Rate Limit",
+};
+
 /* ------------------------------------------------------------------ */
 /*  HOOKS                                                              */
 /* ------------------------------------------------------------------ */
@@ -78,6 +108,8 @@ export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [statsVisible, setStatsVisible] = useState(false);
   const [activeTestimonial, setActiveTestimonial] = useState(0);
+  const [isYearly, setIsYearly] = useState(false);
+  const [showAllFeatures, setShowAllFeatures] = useState<Record<string, boolean>>({});
   const statsRef = useRef<HTMLDivElement>(null);
 
   useSEO({
@@ -245,15 +277,52 @@ export default function Home() {
         <section id="pricing" className="py-20 md:py-28 bg-muted/30">
           <div className="container mx-auto px-4">
             <h2 className="text-3xl md:text-4xl font-bold text-center mb-4">Simple, Transparent Pricing</h2>
-            <p className="text-center text-muted-foreground mb-12 max-w-xl mx-auto">
+            <p className="text-center text-muted-foreground mb-8 max-w-xl mx-auto">
               Start free. Upgrade when you grow. No hidden fees.
             </p>
+
+            {/* Monthly / Yearly Toggle */}
+            <div className="flex items-center justify-center gap-3 mb-12">
+              <span className={`text-sm font-medium ${!isYearly ? "text-foreground" : "text-muted-foreground"}`}>Monthly</span>
+              <button
+                onClick={() => setIsYearly(!isYearly)}
+                className={`relative w-14 h-7 rounded-full transition-colors ${isYearly ? "bg-primary" : "bg-muted-foreground/30"}`}
+              >
+                <span className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow-md transition-transform ${isYearly ? "translate-x-7" : "translate-x-0"}`} />
+              </button>
+              <span className={`text-sm font-medium ${isYearly ? "text-foreground" : "text-muted-foreground"}`}>
+                Yearly
+              </span>
+              {isYearly && (
+                <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full dark:bg-green-900/30 dark:text-green-400">
+                  Save up to 17%
+                </span>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
               {(plans || []).map((plan: any, i: number) => {
                 const features = (plan.features && typeof plan.features === "object" && !Array.isArray(plan.features))
                   ? plan.features as Record<string, any> : {};
-                const featureList = Object.entries(features);
+
+                // Separate boolean features and limits
+                const booleanFeatures = Object.entries(features)
+                  .filter(([, val]) => typeof val === "boolean")
+                  .sort(([, a], [, b]) => (b ? 1 : 0) - (a ? 1 : 0)); // enabled first
+                const limitFeatures = Object.entries(features)
+                  .filter(([, val]) => typeof val === "number");
+
                 const isMiddle = i === 1;
+                const displayPrice = isYearly && plan.yearly_price_cents > 0
+                  ? plan.yearly_price_cents
+                  : plan.price_cents;
+                const billingLabel = isYearly && plan.yearly_price_cents > 0 ? "year" : "month";
+
+                // Calculate monthly equivalent for yearly
+                const monthlyEquivalent = isYearly && plan.yearly_price_cents > 0
+                  ? Math.round(plan.yearly_price_cents / 12)
+                  : null;
+
                 return (
                   <Card key={plan.id} className={`relative p-6 flex flex-col ${isMiddle ? "border-primary shadow-xl scale-[1.03] ring-2 ring-primary/20" : "border"}`}>
                     {isMiddle && (
@@ -265,19 +334,50 @@ export default function Home() {
                     )}
                     <h3 className="text-lg font-bold">{plan.name}</h3>
                     <p className="text-sm text-muted-foreground mt-1 min-h-[40px]">{plan.description || ""}</p>
-                    <div className="mt-4 mb-6">
+                    <div className="mt-4 mb-1">
                       <span className="text-3xl font-extrabold">
-                        {plan.price_cents === 0 ? "Free" : formatMoney(plan.price_cents, plan.currency || "INR")}
+                        {displayPrice === 0 ? "Free" : formatMoney(displayPrice, plan.currency || "INR")}
                       </span>
-                      {plan.price_cents > 0 && <span className="text-muted-foreground text-sm">/{plan.billing_period || "month"}</span>}
+                      {displayPrice > 0 && <span className="text-muted-foreground text-sm">/{billingLabel}</span>}
                     </div>
+                    {monthlyEquivalent && monthlyEquivalent > 0 && (
+                      <p className="text-xs text-muted-foreground mb-4">
+                        That's {formatMoney(monthlyEquivalent, plan.currency || "INR")}/month
+                      </p>
+                    )}
+                    {!monthlyEquivalent && <div className="mb-4" />}
+
+                    {/* Limit features — shown as highlights */}
+                    {limitFeatures.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {limitFeatures.map(([key, val]) => (
+                          <span key={key} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-semibold px-2.5 py-1 rounded-full">
+                            {val === -1 ? "Unlimited" : val} {FEATURE_LABELS[key]?.replace(" Limit", "") || key.replace(/_/g, " ")}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Boolean features */}
                     <ul className="space-y-2 flex-1 mb-6">
-                      {featureList.map(([key, val]) => (
+                      {booleanFeatures.slice(0, showAllFeatures[plan.id] ? undefined : 8).map(([key, val]) => (
                         <li key={key} className="flex items-start gap-2 text-sm">
                           {val ? <Check className="h-4 w-4 text-green-500 mt-0.5 shrink-0" /> : <X className="h-4 w-4 text-muted-foreground/40 mt-0.5 shrink-0" />}
-                          <span className={val ? "" : "text-muted-foreground/60"}>{key}</span>
+                          <span className={val ? "" : "text-muted-foreground/60"}>{FEATURE_LABELS[key] || key.replace(/_/g, " ")}</span>
                         </li>
                       ))}
+                      {booleanFeatures.length > 8 && (
+                        <li>
+                          <button
+                            onClick={() => setShowAllFeatures(prev => ({ ...prev, [plan.id]: !prev[plan.id] }))}
+                            className="text-xs text-primary font-medium hover:underline"
+                          >
+                            {showAllFeatures[plan.id]
+                              ? "Show less"
+                              : `+ ${booleanFeatures.length - 8} more features`}
+                          </button>
+                        </li>
+                      )}
                     </ul>
                     <Link to="/admin/auth" className="mt-auto">
                       <Button className="w-full" variant={isMiddle ? "default" : "outline"}>

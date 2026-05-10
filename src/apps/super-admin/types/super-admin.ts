@@ -17,6 +17,7 @@ export interface SubscriptionPlan {
     slug: string;
     description: string | null;
     price_cents: number;
+    yearly_price_cents: number;
     currency: string;
     billing_period: BillingPeriod;
     trial_days: number;

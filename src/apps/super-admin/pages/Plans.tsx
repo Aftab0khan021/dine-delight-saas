@@ -62,6 +62,7 @@ export default function Plans() {
         slug: "",
         description: "",
         price_cents: 0,
+        yearly_price_cents: 0,
         billing_period: "monthly" as "monthly" | "yearly",
         trial_days: 14,
         features: getDefaultFeatures(),
@@ -92,6 +93,7 @@ export default function Plans() {
                 slug: formData.slug,
                 description: formData.description,
                 price_cents: formData.price_cents,
+                yearly_price_cents: formData.yearly_price_cents,
                 billing_period: formData.billing_period,
                 trial_days: formData.trial_days,
                 features: formData.features, // Already an object
@@ -160,6 +162,7 @@ export default function Plans() {
                 slug: plan.slug,
                 description: plan.description || "",
                 price_cents: plan.price_cents,
+                yearly_price_cents: plan.yearly_price_cents || 0,
                 billing_period: plan.billing_period,
                 trial_days: plan.trial_days,
                 features: plan.features,
@@ -172,6 +175,7 @@ export default function Plans() {
                 slug: "",
                 description: "",
                 price_cents: 0,
+                yearly_price_cents: 0,
                 billing_period: "monthly",
                 trial_days: 14,
                 features: getDefaultFeatures(),
@@ -272,7 +276,7 @@ export default function Plans() {
 
                             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                                 <div className="space-y-2">
-                                    <Label htmlFor="price">Price (INR)</Label>
+                                    <Label htmlFor="price">Monthly Price (INR)</Label>
                                     <Input
                                         id="price"
                                         type="number"
@@ -284,19 +288,20 @@ export default function Plans() {
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="billing_period">Billing Period</Label>
-                                    <Select
-                                        value={formData.billing_period}
-                                        onValueChange={(value: "monthly" | "yearly") => setFormData({ ...formData, billing_period: value })}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="monthly">Monthly</SelectItem>
-                                            <SelectItem value="yearly">Yearly</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <Label htmlFor="yearly_price">Yearly Price (INR)</Label>
+                                    <Input
+                                        id="yearly_price"
+                                        type="number"
+                                        value={formData.yearly_price_cents / 100}
+                                        onChange={(e) => setFormData({ ...formData, yearly_price_cents: Math.round(parseFloat(e.target.value) * 100) })}
+                                        placeholder="290.00"
+                                        step="0.01"
+                                    />
+                                    {formData.price_cents > 0 && formData.yearly_price_cents > 0 && (
+                                        <p className="text-xs text-muted-foreground">
+                                            {Math.round((1 - formData.yearly_price_cents / (formData.price_cents * 12)) * 100)}% savings vs monthly
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="trial_days">Trial Days</Label>
@@ -445,8 +450,7 @@ export default function Plans() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Plan Name</TableHead>
-                                <TableHead>Price</TableHead>
-                                <TableHead>Billing</TableHead>
+                                <TableHead>Pricing</TableHead>
                                 <TableHead>Trial</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead>Features</TableHead>
@@ -456,13 +460,13 @@ export default function Plans() {
                         <TableBody>
                             {isLoading ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="text-center py-8">
+                                    <TableCell colSpan={6} className="text-center py-8">
                                         Loading plans...
                                     </TableCell>
                                 </TableRow>
                             ) : plans?.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                                         No plans created yet
                                     </TableCell>
                                 </TableRow>
@@ -476,9 +480,15 @@ export default function Plans() {
                                             </div>
                                         </TableCell>
                                         <TableCell className="font-medium">
-                                            {formatCurrency(plan.price_cents)}
+                                            <div>
+                                                <span>{formatCurrency(plan.price_cents)}/mo</span>
+                                                {plan.yearly_price_cents > 0 && (
+                                                    <span className="block text-xs text-muted-foreground">
+                                                        {formatCurrency(plan.yearly_price_cents)}/yr
+                                                    </span>
+                                                )}
+                                            </div>
                                         </TableCell>
-                                        <TableCell className="capitalize">{plan.billing_period}</TableCell>
                                         <TableCell>{plan.trial_days} days</TableCell>
                                         <TableCell>
                                             <Badge variant={plan.is_active ? "default" : "secondary"}>

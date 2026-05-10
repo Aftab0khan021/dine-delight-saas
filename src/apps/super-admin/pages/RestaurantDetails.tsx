@@ -10,6 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
     AlertDialog,
     AlertDialogAction,
     AlertDialogCancel,
@@ -44,7 +51,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { formatDistanceToNow, format } from "date-fns";
+import { formatDistanceToNow, format, addMonths, addYears } from "date-fns";
 import { FeatureAccessMatrix } from "../components/FeatureAccessMatrix";
 import { FeatureLimitIndicator } from "../components/FeatureLimitIndicator";
 import { getFeatureDefinition, getLimitFeatures } from "../lib/features";
@@ -61,6 +68,12 @@ export default function RestaurantDetails() {
     const [overrideEnabled, setOverrideEnabled] = useState(false);
     const [overrideValue, setOverrideValue] = useState<boolean | number>(false);
     const [overrideReason, setOverrideReason] = useState("");
+
+    // Plan assignment state
+    const [planDialogOpen, setPlanDialogOpen] = useState(false);
+    const [selectedPlanId, setSelectedPlanId] = useState("");
+    const [planDiscount, setPlanDiscount] = useState(0);
+    const [planNotes, setPlanNotes] = useState("");
 
     // Fetch restaurant details — split queries to avoid RLS join issues
     const { data: restaurant, isLoading, refetch } = useQuery({
@@ -170,6 +183,63 @@ export default function RestaurantDetails() {
             }>;
         },
         enabled: !!id,
+    });
+
+    // Fetch available plans
+    const { data: availablePlans } = useQuery({
+        queryKey: ['available-plans'],
+        queryFn: async () => {
+            const { data } = await supabase
+                .from('subscription_plans')
+                .select('id, name, slug, price_cents, billing_period')
+                .eq('is_active', true)
+                .order('sort_order');
+            return data || [];
+        },
+    });
+
+    // Assign plan mutation
+    const assignPlanMutation = useMutation({
+        mutationFn: async () => {
+            if (!selectedPlanId || !id) throw new Error('Select a plan');
+            const now = new Date();
+            const plan = availablePlans?.find(p => p.id === selectedPlanId);
+            const periodEnd = plan?.billing_period === 'yearly'
+                ? addYears(now, 1)
+                : addMonths(now, 1);
+
+            // Cancel existing active subscriptions
+            await supabase
+                .from('subscriptions')
+                .update({ status: 'canceled' })
+                .eq('restaurant_id', id)
+                .in('status', ['active', 'trialing']);
+
+            const { error } = await supabase.from('subscriptions').insert({
+                restaurant_id: id,
+                plan_id: selectedPlanId,
+                status: 'active',
+                current_period_start: now.toISOString(),
+                current_period_end: periodEnd.toISOString(),
+                is_manual_override: true,
+                override_reason: planNotes || 'Assigned by Super Admin',
+                override_at: now.toISOString(),
+                discount_percent: planDiscount,
+                discount_reason: planDiscount > 0 ? (planNotes || 'Manual discount') : null,
+            });
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['restaurant-details', id] });
+            toast({ title: 'Plan assigned', description: 'Subscription activated successfully.' });
+            setPlanDialogOpen(false);
+            setSelectedPlanId('');
+            setPlanDiscount(0);
+            setPlanNotes('');
+        },
+        onError: (error: Error) => {
+            toast({ title: 'Error', description: error.message, variant: 'destructive' });
+        },
     });
 
     // Helper function to get effective limit (override > plan > default)
@@ -663,10 +733,77 @@ export default function RestaurantDetails() {
                                             format(new Date(subscription.current_period_end), 'PP')}
                                     </p>
                                 </div>
+                                <Button variant="outline" size="sm" onClick={() => setPlanDialogOpen(true)}>
+                                    Change Plan
+                                </Button>
                             </>
                         ) : (
-                            <p className="text-muted-foreground">No active subscription</p>
+                            <div className="space-y-3">
+                                <p className="text-muted-foreground">No active subscription</p>
+                                <Button size="sm" onClick={() => setPlanDialogOpen(true)}>
+                                    Assign Plan
+                                </Button>
+                            </div>
                         )}
+
+                        {/* Assign/Change Plan Dialog */}
+                        <Dialog open={planDialogOpen} onOpenChange={setPlanDialogOpen}>
+                            <DialogContent className="max-w-md">
+                                <DialogHeader>
+                                    <DialogTitle>{subscription ? 'Change Plan' : 'Assign Plan'}</DialogTitle>
+                                    <DialogDescription>
+                                        {subscription
+                                            ? 'Switch this restaurant to a different plan. The current plan will be canceled.'
+                                            : 'Assign a subscription plan to this restaurant — for cash payments or custom deals.'}
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="grid gap-4 py-2">
+                                    <div className="space-y-2">
+                                        <Label>Plan</Label>
+                                        <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select plan..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {availablePlans?.map((p: any) => (
+                                                    <SelectItem key={p.id} value={p.id}>
+                                                        {p.name} — ₹{(p.price_cents / 100).toFixed(0)}/{p.billing_period}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Discount (%)</Label>
+                                        <Input
+                                            type="number"
+                                            value={planDiscount}
+                                            onChange={(e) => setPlanDiscount(parseInt(e.target.value) || 0)}
+                                            min={0}
+                                            max={100}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Notes</Label>
+                                        <Textarea
+                                            value={planNotes}
+                                            onChange={(e) => setPlanNotes(e.target.value)}
+                                            placeholder="e.g. Cash ₹2,000 received"
+                                            rows={2}
+                                        />
+                                    </div>
+                                </div>
+                                <DialogFooter>
+                                    <Button variant="outline" onClick={() => setPlanDialogOpen(false)}>Cancel</Button>
+                                    <Button
+                                        onClick={() => assignPlanMutation.mutate()}
+                                        disabled={!selectedPlanId || assignPlanMutation.isPending}
+                                    >
+                                        {assignPlanMutation.isPending ? 'Saving...' : subscription ? 'Change Plan' : 'Assign Plan'}
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
                     </CardContent>
                 </Card>
 

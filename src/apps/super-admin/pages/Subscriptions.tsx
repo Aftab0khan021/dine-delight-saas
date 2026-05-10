@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   Table,
@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -20,6 +22,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -28,21 +38,20 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Search,
   MoreVertical,
   Eye,
   Filter,
   X,
-  Lock,
-  Info
+  Plus,
+  CalendarPlus,
+  Percent,
+  Ban,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { formatDistanceToNow, format } from "date-fns";
-
-// Feature flag for manual controls (disabled for now)
-const MANUAL_CONTROLS_ENABLED = false;
+import { useToast } from "@/hooks/use-toast";
+import { formatDistanceToNow, format, addMonths, addYears } from "date-fns";
 
 interface Subscription {
   id: string;
@@ -65,12 +74,26 @@ interface Subscription {
 
 export default function Subscriptions() {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [planFilter, setPlanFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
   const pageSize = 20;
+
+  // --- Assign Plan dialog state ---
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [assignRestaurantId, setAssignRestaurantId] = useState("");
+  const [assignPlanId, setAssignPlanId] = useState("");
+  const [assignNotes, setAssignNotes] = useState("");
+  const [assignDiscount, setAssignDiscount] = useState(0);
+
+  // --- Extend dialog state ---
+  const [extendDialogOpen, setExtendDialogOpen] = useState(false);
+  const [extendSubId, setExtendSubId] = useState("");
+  const [extendMonths, setExtendMonths] = useState(1);
 
   // Fetch subscriptions with filters
   const { data: subscriptionsData, isLoading } = useQuery({
@@ -147,6 +170,116 @@ export default function Subscriptions() {
     },
   });
 
+  // Fetch restaurants (for assignment dropdown)
+  const { data: restaurants } = useQuery({
+    queryKey: ['restaurants-list-for-assign'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('restaurants')
+        .select('id, name, slug')
+        .eq('status', 'active')
+        .order('name');
+      return data || [];
+    },
+  });
+
+  // --- Assign Plan Mutation ---
+  const assignPlanMutation = useMutation({
+    mutationFn: async () => {
+      if (!assignRestaurantId || !assignPlanId) throw new Error('Select a restaurant and plan');
+
+      const now = new Date();
+      const selectedPlan = plans?.find((p: any) => p.id === assignPlanId) as any;
+      const periodEnd = selectedPlan?.billing_period === 'yearly'
+        ? addYears(now, 1)
+        : addMonths(now, 1);
+
+      // Deactivate any existing active subscription for this restaurant
+      await supabase
+        .from('subscriptions')
+        .update({ status: 'canceled' })
+        .eq('restaurant_id', assignRestaurantId)
+        .in('status', ['active', 'trialing']);
+
+      // Create new subscription
+      const { error } = await supabase.from('subscriptions').insert({
+        restaurant_id: assignRestaurantId,
+        plan_id: assignPlanId,
+        status: 'active',
+        current_period_start: now.toISOString(),
+        current_period_end: periodEnd.toISOString(),
+        is_manual_override: true,
+        override_reason: assignNotes || 'Cash payment — assigned by Super Admin',
+        override_at: now.toISOString(),
+        discount_percent: assignDiscount,
+        discount_reason: assignDiscount > 0 ? (assignNotes || 'Manual discount') : null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+      toast({ title: 'Plan assigned', description: 'Subscription created successfully.' });
+      setAssignDialogOpen(false);
+      setAssignRestaurantId('');
+      setAssignPlanId('');
+      setAssignNotes('');
+      setAssignDiscount(0);
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  // --- Extend Subscription Mutation ---
+  const extendMutation = useMutation({
+    mutationFn: async () => {
+      const sub = subscriptionsData?.subscriptions.find(s => s.id === extendSubId);
+      if (!sub) throw new Error('Subscription not found');
+
+      const currentEnd = sub.current_period_end
+        ? new Date(sub.current_period_end)
+        : new Date();
+      const newEnd = addMonths(currentEnd, extendMonths);
+
+      const { error } = await supabase
+        .from('subscriptions')
+        .update({
+          current_period_end: newEnd.toISOString(),
+          is_manual_override: true,
+          override_reason: `Extended by ${extendMonths} month(s) by Super Admin`,
+          override_at: new Date().toISOString(),
+        })
+        .eq('id', extendSubId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+      toast({ title: 'Extended', description: `Subscription extended by ${extendMonths} month(s).` });
+      setExtendDialogOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  // --- Cancel Subscription Mutation ---
+  const cancelMutation = useMutation({
+    mutationFn: async (subId: string) => {
+      const { error } = await supabase
+        .from('subscriptions')
+        .update({ status: 'canceled', is_manual_override: true, override_reason: 'Canceled by Super Admin', override_at: new Date().toISOString() })
+        .eq('id', subId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+      toast({ title: 'Canceled', description: 'Subscription has been canceled.' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
   const getStatusBadge = (status: string) => {
     const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
       active: 'default',
@@ -182,20 +315,110 @@ export default function Subscriptions() {
             View and manage all platform subscriptions
           </p>
         </div>
+        <Button onClick={() => setAssignDialogOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Assign Plan
+        </Button>
       </header>
 
-      {/* Manual Controls Notice */}
-      {!MANUAL_CONTROLS_ENABLED && (
-        <Alert>
-          <Info className="h-4 w-4" />
-          <AlertDescription>
-            Manual subscription controls are currently disabled. Enable them in Settings when you have more users.
-            <span className="block text-xs text-muted-foreground mt-1">
-              Features like extend subscription, apply discounts, and force upgrades will be available after enabling.
-            </span>
-          </AlertDescription>
-        </Alert>
-      )}
+      {/* ═══ Assign Plan Dialog ═══ */}
+      <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign Subscription Plan</DialogTitle>
+            <DialogDescription>
+              Manually assign a plan to a restaurant — for cash payments, gifts, or custom deals.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="space-y-2">
+              <Label>Restaurant</Label>
+              <Select value={assignRestaurantId} onValueChange={setAssignRestaurantId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select restaurant..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {restaurants?.map((r: any) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name} <span className="text-muted-foreground ml-1">/{r.slug}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Plan</Label>
+              <Select value={assignPlanId} onValueChange={setAssignPlanId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select plan..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {plans?.map((p: any) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Discount (%)</Label>
+              <Input
+                type="number"
+                value={assignDiscount}
+                onChange={(e) => setAssignDiscount(parseInt(e.target.value) || 0)}
+                min={0}
+                max={100}
+                placeholder="0"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Notes (optional)</Label>
+              <Textarea
+                value={assignNotes}
+                onChange={(e) => setAssignNotes(e.target.value)}
+                placeholder="e.g. Cash payment received ₹2,000 on 10-May"
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => assignPlanMutation.mutate()}
+              disabled={!assignRestaurantId || !assignPlanId || assignPlanMutation.isPending}
+            >
+              {assignPlanMutation.isPending ? 'Assigning...' : 'Assign Plan'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══ Extend Subscription Dialog ═══ */}
+      <Dialog open={extendDialogOpen} onOpenChange={setExtendDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Extend Subscription</DialogTitle>
+            <DialogDescription>Add extra months to this subscription's current period.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label>Months to add</Label>
+            <Input
+              type="number"
+              value={extendMonths}
+              onChange={(e) => setExtendMonths(parseInt(e.target.value) || 1)}
+              min={1}
+              max={24}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExtendDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => extendMutation.mutate()} disabled={extendMutation.isPending}>
+              {extendMutation.isPending ? 'Extending...' : `Extend by ${extendMonths} month(s)`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Filters */}
       <Card>
@@ -377,21 +600,26 @@ export default function Subscriptions() {
                             View Restaurant
                           </DropdownMenuItem>
 
-                          {/* Manual Controls (Disabled) */}
-                          {!MANUAL_CONTROLS_ENABLED && (
+                          {/* Manual Controls */}
+                          {subscription.status === 'active' && (
                             <>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem disabled>
-                                <Lock className="h-4 w-4 mr-2" />
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setExtendSubId(subscription.id);
+                                  setExtendMonths(1);
+                                  setExtendDialogOpen(true);
+                                }}
+                              >
+                                <CalendarPlus className="h-4 w-4 mr-2" />
                                 Extend Subscription
                               </DropdownMenuItem>
-                              <DropdownMenuItem disabled>
-                                <Lock className="h-4 w-4 mr-2" />
-                                Apply Discount
-                              </DropdownMenuItem>
-                              <DropdownMenuItem disabled>
-                                <Lock className="h-4 w-4 mr-2" />
-                                Force Upgrade
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => cancelMutation.mutate(subscription.id)}
+                              >
+                                <Ban className="h-4 w-4 mr-2" />
+                                Cancel Subscription
                               </DropdownMenuItem>
                             </>
                           )}
