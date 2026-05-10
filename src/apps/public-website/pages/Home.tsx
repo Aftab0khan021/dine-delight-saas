@@ -14,7 +14,8 @@ import {
 import {
   Utensils, ClipboardList, BarChart3, QrCode, Users, CreditCard,
   MessageCircle, Tag, Package, Split, ChevronRight, Check, X,
-  Star, Menu as MenuIcon, ArrowRight,
+  Star, Menu as MenuIcon, ArrowRight, Rocket, Smartphone,
+  Shield, Globe, Sparkles,
 } from "lucide-react";
 import { formatMoney } from "@/lib/formatting";
 
@@ -80,6 +81,20 @@ const FEATURE_LABELS: Record<string, string> = {
   api_rate_limit: "API Rate Limit",
 };
 
+const HOW_IT_WORKS = [
+  { step: "1", icon: Rocket,     title: "Sign Up",          desc: "Create your restaurant profile in under 2 minutes. No credit card required." },
+  { step: "2", icon: Utensils,   title: "Build Your Menu",  desc: "Add items, categories, variants, photos & pricing. Import from CSV or start fresh." },
+  { step: "3", icon: Smartphone, title: "Go Live",          desc: "Print QR codes, share your link, and start accepting orders immediately." },
+];
+
+const INTEGRATIONS = [
+  { name: "Razorpay",   desc: "Payments" },
+  { name: "WhatsApp",   desc: "Messaging" },
+  { name: "Supabase",   desc: "Database" },
+  { name: "Cloudflare", desc: "Security" },
+  { name: "PWA",        desc: "Mobile App" },
+];
+
 /* ------------------------------------------------------------------ */
 /*  HOOKS                                                              */
 /* ------------------------------------------------------------------ */
@@ -110,6 +125,7 @@ export default function Home() {
   const [activeTestimonial, setActiveTestimonial] = useState(0);
   const [isYearly, setIsYearly] = useState(false);
   const [showAllFeatures, setShowAllFeatures] = useState<Record<string, boolean>>({});
+  const [scrollProgress, setScrollProgress] = useState(0);
   const statsRef = useRef<HTMLDivElement>(null);
 
   useSEO({
@@ -161,6 +177,17 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
+  // Scroll progress for nav bar
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollTop = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      setScrollProgress(docHeight > 0 ? (scrollTop / docHeight) * 100 : 0);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   const scrollTo = (id: string) => {
     setMobileMenuOpen(false);
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
@@ -175,6 +202,8 @@ export default function Home() {
 
       {/* ═══════════════ SECTION 1: STICKY NAV ═══════════════ */}
       <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-lg">
+        {/* Scroll progress bar */}
+        <div className="absolute top-0 left-0 h-0.5 bg-gradient-to-r from-violet-500 to-pink-500 transition-all duration-150" style={{ width: `${scrollProgress}%` }} />
         <div className="container mx-auto px-4 h-14 flex items-center justify-between">
           <button onClick={() => scrollTo("hero")} className="flex items-center gap-2 text-lg font-bold tracking-tight">
             🍽️ <span>Dine Delight</span>
@@ -186,17 +215,18 @@ export default function Home() {
             <Link to="/admin/auth"><Button size="sm">Get Started</Button></Link>
           </nav>
           <button className="md:hidden p-2" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-            <MenuIcon className="h-5 w-5" />
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
           </button>
         </div>
-        {mobileMenuOpen && (
-          <div className="md:hidden border-t bg-background px-4 py-3 space-y-2">
-            <button onClick={() => scrollTo("features")} className="block w-full text-left text-sm py-1.5">Features</button>
-            <button onClick={() => scrollTo("pricing")} className="block w-full text-left text-sm py-1.5">Pricing</button>
-            <button onClick={() => scrollTo("faq")} className="block w-full text-left text-sm py-1.5">FAQ</button>
+        {/* Mobile menu with slide animation */}
+        <div className={`md:hidden overflow-hidden transition-all duration-300 ease-in-out ${mobileMenuOpen ? "max-h-60 opacity-100" : "max-h-0 opacity-0"}`}>
+          <div className="border-t bg-background/95 backdrop-blur-xl px-4 py-3 space-y-2">
+            <button onClick={() => scrollTo("features")} className="block w-full text-left text-sm py-2 hover:text-primary transition-colors">Features</button>
+            <button onClick={() => scrollTo("pricing")} className="block w-full text-left text-sm py-2 hover:text-primary transition-colors">Pricing</button>
+            <button onClick={() => scrollTo("faq")} className="block w-full text-left text-sm py-2 hover:text-primary transition-colors">FAQ</button>
             <Link to="/admin/auth" className="block"><Button size="sm" className="w-full mt-1">Get Started</Button></Link>
           </div>
-        )}
+        </div>
       </header>
 
       <main className="flex-1">
@@ -248,6 +278,34 @@ export default function Home() {
                   <h3 className="font-semibold mb-1">{f.title}</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed">{f.desc}</p>
                 </Card>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ═══════════════ SECTION 3.5: HOW IT WORKS ═══════════════ */}
+        <section className="py-16 md:py-24 bg-muted/20">
+          <div className="container mx-auto px-4">
+            <h2 className="text-3xl md:text-4xl font-bold text-center mb-4">Get Started in 3 Steps</h2>
+            <p className="text-center text-muted-foreground mb-12 max-w-lg mx-auto">
+              From signup to first order in under 30 minutes. No technical knowledge needed.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto relative">
+              {/* Connecting line (desktop) */}
+              <div className="hidden md:block absolute top-12 left-[16.5%] right-[16.5%] h-0.5 bg-gradient-to-r from-violet-500/30 via-primary/30 to-pink-500/30" />
+              {HOW_IT_WORKS.map((s, i) => (
+                <div key={i} className="text-center relative" style={{ animation: `fadeInUp 0.6s ease-out ${0.2 * i}s both` }}>
+                  <div className="relative mx-auto mb-4">
+                    <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-violet-500/10 to-pink-500/10 border border-primary/20 flex items-center justify-center mx-auto group hover:scale-110 transition-transform duration-300">
+                      <s.icon className="h-8 w-8 text-primary" />
+                    </div>
+                    <span className="absolute -top-2 -right-2 h-7 w-7 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center shadow-lg">
+                      {s.step}
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-bold mb-2">{s.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{s.desc}</p>
+                </div>
               ))}
             </div>
           </div>
@@ -422,18 +480,63 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ═══════════════ SECTION 7: DEMO ═══════════════ */}
-        <section id="demo" className="py-16 md:py-20" style={{ background: "linear-gradient(135deg, hsl(var(--primary) / 0.9), #6366f1)" }}>
-          <div className="container mx-auto px-4 text-center">
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">See It In Action</h2>
-            <p className="text-white/80 mb-8 max-w-lg mx-auto">
-              Experience the full customer ordering flow — browse menu, add items, customize & checkout.
+        {/* ═══════════════ SECTION 6.5: INTEGRATIONS ═══════════════ */}
+        <section className="py-12 md:py-16 bg-muted/20">
+          <div className="container mx-auto px-4">
+            <p className="text-center text-sm font-medium text-muted-foreground uppercase tracking-wider mb-8">
+              Powered by world-class technology
             </p>
-            <Link to="/r/vrindavan">
-              <Button size="lg" variant="outline" className="text-base px-8 border-white/30 text-white hover:bg-white/10">
-                Visit Demo Restaurant <ChevronRight className="ml-1 h-4 w-4" />
-              </Button>
-            </Link>
+            <div className="flex flex-wrap items-center justify-center gap-8 md:gap-12">
+              {INTEGRATIONS.map((t, i) => (
+                <div key={i} className="flex flex-col items-center gap-1 opacity-60 hover:opacity-100 transition-opacity duration-300">
+                  <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center">
+                    {t.name === "Razorpay" && <CreditCard className="h-6 w-6" />}
+                    {t.name === "WhatsApp" && <MessageCircle className="h-6 w-6" />}
+                    {t.name === "Supabase" && <Shield className="h-6 w-6" />}
+                    {t.name === "Cloudflare" && <Globe className="h-6 w-6" />}
+                    {t.name === "PWA" && <Smartphone className="h-6 w-6" />}
+                  </div>
+                  <span className="text-xs font-semibold">{t.name}</span>
+                  <span className="text-[10px] text-muted-foreground">{t.desc}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ═══════════════ SECTION 7: CTA ═══════════════ */}
+        <section id="demo" className="py-20 md:py-28 relative overflow-hidden" style={{ background: "linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)" }}>
+          <div className="absolute inset-0 opacity-5">
+            {["✨","🚀","💫","⭐"].map((e, i) => (
+              <span key={i} className="absolute text-3xl select-none" style={{
+                top: `${20 + i * 20}%`, left: `${10 + i * 22}%`,
+                animation: `float ${3 + i * 0.7}s ease-in-out infinite alternate`,
+              }}>{e}</span>
+            ))}
+          </div>
+          <div className="container mx-auto px-4 text-center relative z-10">
+            <div className="inline-flex items-center gap-2 bg-white/10 text-white/80 text-sm font-medium px-4 py-1.5 rounded-full mb-6 backdrop-blur">
+              <Sparkles className="h-4 w-4" /> Free forever for small restaurants
+            </div>
+            <h2 className="text-3xl md:text-5xl font-extrabold text-white mb-4">
+              Ready to Take Control?
+            </h2>
+            <p className="text-white/70 mb-8 max-w-lg mx-auto text-lg">
+              Join hundreds of restaurants already saving on commissions and owning their digital presence.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Link to="/admin/auth">
+                <Button size="lg" className="text-base px-10 shadow-lg shadow-primary/25">
+                  Start Free — No Credit Card <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+              <Link to="/r/vrindavan">
+                <Button size="lg" variant="outline" className="text-base px-8 border-white/20 text-white hover:bg-white/10">
+                  See Live Demo <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+            <p className="text-white/40 text-xs mt-6">Setup takes less than 5 minutes • Cancel anytime</p>
           </div>
         </section>
 
@@ -505,6 +608,10 @@ export default function Home() {
         @keyframes float {
           from { transform: translateY(0); }
           to { transform: translateY(-15px); }
+        }
+        @keyframes slideDown {
+          from { opacity: 0; max-height: 0; }
+          to { opacity: 1; max-height: 300px; }
         }
       `}</style>
     </div>
