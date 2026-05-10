@@ -218,6 +218,9 @@ export default function RestaurantDetails() {
             const { error } = await supabase.from('subscriptions').insert({
                 restaurant_id: id,
                 plan_id: selectedPlanId,
+                provider: 'manual',
+                provider_subscription_id: `manual_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                plan_key: plan?.slug || 'manual',
                 status: 'active',
                 current_period_start: now.toISOString(),
                 current_period_end: periodEnd.toISOString(),
