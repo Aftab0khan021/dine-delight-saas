@@ -47,7 +47,7 @@ type NavItem = {
 const coreNavItems: NavItem[] = [
   { to: "/admin/dashboard",        label: "Dashboard",        icon: LayoutDashboard },
   { to: "/admin/orders",           label: "Orders",           icon: ReceiptText,    permission: PERMISSIONS.VIEW_ORDERS },
-  { to: "/admin/kitchen",          label: "Kitchen Board",    icon: ChefHat,        permission: PERMISSIONS.VIEW_ORDERS, featureKey: "kitchen_display" },
+  { to: "/admin/kitchen",          label: "Kitchen Board",    icon: ChefHat,        permission: PERMISSIONS.VIEW_KITCHEN, featureKey: "kitchen_display" },
   { to: "/admin/menu",             label: "Menu",             icon: Salad,          permission: PERMISSIONS.VIEW_MENU },
   { to: "/admin/qr",               label: "QR Menu",          icon: QrCode,         permission: PERMISSIONS.VIEW_QR },
   { to: "/admin/staff",            label: "Staff",            icon: Users,          permission: PERMISSIONS.VIEW_STAFF },
@@ -55,9 +55,9 @@ const coreNavItems: NavItem[] = [
   { to: "/admin/branding",         label: "Branding",         icon: Palette,        permission: PERMISSIONS.MANAGE_SETTINGS },
   { to: "/admin/billing",          label: "Billing",          icon: CreditCard,     adminOnly: true },
   { to: "/admin/coupons",          label: "Coupons",          icon: Ticket,         permission: PERMISSIONS.VIEW_COUPONS, featureKey: "coupons" },
-  { to: "/admin/reservations",     label: "Reservations",     icon: CalendarDays,   permission: PERMISSIONS.MANAGE_SETTINGS, featureKey: "table_reservations" },
-  { to: "/admin/reviews",          label: "Reviews",          icon: Star,           adminOnly: true, featureKey: "reviews" },
-  { to: "/admin/inventory",        label: "Inventory",        icon: Package,        permission: PERMISSIONS.VIEW_MENU, featureKey: "inventory_management" },
+  { to: "/admin/reservations",     label: "Reservations",     icon: CalendarDays,   permission: PERMISSIONS.VIEW_RESERVATIONS, featureKey: "table_reservations" },
+  { to: "/admin/reviews",          label: "Reviews",          icon: Star,           permission: PERMISSIONS.VIEW_REVIEWS, featureKey: "reviews" },
+  { to: "/admin/inventory",        label: "Inventory",        icon: Package,        permission: PERMISSIONS.VIEW_INVENTORY, featureKey: "inventory_management" },
   { to: "/admin/customers",        label: "Customers",        icon: UserCheck,      adminOnly: true, featureKey: "customer_management" },
   { to: "/admin/delivery-zones",   label: "Delivery Zones",   icon: MapPin,         adminOnly: true, featureKey: "delivery_zones" },
 ];
@@ -66,7 +66,7 @@ const coreNavItems: NavItem[] = [
 const growthNavItems: NavItem[] = [
   { to: "/admin/marketing",  label: "WhatsApp CRM",   icon: MessageCircle, adminOnly: true, featureKey: "whatsapp_crm" },
   { to: "/admin/insights",   label: "Menu Insights",  icon: BarChart3,     adminOnly: true, featureKey: "menu_insights" },
-  { to: "/admin/analytics",  label: "Analytics",      icon: PieChart,      adminOnly: true, featureKey: "analytics" },
+  { to: "/admin/analytics",  label: "Analytics",      icon: PieChart,      permission: PERMISSIONS.VIEW_ANALYTICS, featureKey: "analytics" },
   { to: "/admin/developer",  label: "Developer API",  icon: Code2,         adminOnly: true, featureKey: "api_access" },
   { to: "/admin/whatsapp",   label: "WhatsApp Bot",   icon: Bot,           adminOnly: true, featureKey: "whatsapp_bot" },
   { to: "/admin/otp-settings", label: "OTP Settings", icon: Shield,        adminOnly: true, featureKey: "otp_verification" },

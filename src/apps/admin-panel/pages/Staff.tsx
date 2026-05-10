@@ -89,6 +89,7 @@ export default function AdminStaff() {
     queryKey: ["admin", "staff", restaurant?.id, "roles"],
     enabled: !!restaurant?.id,
     queryFn: async () => {
+      console.log("🔍 Staff query for restaurant:", restaurant!.id);
       const { data, error } = await supabase
         .from("user_roles")
         .select(`
@@ -100,6 +101,7 @@ export default function AdminStaff() {
         `)
         .eq("restaurant_id", restaurant!.id)
         .in("role", ["restaurant_admin", "user"]);
+      console.log("🔍 Staff query result:", { data, error, count: data?.length });
       if (error) throw error;
       return data ?? [];
     },
