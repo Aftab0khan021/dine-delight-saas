@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Star, Eye, EyeOff, Trash2, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { analyzeSentimentFree } from "../lib/ai-utils";
+import { analyzeSentimentFree, type SentimentResult } from "../lib/ai-utils";
+import { useAITier } from "../hooks/useAITier";
 
 export default function Reviews() {
   return (
@@ -22,6 +23,8 @@ function ReviewsContent() {
   const { restaurant } = useRestaurantContext();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { tier } = useAITier();
+  const sentimentTier = tier("sentiment_analysis");
 
   const reviewsQuery = useQuery({
     queryKey: ["admin", "reviews", restaurant?.id],
@@ -160,6 +163,9 @@ function ReviewsContent() {
                           return (
                             <Badge variant="outline" className={`gap-1 ${s.color}`}>
                               {s.emoji} {s.label}
+                              {sentimentTier === "paid" && (
+                                <span className="text-[9px] ml-0.5 opacity-60">Pro</span>
+                              )}
                             </Badge>
                           );
                         })()}

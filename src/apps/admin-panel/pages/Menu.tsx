@@ -20,7 +20,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
 import { useFeatureLimit } from "../hooks/useFeatureAccess";
-import { generateDescriptionFree, getStaleLabel } from "../lib/ai-utils";
+import { generateDescription, getStaleLabel } from "../lib/ai-utils";
+import { useAITier } from "../hooks/useAITier";
 
 // UI Components
 import { Badge } from "@/components/ui/badge";
@@ -86,6 +87,7 @@ export default function AdminMenu() {
   const { restaurant } = useRestaurantContext();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { tier, getAccessToken } = useAITier();
 
   const currencyCode = restaurant?.currency_code || "INR";
 
@@ -805,19 +807,32 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currenc
                 size="sm"
                 className="h-7 text-xs gap-1.5"
                 disabled={generatingDesc || !form.watch("name")}
-                onClick={() => {
+                onClick={async () => {
                   setGeneratingDesc(true);
-                  const name = form.watch("name");
-                  const catId = form.watch("category_id");
-                  const cat = (categories || []).find((c: any) => c.id === catId);
-                  const price = Number(form.watch("price_cents"));
-                  const desc = generateDescriptionFree(name, cat?.name, price);
-                  form.setValue("description", desc, { shouldDirty: true });
-                  setGeneratingDesc(false);
+                  try {
+                    const name = form.watch("name");
+                    const catId = form.watch("category_id");
+                    const cat = (categories || []).find((c: any) => c.id === catId);
+                    const price = Number(form.watch("price_cents"));
+                    const isPaid = tier("ai_descriptions") === "paid";
+                    const token = isPaid ? await getAccessToken() : null;
+                    const desc = await generateDescription({
+                      isPaid,
+                      itemName: name,
+                      categoryName: cat?.name,
+                      priceCents: price,
+                      accessToken: token,
+                    });
+                    form.setValue("description", desc, { shouldDirty: true });
+                  } catch (e) {
+                    console.error("AI Generate error:", e);
+                  } finally {
+                    setGeneratingDesc(false);
+                  }
                 }}
               >
                 <Sparkles className="h-3 w-3" />
-                {generatingDesc ? "Generating..." : "✨ AI Generate"}
+                {generatingDesc ? "Generating..." : tier("ai_descriptions") === "paid" ? "🚀 AI Pro" : "✨ AI Generate"}
               </Button>
             </div>
             <Textarea {...form.register("description")} placeholder="Add a tasty description... or let AI generate one" />

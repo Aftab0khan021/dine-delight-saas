@@ -11,84 +11,95 @@ import { useToast } from '@/hooks/use-toast';
 import { Save, AlertCircle, Sparkles, BarChart3, MessageSquare, TrendingUp, Brain, Eye, Mic, Image } from 'lucide-react';
 import APIKeyManagement from '../components/APIKeyManagement';
 
-// Bug Fix #7: Define features with descriptions and status
+// AI Features with dual-tier descriptions
 const AI_FEATURES = [
     {
         key: 'smart_ranking',
         label: 'Smart Menu Ranking',
-        description: 'Auto-sort menu items by popularity so best-sellers appear first',
+        freeTier: 'SQL-based order count sorting',
+        paidTier: 'AI-powered trending + seasonal ranking',
         icon: TrendingUp,
-        tier: 'free' as const,
+        category: 'core' as const,
     },
     {
         key: 'ai_descriptions',
         label: 'AI Menu Descriptions',
-        description: 'Generate appetizing menu item descriptions using AI templates or GPT',
+        freeTier: 'Template-based description generator',
+        paidTier: 'GPT/Claude/Gemini unique descriptions',
         icon: Sparkles,
-        tier: 'free' as const,
+        category: 'core' as const,
     },
     {
         key: 'sentiment_analysis',
         label: 'Review Sentiment',
-        description: 'Auto-classify customer reviews as positive, neutral, or negative',
+        freeTier: 'Keyword-based sentiment scoring',
+        paidTier: 'LLM sentiment + topic extraction',
         icon: MessageSquare,
-        tier: 'free' as const,
+        category: 'core' as const,
     },
     {
         key: 'order_heatmap',
-        label: 'Order Heatmap',
-        description: 'Visual heatmap showing busiest ordering hours and days',
+        label: 'Order Heatmap & Demand Insights',
+        freeTier: '7×24 order frequency grid + basic stats',
+        paidTier: 'AI staffing & promotion recommendations',
         icon: BarChart3,
-        tier: 'free' as const,
+        category: 'core' as const,
     },
     {
         key: 'recommendations',
         label: 'Smart Upsell Suggestions',
-        description: 'Suggest add-ons at checkout based on co-order patterns',
+        freeTier: 'Co-order frequency analysis',
+        paidTier: 'AI-powered contextual upselling',
         icon: Brain,
-        tier: 'paid' as const,
+        category: 'advanced' as const,
     },
     {
         key: 'personalized_greetings',
         label: 'Personalized Greetings',
-        description: 'Custom WhatsApp messages based on customer order history',
+        freeTier: 'Template greetings with customer name',
+        paidTier: 'AI-personalized messages from order history',
         icon: MessageSquare,
-        tier: 'paid' as const,
+        category: 'advanced' as const,
     },
     {
         key: 'natural_language_ordering',
         label: 'Natural Language Ordering',
-        description: 'Allow customers to order using natural language text',
+        freeTier: 'Regex pattern matching',
+        paidTier: 'Full NLP intent parsing (GPT/Claude)',
         icon: Brain,
-        tier: 'paid' as const,
+        category: 'advanced' as const,
     },
     {
         key: 'image_recognition',
         label: 'Image Recognition',
-        description: 'Identify food items from photos for menu creation',
+        freeTier: 'TensorFlow.js client-side detection',
+        paidTier: 'GPT-4 Vision / Gemini Vision',
         icon: Image,
-        tier: 'paid' as const,
+        category: 'advanced' as const,
     },
     {
         key: 'voice_messages',
         label: 'Voice Ordering',
-        description: 'Transcribe voice messages to text orders',
+        freeTier: 'Whisper self-hosted transcription',
+        paidTier: 'Deepgram / AssemblyAI real-time STT',
         icon: Mic,
-        tier: 'paid' as const,
+        category: 'advanced' as const,
     },
     {
         key: 'birthday_offers',
         label: 'Birthday Auto-Offers',
-        description: 'Automatically send birthday coupons to customers',
+        freeTier: 'Template birthday coupon message',
+        paidTier: 'AI-crafted personalized birthday offers',
         icon: Sparkles,
-        tier: 'paid' as const,
+        category: 'advanced' as const,
     },
     {
         key: 'real_time_notifications',
         label: 'Real-time Notifications',
-        description: 'Push notifications for order status and promotions',
+        freeTier: 'Template order status messages',
+        paidTier: 'AI-optimized delivery time predictions',
         icon: Eye,
-        tier: 'paid' as const,
+        category: 'advanced' as const,
     },
 ];
 
@@ -217,9 +228,9 @@ export default function RestaurantAIConfig() {
         }
     };
 
-    // Count active features by tier
-    const freeFeatures = AI_FEATURES.filter(f => f.tier === 'free');
-    const paidFeatures = AI_FEATURES.filter(f => f.tier === 'paid');
+    // Count active features by category
+    const coreFeatures = AI_FEATURES.filter(f => f.category === 'core');
+    const advancedFeatures = AI_FEATURES.filter(f => f.category === 'advanced');
     const enabledCount = AI_FEATURES.filter(f => config.features[f.key]).length;
 
     if (loading) {
@@ -355,32 +366,41 @@ export default function RestaurantAIConfig() {
                         </CardContent>
                     </Card>
 
-                    {/* Bug Fix #7: Replaced dead features with organized free/paid sections */}
+                    {/* Core AI Features */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Free Features</CardTitle>
+                            <CardTitle>Core AI Features</CardTitle>
                             <CardDescription>
-                                Built-in AI features — no API key required
+                                These features always work — free tier runs locally, paid tier uses your configured AI provider
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            {freeFeatures.map((feature) => {
+                            {coreFeatures.map((feature) => {
                                 const Icon = feature.icon;
+                                const isEnabled = config.features[feature.key] ?? false;
                                 return (
-                                    <div key={feature.key} className="flex items-start justify-between gap-4 py-2">
+                                    <div key={feature.key} className="flex items-start justify-between gap-4 py-3 border-b last:border-0">
                                         <div className="flex items-start gap-3 flex-1">
-                                            <Icon className="w-4 h-4 mt-0.5 text-green-600 shrink-0" />
-                                            <div>
-                                                <Label htmlFor={feature.key} className="cursor-pointer font-medium flex items-center gap-2">
+                                            <Icon className="w-5 h-5 mt-0.5 text-primary shrink-0" />
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor={feature.key} className="cursor-pointer font-medium text-base">
                                                     {feature.label}
-                                                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">Free</Badge>
                                                 </Label>
-                                                <p className="text-xs text-muted-foreground mt-0.5">{feature.description}</p>
+                                                <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Badge variant="secondary" className="text-[10px] h-4 px-1.5 shrink-0">Free</Badge>
+                                                        <span className="text-xs text-muted-foreground">{feature.freeTier}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-amber-400 text-amber-600 shrink-0">Paid</Badge>
+                                                        <span className="text-xs text-muted-foreground">{feature.paidTier}</span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                         <Switch
                                             id={feature.key}
-                                            checked={config.features[feature.key] ?? false}
+                                            checked={isEnabled}
                                             onCheckedChange={(checked) =>
                                                 setConfig({
                                                     ...config,
@@ -394,31 +414,41 @@ export default function RestaurantAIConfig() {
                         </CardContent>
                     </Card>
 
+                    {/* Advanced AI Features */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Paid Features</CardTitle>
+                            <CardTitle>Advanced AI Features</CardTitle>
                             <CardDescription>
-                                Advanced AI features — requires API key from restaurant owner
+                                Extended capabilities — each has a free fallback and an AI-powered upgrade
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            {paidFeatures.map((feature) => {
+                            {advancedFeatures.map((feature) => {
                                 const Icon = feature.icon;
+                                const isEnabled = config.features[feature.key] ?? false;
                                 return (
-                                    <div key={feature.key} className="flex items-start justify-between gap-4 py-2">
+                                    <div key={feature.key} className="flex items-start justify-between gap-4 py-3 border-b last:border-0">
                                         <div className="flex items-start gap-3 flex-1">
-                                            <Icon className="w-4 h-4 mt-0.5 text-amber-500 shrink-0" />
-                                            <div>
-                                                <Label htmlFor={feature.key} className="cursor-pointer font-medium flex items-center gap-2">
+                                            <Icon className="w-5 h-5 mt-0.5 text-amber-500 shrink-0" />
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor={feature.key} className="cursor-pointer font-medium text-base">
                                                     {feature.label}
-                                                    <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-amber-400 text-amber-600">Paid</Badge>
                                                 </Label>
-                                                <p className="text-xs text-muted-foreground mt-0.5">{feature.description}</p>
+                                                <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Badge variant="secondary" className="text-[10px] h-4 px-1.5 shrink-0">Free</Badge>
+                                                        <span className="text-xs text-muted-foreground">{feature.freeTier}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-amber-400 text-amber-600 shrink-0">Paid</Badge>
+                                                        <span className="text-xs text-muted-foreground">{feature.paidTier}</span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                         <Switch
                                             id={feature.key}
-                                            checked={config.features[feature.key] ?? false}
+                                            checked={isEnabled}
                                             onCheckedChange={(checked) =>
                                                 setConfig({
                                                     ...config,

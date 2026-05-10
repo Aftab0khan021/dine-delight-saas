@@ -1,14 +1,18 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { FeatureGate } from "../components/FeatureGate";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { BarChart3, TrendingUp, Clock, Users, Star } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { BarChart3, TrendingUp, Clock, Users, Star, Brain, Lightbulb, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { formatMoney } from "@/lib/formatting";
 import { format, subDays, startOfDay, getHours, getDay } from "date-fns";
 import OrderHeatmap from "../components/OrderHeatmap";
+import { forecastDemandFree, forecastDemand, type DemandForecast } from "../lib/ai-utils";
+import { useAITier } from "../hooks/useAITier";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const HOUR_LABELS = Array.from({ length: 24 }, (_, i) => `${i}:00`);
@@ -24,6 +28,9 @@ export default function Analytics() {
 function AnalyticsContent() {
   const { restaurant } = useRestaurantContext();
   const cc = restaurant?.currency_code || "INR";
+  const { tier, getAccessToken } = useAITier();
+  const [aiInsights, setAiInsights] = useState<DemandForecast | null>(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
 
   // Fetch all completed orders (last 90 days)
   const { data: orders = [] } = useQuery({
@@ -217,6 +224,105 @@ function AnalyticsContent() {
 
       {/* Full-Width Order Heatmap */}
       <OrderHeatmap orders={orders} />
+
+      {/* AI Demand Insights */}
+      {orders.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Brain className="w-4 h-4" />
+                  AI Demand Insights
+                  <Badge variant={tier("order_heatmap") === "paid" ? "default" : "secondary"} className="text-[10px] h-4">
+                    {tier("order_heatmap") === "paid" ? "AI Pro" : "Basic"}
+                  </Badge>
+                </CardTitle>
+                <CardDescription>Staffing and promotion recommendations based on your order patterns</CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={loadingInsights}
+                onClick={async () => {
+                  setLoadingInsights(true);
+                  try {
+                    const matrix: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
+                    for (const o of orders) {
+                      const d = new Date(o.created_at);
+                      matrix[getDay(d)][getHours(d)]++;
+                    }
+                    const isPaid = tier("order_heatmap") === "paid";
+                    const token = isPaid ? await getAccessToken() : null;
+                    const result = await forecastDemand({
+                      isPaid,
+                      matrix,
+                      dayLabels: DAY_LABELS,
+                      hourLabels: HOUR_LABELS,
+                      accessToken: token,
+                    });
+                    setAiInsights(result);
+                  } catch {
+                    // Fallback to free
+                    const matrix: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
+                    for (const o of orders) {
+                      const d = new Date(o.created_at);
+                      matrix[getDay(d)][getHours(d)]++;
+                    }
+                    setAiInsights(forecastDemandFree(matrix, DAY_LABELS, HOUR_LABELS));
+                  } finally {
+                    setLoadingInsights(false);
+                  }
+                }}
+              >
+                <Lightbulb className="w-4 h-4 mr-1" />
+                {loadingInsights ? "Analyzing..." : aiInsights ? "Refresh" : "Generate Insights"}
+              </Button>
+            </div>
+          </CardHeader>
+          {aiInsights && (
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1 text-sm font-medium text-green-600">
+                    <ArrowUpCircle className="w-4 h-4" /> Peak Hours
+                  </div>
+                  {aiInsights.peakHours.length > 0 ? (
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      {aiInsights.peakHours.map((h, i) => <li key={i}>• {h}</li>)}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Not enough data</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1 text-sm font-medium text-amber-500">
+                    <ArrowDownCircle className="w-4 h-4" /> Slow Hours
+                  </div>
+                  {aiInsights.slowHours.length > 0 ? (
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      {aiInsights.slowHours.map((h, i) => <li key={i}>• {h}</li>)}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No slow periods detected</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1 text-sm font-medium text-blue-600">
+                    <Lightbulb className="w-4 h-4" /> Recommendations
+                  </div>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    {aiInsights.recommendations.map((r, i) => <li key={i}>💡 {r}</li>)}
+                  </ul>
+                </div>
+              </div>
+              {aiInsights.tierUsed === "paid" && (
+                <p className="text-[10px] text-muted-foreground mt-3 text-right">Powered by AI Pro</p>
+              )}
+            </CardContent>
+          )}
+        </Card>
+      )}
     </section>
   );
 }
