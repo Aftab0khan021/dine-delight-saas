@@ -43,6 +43,14 @@ export function FeatureGate({
 
   // While loading, show a minimal skeleton to avoid flicker
   if (isLoading) {
+    // Inline mode: compact loader that doesn't disrupt page layout
+    if (mode === "inline") {
+      return (
+        <div className="flex items-center justify-center py-4">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+      );
+    }
     return (
       <div className="flex items-center justify-center py-20">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />

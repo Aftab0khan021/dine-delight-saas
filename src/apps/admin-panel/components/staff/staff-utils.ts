@@ -24,7 +24,7 @@ export type Permission = {
   created_at: string;
 };
 
-export type PermissionCategory = "orders" | "menu" | "staff" | "analytics" | "settings";
+export type PermissionCategory = "orders" | "menu" | "staff" | "analytics" | "settings" | "inventory" | "kitchen" | "reservations" | "reviews" | "customers" | "delivery" | "marketing" | "developer" | "branding" | "qr_coupons";
 
 export type CategoryPermission = {
   category_id: string;
@@ -66,6 +66,42 @@ export const PERMISSIONS = {
   MANAGE_QR: "manage_qr",
   VIEW_COUPONS: "view_coupons",
   MANAGE_COUPONS: "manage_coupons",
+
+  // Inventory
+  VIEW_INVENTORY: "view_inventory",
+  MANAGE_INVENTORY: "manage_inventory",
+
+  // Kitchen
+  VIEW_KITCHEN: "view_kitchen",
+  MANAGE_KITCHEN: "manage_kitchen",
+
+  // Reservations
+  VIEW_RESERVATIONS: "view_reservations",
+  MANAGE_RESERVATIONS: "manage_reservations",
+
+  // Reviews
+  VIEW_REVIEWS: "view_reviews",
+  MANAGE_REVIEWS: "manage_reviews",
+
+  // Customers
+  VIEW_CUSTOMERS: "view_customers",
+  MANAGE_CUSTOMERS: "manage_customers",
+
+  // Delivery Zones
+  VIEW_DELIVERY_ZONES: "view_delivery_zones",
+  MANAGE_DELIVERY_ZONES: "manage_delivery_zones",
+
+  // Marketing / WhatsApp
+  VIEW_MARKETING: "view_marketing",
+  MANAGE_MARKETING: "manage_marketing",
+
+  // Developer API
+  VIEW_API: "view_api",
+  MANAGE_API: "manage_api",
+
+  // Branding
+  VIEW_BRANDING: "view_branding",
+  MANAGE_BRANDING: "manage_branding",
 } as const;
 
 export type PermissionCode = typeof PERMISSIONS[keyof typeof PERMISSIONS];

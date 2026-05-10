@@ -18,6 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Loader2, CheckSquare, Square } from "lucide-react";
 import type { StaffCategory, Permission } from "./staff-utils";
+import { useFeatureAccess } from "../../hooks/useFeatureAccess";
 
 type CategoryDialogProps = {
     open: boolean;
@@ -36,6 +37,7 @@ export function CategoryDialog({
 }: CategoryDialogProps) {
     const { toast } = useToast();
     const queryClient = useQueryClient();
+    const { isFeatureEnabled } = useFeatureAccess(restaurantId);
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
     const [color, setColor] = useState("#6366f1");
@@ -192,7 +194,43 @@ export function CategoryDialog({
         staff: "Staff Management",
         analytics: "Analytics & Reports",
         settings: "Settings & Billing",
+        qr_coupons: "QR & Coupons",
+        inventory: "Inventory",
+        kitchen: "Kitchen Display",
+        reservations: "Reservations",
+        reviews: "Reviews",
+        customers: "Customers",
+        delivery: "Delivery Zones",
+        marketing: "Marketing & WhatsApp",
+        developer: "Developer API",
+        branding: "Branding & Theme",
     };
+
+    // ── Map permission categories to feature flag keys ──
+    // Categories NOT listed here are always shown (core features)
+    const categoryToFeatureKey: Record<string, string> = {
+        inventory: "inventory_management",
+        kitchen: "kitchen_display",
+        reservations: "table_reservations",
+        reviews: "reviews",
+        customers: "customer_management",
+        delivery: "delivery_zones",
+        marketing: "whatsapp_crm",
+        developer: "api_access",
+        analytics: "analytics",
+        qr_coupons: "coupons",
+    };
+
+    // Filter: only show permission groups for features in the restaurant's subscription
+    const visibleCategories = Object.entries(permissionsByCategory).filter(
+        ([cat]) => {
+            const featureKey = categoryToFeatureKey[cat];
+            // No mapping = core feature (orders, menu, staff, settings, branding) → always show
+            if (!featureKey) return true;
+            // Only show if this feature is enabled in the subscription
+            return isFeatureEnabled(featureKey);
+        }
+    );
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -261,7 +299,7 @@ export function CategoryDialog({
                             </p>
                         </div>
 
-                        {Object.entries(permissionsByCategory).map(([cat, perms]) => {
+                        {visibleCategories.map(([cat, perms]) => {
                             const allSelected = perms.every((p) => selectedPermissions.has(p.id));
                             const someSelected = perms.some((p) => selectedPermissions.has(p.id));
 
