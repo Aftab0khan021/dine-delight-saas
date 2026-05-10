@@ -125,13 +125,12 @@ export default function AcceptInvitation() {
                 .from("invitation_tokens")
                 .update({ used_at: new Date().toISOString() })
                 .eq("token", token)
-                .is("used_at", null)
-                .select();
+                .is("used_at", null);
 
-            // If update didn't match any rows, the token was already claimed
+            // If update didn't match any rows or errored, the token was already claimed
             if (claimError) {
                 console.error("Token claim error:", claimError);
-                setError("Failed to process invitation. The token may have already been used.");
+                setError("Failed to process invitation. The token may have already been used. Error: " + claimError.message);
                 setSettingPassword(false);
                 return;
             }
