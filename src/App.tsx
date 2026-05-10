@@ -44,6 +44,7 @@ import AdminCustomers from "./apps/admin-panel/pages/Customers";
 import AdminAnalytics from "./apps/admin-panel/pages/Analytics";
 import AdminDeliveryZones from "./apps/admin-panel/pages/DeliveryZones";
 import AdminExploreFeatures from "./apps/admin-panel/pages/ExploreFeatures";
+import { ProtectedRoute } from "./apps/admin-panel/components/ProtectedRoute";
 
 // Super Admin
 import SuperAdminAuth from "./apps/super-admin/pages/Auth";
@@ -138,30 +139,30 @@ const App = () => (
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="dashboard" element={<AdminDashboard />} />
-            <Route path="orders" element={<AdminOrders />} />
-            <Route path="menu" element={<AdminMenu />} />
-            <Route path="qr" element={<AdminQrMenu />} />
+            <Route path="orders" element={<ProtectedRoute permission="view_orders"><AdminOrders /></ProtectedRoute>} />
+            <Route path="menu" element={<ProtectedRoute permission="view_menu"><AdminMenu /></ProtectedRoute>} />
+            <Route path="qr" element={<ProtectedRoute permission="view_qr"><AdminQrMenu /></ProtectedRoute>} />
             {/* Backwards compatible */}
             <Route path="qr-menu" element={<Navigate to="/admin/qr" replace />} />
-            <Route path="staff" element={<AdminStaff />} />
-            <Route path="staff-categories" element={<AdminStaffCategories />} />
-            <Route path="branding" element={<AdminBranding />} />
-            <Route path="billing" element={<AdminBilling />} />
-            <Route path="coupons" element={<AdminCoupons />} />
-            <Route path="marketing" element={<AdminMarketing />} />
-            <Route path="reviews" element={<AdminReviews />} />
-            <Route path="insights" element={<AdminMenuInsights />} />
-            <Route path="developer" element={<AdminDeveloperAPI />} />
-            <Route path="kitchen" element={<AdminKitchenDashboard />} />
-            <Route path="reservations" element={<AdminReservations />} />
-            <Route path="inventory" element={<AdminInventory />} />
+            <Route path="staff" element={<ProtectedRoute permission="view_staff"><AdminStaff /></ProtectedRoute>} />
+            <Route path="staff-categories" element={<ProtectedRoute adminOnly><AdminStaffCategories /></ProtectedRoute>} />
+            <Route path="branding" element={<ProtectedRoute permission="manage_settings"><AdminBranding /></ProtectedRoute>} />
+            <Route path="billing" element={<ProtectedRoute adminOnly><AdminBilling /></ProtectedRoute>} />
+            <Route path="coupons" element={<ProtectedRoute permission="view_coupons"><AdminCoupons /></ProtectedRoute>} />
+            <Route path="marketing" element={<ProtectedRoute adminOnly><AdminMarketing /></ProtectedRoute>} />
+            <Route path="reviews" element={<ProtectedRoute permission="view_reviews"><AdminReviews /></ProtectedRoute>} />
+            <Route path="insights" element={<ProtectedRoute adminOnly><AdminMenuInsights /></ProtectedRoute>} />
+            <Route path="developer" element={<ProtectedRoute adminOnly><AdminDeveloperAPI /></ProtectedRoute>} />
+            <Route path="kitchen" element={<ProtectedRoute permission="view_kitchen"><AdminKitchenDashboard /></ProtectedRoute>} />
+            <Route path="reservations" element={<ProtectedRoute permission="manage_settings"><AdminReservations /></ProtectedRoute>} />
+            <Route path="inventory" element={<ProtectedRoute permission="view_inventory"><AdminInventory /></ProtectedRoute>} />
             {/* WhatsApp bot settings (from dev merge) */}
-            <Route path="whatsapp" element={<AdminWhatsAppSettings />} />
-            <Route path="otp-settings" element={<AdminOTPSettings />} />
+            <Route path="whatsapp" element={<ProtectedRoute adminOnly><AdminWhatsAppSettings /></ProtectedRoute>} />
+            <Route path="otp-settings" element={<ProtectedRoute adminOnly><AdminOTPSettings /></ProtectedRoute>} />
             {/* Enhancement batch */}
-            <Route path="customers" element={<AdminCustomers />} />
-            <Route path="analytics" element={<AdminAnalytics />} />
-            <Route path="delivery-zones" element={<AdminDeliveryZones />} />
+            <Route path="customers" element={<ProtectedRoute adminOnly><AdminCustomers /></ProtectedRoute>} />
+            <Route path="analytics" element={<ProtectedRoute permission="view_analytics"><AdminAnalytics /></ProtectedRoute>} />
+            <Route path="delivery-zones" element={<ProtectedRoute adminOnly><AdminDeliveryZones /></ProtectedRoute>} />
             <Route path="explore" element={<AdminExploreFeatures />} />
           </Route>
 

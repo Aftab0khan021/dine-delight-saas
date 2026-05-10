@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useRestaurantContext } from "../state/restaurant-context";
+import { usePermissionContext } from "../state/permission-context";
 import { useFeatureAccess } from "../hooks/useFeatureAccess";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,8 @@ type FeatureMeta = {
   icon: LucideIcon;
   route: string;
   tier: "core" | "growth";
+  requiredPermission?: string; // Permission code required to see this feature
+  adminOnly?: boolean; // Only visible to admins regardless of permissions
 };
 
 const FEATURE_CATALOG: FeatureMeta[] = [
@@ -47,6 +50,7 @@ const FEATURE_CATALOG: FeatureMeta[] = [
     icon: ChefHat,
     route: "/admin/kitchen",
     tier: "core",
+    requiredPermission: "view_kitchen",
   },
   {
     key: "coupons",
@@ -55,6 +59,7 @@ const FEATURE_CATALOG: FeatureMeta[] = [
     icon: Ticket,
     route: "/admin/coupons",
     tier: "core",
+    requiredPermission: "view_coupons",
   },
   {
     key: "table_reservations",
@@ -63,6 +68,7 @@ const FEATURE_CATALOG: FeatureMeta[] = [
     icon: CalendarDays,
     route: "/admin/reservations",
     tier: "core",
+    requiredPermission: "manage_settings",
   },
   {
     key: "reviews",
@@ -71,6 +77,8 @@ const FEATURE_CATALOG: FeatureMeta[] = [
     icon: Star,
     route: "/admin/reviews",
     tier: "core",
+    requiredPermission: "view_reviews",
+    adminOnly: true,
   },
   {
     key: "inventory_management",
@@ -79,6 +87,7 @@ const FEATURE_CATALOG: FeatureMeta[] = [
     icon: Package,
     route: "/admin/inventory",
     tier: "core",
+    requiredPermission: "view_inventory",
   },
   {
     key: "customer_management",
@@ -87,6 +96,7 @@ const FEATURE_CATALOG: FeatureMeta[] = [
     icon: UserCheck,
     route: "/admin/customers",
     tier: "core",
+    adminOnly: true,
   },
   {
     key: "delivery_zones",
@@ -95,6 +105,7 @@ const FEATURE_CATALOG: FeatureMeta[] = [
     icon: MapPin,
     route: "/admin/delivery-zones",
     tier: "core",
+    adminOnly: true,
   },
   {
     key: "staff_categories",
@@ -103,6 +114,7 @@ const FEATURE_CATALOG: FeatureMeta[] = [
     icon: Settings,
     route: "/admin/staff-categories",
     tier: "core",
+    adminOnly: true,
   },
   {
     key: "online_payments",
@@ -111,6 +123,7 @@ const FEATURE_CATALOG: FeatureMeta[] = [
     icon: CreditCard,
     route: "/admin/billing",
     tier: "core",
+    adminOnly: true,
   },
   // Growth features
   {
@@ -120,6 +133,7 @@ const FEATURE_CATALOG: FeatureMeta[] = [
     icon: MessageCircle,
     route: "/admin/marketing",
     tier: "growth",
+    adminOnly: true,
   },
   {
     key: "menu_insights",
@@ -128,6 +142,7 @@ const FEATURE_CATALOG: FeatureMeta[] = [
     icon: BarChart3,
     route: "/admin/insights",
     tier: "growth",
+    adminOnly: true,
   },
   {
     key: "analytics",
@@ -136,6 +151,7 @@ const FEATURE_CATALOG: FeatureMeta[] = [
     icon: PieChart,
     route: "/admin/analytics",
     tier: "growth",
+    requiredPermission: "view_analytics",
   },
   {
     key: "api_access",
@@ -144,6 +160,7 @@ const FEATURE_CATALOG: FeatureMeta[] = [
     icon: Code2,
     route: "/admin/developer",
     tier: "growth",
+    adminOnly: true,
   },
   {
     key: "whatsapp_bot",
@@ -152,6 +169,7 @@ const FEATURE_CATALOG: FeatureMeta[] = [
     icon: Bot,
     route: "/admin/whatsapp",
     tier: "growth",
+    adminOnly: true,
   },
   {
     key: "otp_verification",
@@ -160,6 +178,7 @@ const FEATURE_CATALOG: FeatureMeta[] = [
     icon: Shield,
     route: "/admin/otp-settings",
     tier: "growth",
+    adminOnly: true,
   },
   {
     key: "loyalty_program",
@@ -168,11 +187,13 @@ const FEATURE_CATALOG: FeatureMeta[] = [
     icon: Gift,
     route: "/admin/coupons",
     tier: "growth",
+    adminOnly: true,
   },
 ];
 
 export default function ExploreFeatures() {
   const { restaurant } = useRestaurantContext();
+  const { hasPermission, isAdmin } = usePermissionContext();
   const { features, isLoading, isFeatureEnabled } = useFeatureAccess(restaurant?.id);
 
   const { activeFeatures, lockedFeatures } = useMemo(() => {
@@ -180,6 +201,12 @@ export default function ExploreFeatures() {
     const locked: FeatureMeta[] = [];
 
     for (const feat of FEATURE_CATALOG) {
+      // Non-admin users can only see features they have permission for
+      if (!isAdmin) {
+        if (feat.adminOnly) continue; // Skip admin-only features entirely
+        if (feat.requiredPermission && !hasPermission(feat.requiredPermission as any)) continue;
+      }
+
       if (isFeatureEnabled(feat.key)) {
         active.push(feat);
       } else {
@@ -188,7 +215,7 @@ export default function ExploreFeatures() {
     }
 
     return { activeFeatures: active, lockedFeatures: locked };
-  }, [features, isFeatureEnabled]);
+  }, [features, isFeatureEnabled, isAdmin, hasPermission]);
 
   if (isLoading) {
     return (
