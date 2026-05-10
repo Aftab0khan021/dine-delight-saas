@@ -118,22 +118,21 @@ export default function AcceptInvitation() {
         try {
             const token = searchParams.get("token");
 
-            // Fix #1: Atomically claim the token BEFORE creating the user.
-            // This prevents race conditions where two tabs could use the same token.
-            // The RLS policy only allows updating tokens where used_at IS NULL.
-            const { error: claimError, count } = await supabase
-                .from("invitation_tokens")
-                .update({ used_at: new Date().toISOString() })
-                .eq("token", token)
-                .is("used_at", null);
+            // Fix #1: Atomically claim the token using a SECURITY DEFINER function.
+            // This bypasses RLS on invitation_tokens and prevents race conditions.
+            const { data: claimResult, error: claimError } = await supabase
+                .rpc("claim_invitation_token", { p_token: token });
 
-            // If update didn't match any rows or errored, the token was already claimed
-            if (claimError) {
-                console.error("Token claim error:", claimError);
-                setError("Failed to process invitation. The token may have already been used. Error: " + claimError.message);
+            if (claimError || !claimResult?.success) {
+                const msg = claimError?.message || claimResult?.error || "Unknown error";
+                console.error("Token claim error:", claimError || claimResult);
+                setError("Failed to process invitation: " + msg);
                 setSettingPassword(false);
                 return;
             }
+
+            // Use data from the RPC result (has email, restaurant_id, etc.)
+            const claimedData = claimResult;
 
             // Fix #8 & #11: Create user account with full_name in metadata
             const { data: authData, error: signUpError } = await supabase.auth.signUp({
