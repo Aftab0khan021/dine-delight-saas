@@ -1,10 +1,12 @@
 import { useMemo, useState, useEffect } from "react";
 import { format } from "date-fns";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
+import { FeatureGate } from "../components/FeatureGate";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,7 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle, DollarSign, CreditCard, Percent, X, Plus } from "lucide-react";
+import { AlertTriangle, DollarSign, CreditCard, Percent, X, Plus, Check, Crown, Zap, Rocket } from "lucide-react";
 
 type SubscriptionRow = {
   id: string;
@@ -49,6 +51,7 @@ type PlanRow = {
   currency: string;
   billing_period: "monthly" | "yearly";
   trial_days: number;
+  features: Record<string, any>;
 };
 
 type InvoiceRow = {
@@ -64,6 +67,177 @@ type InvoiceRow = {
   hosted_invoice_url: string | null;
   invoice_pdf_url: string | null;
 };
+
+// ── Feature keys shown in the plan comparison grid ──
+const COMPARISON_FEATURES: { key: string; label: string }[] = [
+  { key: 'online_ordering', label: 'Online Ordering' },
+  { key: 'qr_menu', label: 'QR Menu' },
+  { key: 'table_ordering', label: 'Table Ordering' },
+  { key: 'kitchen_display', label: 'Kitchen Display' },
+  { key: 'reviews', label: 'Customer Reviews' },
+  { key: 'coupons', label: 'Coupons & Discounts' },
+  { key: 'online_payments', label: 'Online Payments' },
+  { key: 'table_reservations', label: 'Table Reservations' },
+  { key: 'delivery_zones', label: 'Delivery Zones' },
+  { key: 'inventory_management', label: 'Inventory Mgmt' },
+  { key: 'customer_management', label: 'Customer CRM' },
+  { key: 'analytics', label: 'Advanced Analytics' },
+  { key: 'menu_insights', label: 'Menu Insights (AI)' },
+  { key: 'whatsapp_crm', label: 'WhatsApp CRM' },
+  { key: 'whatsapp_bot', label: 'WhatsApp Bot' },
+  { key: 'api_access', label: 'Developer API' },
+  { key: 'otp_verification', label: 'OTP Verification' },
+  { key: 'loyalty_program', label: 'Loyalty Program' },
+  { key: 'staff_categories', label: 'Staff Categories' },
+  { key: 'custom_domain', label: 'Custom Domain' },
+  { key: 'multi_location', label: 'Multi-Location' },
+  { key: 'priority_support', label: 'Priority Support' },
+  { key: 'white_label', label: 'White Label' },
+];
+
+const PLAN_ICONS: Record<string, React.ReactNode> = {
+  starter: <Zap className="h-5 w-5" />,
+  professional: <Rocket className="h-5 w-5" />,
+  enterprise: <Crown className="h-5 w-5" />,
+};
+
+const PLAN_GRADIENTS: Record<string, string> = {
+  starter: 'from-orange-400 via-amber-400 to-yellow-400',
+  professional: 'from-blue-500 via-cyan-500 to-teal-500',
+  enterprise: 'from-violet-500 via-purple-500 to-fuchsia-500',
+};
+
+function AllPlansComparison({ currentPlanSlug }: { currentPlanSlug?: string }) {
+  const { data: plans, isLoading } = useQuery({
+    queryKey: ['billing', 'all-plans'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('subscription_plans')
+        .select('id, name, slug, price_cents, currency, billing_period, trial_days, features, description')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {[1, 2, 3].map(i => (
+          <Card key={i} className="animate-pulse">
+            <CardContent className="p-6 space-y-4">
+              <div className="h-6 w-24 bg-muted rounded" />
+              <div className="h-8 w-32 bg-muted rounded" />
+              <div className="space-y-2">
+                {[1, 2, 3, 4, 5].map(j => <div key={j} className="h-3 w-full bg-muted rounded" />)}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
+  if (!plans?.length) return null;
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {plans.map((plan: any) => {
+        const isCurrent = plan.slug === currentPlanSlug;
+        const features = plan.features || {};
+        const gradient = PLAN_GRADIENTS[plan.slug] || PLAN_GRADIENTS.starter;
+        const icon = PLAN_ICONS[plan.slug];
+
+        return (
+          <Card
+            key={plan.id}
+            className={`relative overflow-hidden transition-all ${
+              isCurrent ? 'ring-2 ring-primary shadow-lg' : 'hover:shadow-md'
+            }`}
+          >
+            {/* Gradient bar */}
+            <div className={`h-1.5 w-full bg-gradient-to-r ${gradient}`} />
+
+            {/* Current badge */}
+            {isCurrent && (
+              <div className="absolute top-3 right-3">
+                <Badge className="bg-primary text-primary-foreground text-[10px]">Current Plan</Badge>
+              </div>
+            )}
+
+            <CardContent className="p-5 space-y-4">
+              {/* Plan header */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  {icon}
+                  <span className="text-xs font-medium uppercase tracking-wider">{plan.name}</span>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-2xl font-bold">
+                    {formatMoney(plan.price_cents, plan.currency)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">/ {plan.billing_period}</span>
+                </div>
+                {plan.trial_days > 0 && (
+                  <p className="text-xs text-muted-foreground">{plan.trial_days}-day free trial</p>
+                )}
+              </div>
+
+              {plan.description && (
+                <p className="text-xs text-muted-foreground leading-relaxed">{plan.description}</p>
+              )}
+
+              <Separator />
+
+              {/* Limits */}
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Staff</span>
+                  <span className="font-medium">{features.staff_limit === -1 ? 'Unlimited' : features.staff_limit ?? '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Menu Items</span>
+                  <span className="font-medium">{features.menu_items_limit === -1 ? 'Unlimited' : features.menu_items_limit ?? '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">API Rate</span>
+                  <span className="font-medium">{features.api_rate_limit === -1 ? 'Unlimited' : features.api_rate_limit ? `${features.api_rate_limit}/min` : '—'}</span>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Feature checklist */}
+              <div className="space-y-1.5">
+                {COMPARISON_FEATURES.map(f => {
+                  const enabled = features[f.key] === true;
+                  return (
+                    <div key={f.key} className="flex items-center gap-2 text-xs">
+                      {enabled ? (
+                        <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                      ) : (
+                        <X className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
+                      )}
+                      <span className={enabled ? 'text-foreground' : 'text-muted-foreground/60 line-through'}>{f.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* CTA */}
+              {!isCurrent && (
+                <Button variant="outline" size="sm" className="w-full mt-2">
+                  Contact to upgrade
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function RestaurantBilling() {
   const { restaurant } = useRestaurantContext();
@@ -187,7 +361,7 @@ export default function RestaurantBilling() {
       const { data: subscription, error: subError } = await supabase
         .from("subscriptions")
         .select(
-          "id, plan_id, restaurant_id, status, current_period_end, trial_ends_at, created_at, subscription_plans(id, name, slug, price_cents, currency, billing_period, trial_days)",
+          "id, plan_id, restaurant_id, status, current_period_end, trial_ends_at, created_at, subscription_plans(id, name, slug, price_cents, currency, billing_period, trial_days, features)",
         )
         .eq("restaurant_id", restaurantId)
         .order("created_at", { ascending: false })
@@ -265,9 +439,15 @@ export default function RestaurantBilling() {
       </section>
 
       <section className="grid gap-4 grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <Card className="shadow-sm">
+        <Card className="shadow-sm overflow-hidden">
+          {/* Plan tier color bar */}
+          <div className={`h-1.5 w-full ${
+            planSummary?.plan?.slug === 'enterprise' ? 'bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500' :
+            planSummary?.plan?.slug === 'professional' ? 'bg-gradient-to-r from-blue-500 via-cyan-500 to-teal-500' :
+            'bg-gradient-to-r from-orange-400 via-amber-400 to-yellow-400'
+          }`} />
           <CardHeader>
-            <CardTitle className="text-base">Current plan</CardTitle>
+            <CardTitle className="text-base">Current Plan</CardTitle>
             <CardDescription>
               Your restaurant&apos;s subscription and renewal details.
             </CardDescription>
@@ -278,95 +458,146 @@ export default function RestaurantBilling() {
                 Select a restaurant to view billing information.
               </p>
             ) : subscriptionQuery.isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading plan…</p>
+              <div className="space-y-3">
+                <div className="h-6 w-32 rounded bg-muted animate-pulse" />
+                <div className="h-4 w-48 rounded bg-muted animate-pulse" />
+                <div className="h-4 w-40 rounded bg-muted animate-pulse" />
+              </div>
             ) : subscriptionQuery.isError ? (
               <p className="text-sm text-destructive">
                 Unable to load subscription details.
               </p>
             ) : !planSummary ? (
-              <div className="space-y-2">
-                <p className="text-sm font-medium">
-                  No active subscription found.
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Contact support to choose a plan and activate billing
-                  for this restaurant.
-                </p>
+              <div className="space-y-3">
+                <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                    No active subscription
+                  </p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                    Contact support to choose a plan and activate billing for this restaurant.
+                  </p>
+                </div>
+                <Button type="button" variant="default" size="sm" className="w-full">
+                  Contact support about billing
+                </Button>
               </div>
             ) : (
               <div className="space-y-4">
+                {/* Plan name + status */}
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm text-muted-foreground">
-                      Plan
-                    </p>
-                    <p className="text-lg font-semibold">
+                    <p className="text-sm text-muted-foreground">Plan</p>
+                    <p className="text-xl font-bold">
                       {planSummary.plan?.name ?? "Custom plan"}
                     </p>
                     {planSummary.plan && (
                       <p className="text-sm text-muted-foreground">
-                        {formatMoney(
-                          planSummary.plan.price_cents,
-                          planSummary.plan.currency,
-                        )}{" "}
+                        {formatMoney(planSummary.plan.price_cents, planSummary.plan.currency)}{" "}
                         / {planSummary.plan.billing_period}
                       </p>
                     )}
                   </div>
-                  <Badge variant="secondary">{planSummary.statusLabel}</Badge>
+                  <Badge
+                    variant="secondary"
+                    className={
+                      planSummary.subscription.status === 'active' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' :
+                      planSummary.subscription.status === 'trialing' ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400' :
+                      planSummary.subscription.status === 'past_due' ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400' :
+                      ''
+                    }
+                  >
+                    {planSummary.statusLabel}
+                  </Badge>
                 </div>
 
-                <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <dt className="text-muted-foreground">Restaurant</dt>
-                    <dd className="font-medium">{restaurant?.name}</dd>
+                {/* Trial countdown */}
+                {planSummary.subscription.status === 'trialing' && planSummary.subscription.trial_ends_at && (() => {
+                  const daysLeft = Math.max(0, Math.ceil((new Date(planSummary.subscription.trial_ends_at).getTime() - Date.now()) / 86400000));
+                  return (
+                    <div className={`p-3 rounded-lg border text-sm ${daysLeft <= 3 ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-400' : 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400'}`}>
+                      <p className="font-medium">⏳ {daysLeft} day{daysLeft !== 1 ? 's' : ''} left in trial</p>
+                      <p className="text-xs mt-0.5 opacity-80">Trial ends {planSummary.trialEnds}</p>
+                    </div>
+                  );
+                })()}
+
+                <Separator />
+
+                {/* Key dates */}
+                <dl className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="space-y-0.5">
+                    <dt className="text-xs text-muted-foreground">Restaurant</dt>
+                    <dd className="font-medium text-sm">{restaurant?.name}</dd>
                   </div>
-                  {planSummary.trialEnds && (
-                    <div className="space-y-1">
-                      <dt className="text-muted-foreground">
-                        Trial ends
-                      </dt>
-                      <dd className="font-medium">{planSummary.trialEnds}</dd>
-                    </div>
-                  )}
                   {planSummary.nextRenewal && (
-                    <div className="space-y-1">
-                      <dt className="text-muted-foreground">
-                        Next renewal
-                      </dt>
-                      <dd className="font-medium">
-                        {planSummary.nextRenewal}
-                      </dd>
+                    <div className="space-y-0.5">
+                      <dt className="text-xs text-muted-foreground">Next renewal</dt>
+                      <dd className="font-medium text-sm">{planSummary.nextRenewal}</dd>
                     </div>
                   )}
-                  <div className="space-y-1">
-                    <dt className="text-muted-foreground">
-                      Subscription since
-                    </dt>
-                    <dd className="font-medium">
+                  <div className="space-y-0.5">
+                    <dt className="text-xs text-muted-foreground">Member since</dt>
+                    <dd className="font-medium text-sm">
                       {planSummary.subscription.created_at
-                        ? format(
-                            new Date(planSummary.subscription.created_at),
-                            "PP",
-                          )
+                        ? format(new Date(planSummary.subscription.created_at), "PP")
                         : "—"}
                     </dd>
                   </div>
                 </dl>
 
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">
-                    Changes to plan, billing cadence, or payment method
-                    are currently managed by the platform team.
+                <Separator />
+
+                {/* Usage meters */}
+                {planSummary.plan && (() => {
+                  const planFeatures = (planSummary.plan as any)?.features || (subscriptionQuery.data as any)?.plan?.features;
+                  if (!planFeatures) return null;
+                  const staffLimit = planFeatures.staff_limit;
+                  const menuLimit = planFeatures.menu_items_limit;
+                  return (
+                    <div className="space-y-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Plan Limits</p>
+                      {staffLimit !== undefined && (
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-muted-foreground">Staff members</span>
+                            <span className="font-medium">{staffLimit === -1 ? 'Unlimited' : `Up to ${staffLimit}`}</span>
+                          </div>
+                          {staffLimit !== -1 && (
+                            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                              <div className="h-full rounded-full bg-primary/70 transition-all" style={{ width: '0%' }} />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {menuLimit !== undefined && (
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-muted-foreground">Menu items</span>
+                            <span className="font-medium">{menuLimit === -1 ? 'Unlimited' : `Up to ${menuLimit}`}</span>
+                          </div>
+                          {menuLimit !== -1 && (
+                            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                              <div className="h-full rounded-full bg-primary/70 transition-all" style={{ width: '0%' }} />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                <div className="pt-1">
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Plan changes are managed by the platform team.
                   </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="w-full sm:w-auto"
-                  >
-                    Contact support about billing
-                  </Button>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button type="button" variant="outline" size="sm" className="flex-1 min-w-0">
+                      Contact support
+                    </Button>
+                    <Button type="button" variant="default" size="sm" className="flex-1 min-w-0" asChild>
+                      <Link to="/admin/explore-features">View all features</Link>
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
@@ -492,6 +723,15 @@ export default function RestaurantBilling() {
         </Card>
       </section>
 
+      {/* ─── Plan Comparison ─── */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Compare Plans</h2>
+          <p className="text-sm text-muted-foreground">See what&apos;s included in each plan and find the right fit for your restaurant.</p>
+        </div>
+
+        <AllPlansComparison currentPlanSlug={planSummary?.plan?.slug} />
+      </section>
       {/* ─── Tax & Bill Charges ─── */}
       <section className="space-y-1">
         <h2 className="text-lg font-semibold tracking-tight flex items-center gap-2">
@@ -615,7 +855,8 @@ export default function RestaurantBilling() {
         </CardContent>
       </Card>
 
-      {/* ─── Payment Gateway ─── */}
+      {/* ─── Payment Gateway (gated by online_payments) ─── */}
+      <FeatureGate featureKey="online_payments" featureName="Online Payments" description="Accept UPI, cards, and wallets via Razorpay. Upgrade your plan to enable online payment collection." mode="inline">
       <section className="space-y-1">
         <h2 className="text-lg font-semibold tracking-tight flex items-center gap-2">
           <CreditCard className="h-5 w-5 text-muted-foreground" /> Payment Gateway
@@ -665,6 +906,7 @@ export default function RestaurantBilling() {
           </Button>
         </CardContent>
       </Card>
+      </FeatureGate>
     </div>
   );
 }

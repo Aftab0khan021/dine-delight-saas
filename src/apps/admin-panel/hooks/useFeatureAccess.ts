@@ -21,16 +21,25 @@ export function useFeatureAccess(restaurantId: string | undefined) {
         queryFn: async () => {
             if (!restaurantId) return [];
 
-            const { data, error } = await supabase
-                .from('restaurant_feature_access')
-                .select('*')
-                .eq('restaurant_id', restaurantId);
+            try {
+                const { data, error } = await supabase
+                    .from('restaurant_feature_access')
+                    .select('*')
+                    .eq('restaurant_id', restaurantId);
 
-            if (error) throw error;
-            return data as FeatureAccess[];
+                if (error) {
+                    console.warn('Feature access query failed:', error.message);
+                    return [];
+                }
+                return data as FeatureAccess[];
+            } catch (e) {
+                console.warn('Feature access unavailable:', e);
+                return [];
+            }
         },
         enabled: !!restaurantId,
         staleTime: 5 * 60 * 1000, // 5 minutes — feature flags don't change per-request
+        retry: false,
     });
 
     // Check if a boolean feature is enabled
@@ -74,17 +83,26 @@ export function useFeatureLimit(restaurantId: string | undefined, featureKey: st
     const { data: limit, isLoading } = useQuery({
         queryKey: ['feature-limit', restaurantId, featureKey],
         queryFn: async () => {
-            if (!restaurantId) return 0;
+            if (!restaurantId) return -1;
 
-            const { data, error } = await supabase.rpc('get_feature_limit_for_restaurant', {
-                p_restaurant_id: restaurantId,
-                p_feature_key: featureKey
-            });
+            try {
+                const { data, error } = await supabase.rpc('get_feature_limit_for_restaurant', {
+                    p_restaurant_id: restaurantId,
+                    p_feature_key: featureKey
+                });
 
-            if (error) throw error;
-            return data as number;
+                if (error) {
+                    console.warn('Feature limit RPC failed:', error.message);
+                    return -1; // Default to unlimited if RPC is unavailable
+                }
+                return data as number;
+            } catch (e) {
+                console.warn('Feature limit unavailable:', e);
+                return -1;
+            }
         },
         enabled: !!restaurantId,
+        retry: false,
     });
 
     const isUnlimited = limit === -1;

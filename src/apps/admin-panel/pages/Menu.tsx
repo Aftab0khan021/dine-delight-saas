@@ -147,12 +147,18 @@ export default function AdminMenu() {
     queryKey: ["admin", "menu", restaurant?.id, "popularity"],
     enabled: !!restaurant?.id,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("menu_item_popularity")
-        .select("menu_item_id, last_ordered_at")
-        .eq("restaurant_id", restaurant!.id);
-      return data || [];
+      try {
+        const { data } = await supabase
+          .from("menu_item_popularity")
+          .select("menu_item_id, last_ordered_at")
+          .eq("restaurant_id", restaurant!.id);
+        return data || [];
+      } catch {
+        // View may not exist in this environment — fail gracefully
+        return [];
+      }
     },
+    retry: false,
   });
 
   // Build a map: menu_item_id -> last_ordered_at
