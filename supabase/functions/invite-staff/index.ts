@@ -59,12 +59,12 @@ serve(async (req) => {
 
     console.log("✅ User authenticated:", user.id);
 
-    // Check if user is restaurant_admin and load all restaurants they manage
+    // Check if user is restaurant_admin or super_admin
     const { data: userRoles, error: rolesError } = await supabase
       .from("user_roles")
       .select("role, restaurant_id")
       .eq("user_id", user.id)
-      .eq("role", "restaurant_admin");
+      .in("role", ["restaurant_admin", "super_admin"]);
 
     if (rolesError) {
       console.error("Roles query error:", rolesError);
@@ -116,7 +116,8 @@ serve(async (req) => {
     // Determine target restaurant: prefer explicit restaurantId from client, but
     // ensure it belongs to the authenticated admin.
     const targetRestaurantId = restaurantId ?? userRoles[0].restaurant_id;
-    const hasAccessToRestaurant = userRoles.some(
+    const isSuperAdmin = userRoles.some((r) => r.role === "super_admin");
+    const hasAccessToRestaurant = isSuperAdmin || userRoles.some(
       (r) => r.restaurant_id === targetRestaurantId,
     );
 
@@ -137,18 +138,33 @@ serve(async (req) => {
     console.log("🔁 Action:", action);
 
     // Check if user already exists (use direct lookup instead of paginated list)
-    const { data: existingUser, error: existingUserError } =
-      await supabase.auth.admin.getUserByEmail(email);
+    let existingUser: any = null;
+    try {
+      const { data, error: existingUserError } =
+        await supabase.auth.admin.getUserByEmail(email);
 
-    if (existingUserError) {
-      console.error("getUserByEmail error:", existingUserError);
-      return new Response(
-        JSON.stringify({ error: "Failed to verify existing users" }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 500,
-        },
-      );
+      if (existingUserError) {
+        // "User not found" is expected for new invites — only log non-404 errors
+        const errMsg = existingUserError.message || "";
+        const is404 = errMsg.toLowerCase().includes("not found") ||
+                       (existingUserError as any).status === 404;
+        if (!is404) {
+          console.error("getUserByEmail error:", existingUserError);
+          return new Response(
+            JSON.stringify({ error: "Failed to verify existing users" }),
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 500,
+            },
+          );
+        }
+        // User not found — this is fine, proceed with invitation
+      } else {
+        existingUser = data?.user ?? data;
+      }
+    } catch (lookupErr) {
+      // Catch network/parsing errors — treat as non-blocking
+      console.warn("getUserByEmail exception (non-blocking):", lookupErr);
     }
 
     if (existingUser) {
@@ -409,6 +425,39 @@ serve(async (req) => {
 </html>
     `;
 
+    // Helper: compute a stable token hash for staff_invites tracking
+    async function sha256Hex(value: string): Promise<string> {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(value);
+      const hash = await crypto.subtle.digest("SHA-256", data);
+      return Array.from(new Uint8Array(hash))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+    }
+
+    const tokenHash = await sha256Hex(invitationToken);
+
+    // Record invitation in staff_invites table (for tracking)
+    // MUST happen before any early return so the invite always shows in the panel.
+    try {
+      await supabase
+        .from("staff_invites")
+        .insert({
+          email,
+          restaurant_id: targetRestaurantId,
+          invited_by: user.id,
+          role: effectiveRole,
+          status: 'pending',
+          token_hash: tokenHash,
+          expires_at: expiresAt.toISOString(),
+          ip_address: ipAddress,
+          staff_category_id: staffCategoryId || null,
+        });
+    } catch (inviteError) {
+      console.warn("⚠️ Failed to record in staff_invites:", inviteError);
+      // Non-critical, continue
+    }
+
     if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
       console.warn("⚠️ Gmail SMTP not configured, skipping email send");
       return new Response(
@@ -472,37 +521,6 @@ serve(async (req) => {
           status: 500,
         }
       );
-    }
-
-    // Helper: compute a stable token hash for staff_invites tracking
-    async function sha256Hex(value: string): Promise<string> {
-      const encoder = new TextEncoder();
-      const data = encoder.encode(value);
-      const hash = await crypto.subtle.digest("SHA-256", data);
-      return Array.from(new Uint8Array(hash))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
-    }
-
-    const tokenHash = await sha256Hex(invitationToken);
-
-    // Record invitation in staff_invites table (for tracking)
-    try {
-      await supabase
-        .from("staff_invites")
-        .insert({
-          email,
-          restaurant_id: targetRestaurantId,
-          invited_by: user.id,
-          role: effectiveRole,
-          status: 'pending',
-          token_hash: tokenHash,
-          expires_at: expiresAt.toISOString(),
-          ip_address: ipAddress,
-        });
-    } catch (inviteError) {
-      console.warn("⚠️ Failed to record in staff_invites:", inviteError);
-      // Non-critical, continue
     }
 
     return new Response(

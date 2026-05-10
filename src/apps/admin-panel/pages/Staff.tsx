@@ -111,7 +111,7 @@ export default function AdminStaff() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("staff_invites")
-        .select("id, email, role, status, updated_at")
+        .select("id, email, role, status, updated_at, staff_category_id, staff_categories(id, name, color)")
         .eq("restaurant_id", restaurant!.id)
         .eq("status", "pending")
         .order("created_at", { ascending: false });
@@ -287,13 +287,13 @@ export default function AdminStaff() {
       type: "active" as const
     }));
 
-    const invited = (invitesQuery.data || []).map(i => ({
+    const invited = (invitesQuery.data || []).map((i: any) => ({
       id: i.id,
       name: "Pending Accept",
       contact: i.email,
       role: i.role,
-      category: null,
-      categoryColor: null,
+      category: i.staff_categories?.name || null,
+      categoryColor: i.staff_categories?.color || null,
       status: "Invited",
       type: "invited" as const
     }));
