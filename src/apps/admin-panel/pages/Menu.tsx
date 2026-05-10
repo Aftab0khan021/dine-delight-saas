@@ -87,7 +87,7 @@ export default function AdminMenu() {
   const { restaurant } = useRestaurantContext();
   const qc = useQueryClient();
   const { toast } = useToast();
-  const { tier, getAccessToken } = useAITier();
+  const { tier, getAccessToken } = useAITier(restaurant?.id);
 
   const currencyCode = restaurant?.currency_code || "INR";
 

@@ -28,7 +28,7 @@ export default function Analytics() {
 function AnalyticsContent() {
   const { restaurant } = useRestaurantContext();
   const cc = restaurant?.currency_code || "INR";
-  const { tier, getAccessToken } = useAITier();
+  const { tier, getAccessToken } = useAITier(restaurant?.id);
   const [aiInsights, setAiInsights] = useState<DemandForecast | null>(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
 

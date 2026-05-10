@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useRestaurantContext } from "../state/restaurant-context";
 
 /**
  * AI Configuration shape stored in restaurants.ai_config JSONB
@@ -23,24 +22,16 @@ const DEFAULT_CONFIG: AIConfig = {
 
 /**
  * Hook that determines whether paid AI is available for a given feature.
- *
- * Logic:
- *  1. Restaurant has ai_config.enabled = true
- *  2. The specific feature flag is turned on in ai_config.features
- *  3. At least one active API key exists for the restaurant
- *
- * If all three conditions are met → paid tier.
- * Otherwise → free tier (always works, no API key needed).
+ * 
+ * IMPORTANT: Does NOT call useRestaurantContext internally — takes restaurantId
+ * as an optional parameter to avoid context-throw crashes during render.
  */
-export function useAITier() {
-  const { restaurant } = useRestaurantContext();
-  const restaurantId = restaurant?.id;
-
+export function useAITier(restaurantId?: string | null) {
   // Fetch ai_config from restaurants table
   const { data: aiConfig } = useQuery({
-    queryKey: ["ai-config", restaurantId],
+    queryKey: ["ai-config", restaurantId ?? "none"],
     enabled: !!restaurantId,
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    staleTime: 5 * 60 * 1000,
     retry: false,
     queryFn: async () => {
       try {
@@ -60,14 +51,14 @@ export function useAITier() {
 
   // Check if restaurant has any active API keys
   const { data: hasApiKeys } = useQuery({
-    queryKey: ["ai-api-keys-exist", restaurantId],
+    queryKey: ["ai-api-keys-exist", restaurantId ?? "none"],
     enabled: !!restaurantId && !!aiConfig?.enabled,
     staleTime: 5 * 60 * 1000,
     retry: false,
     queryFn: async () => {
       try {
-        const { count, error } = await supabase
-          .from("restaurant_api_keys" as any)
+        const { count, error } = await (supabase as any)
+          .from("restaurant_api_keys")
           .select("id", { count: "exact", head: true })
           .eq("restaurant_id", restaurantId!)
           .eq("is_active", true);
@@ -92,9 +83,6 @@ export function useAITier() {
 
   const config = aiConfig ?? DEFAULT_CONFIG;
 
-  /**
-   * Returns true if paid AI is available for a specific feature.
-   */
   const isPaidAvailable = (featureKey: string): boolean => {
     if (!config.enabled) return false;
     if (!config.features[featureKey]) return false;
@@ -102,17 +90,14 @@ export function useAITier() {
     return true;
   };
 
-  /**
-   * Returns 'paid' or 'free' for a feature.
-   */
-  const checkTier = (featureKey: string): "free" | "paid" => {
+  const tier = (featureKey: string): "free" | "paid" => {
     return isPaidAvailable(featureKey) ? "paid" : "free";
   };
 
   return {
     aiConfig: config,
     isPaidAvailable,
-    tier: checkTier,
+    tier,
     getAccessToken,
     restaurantId: restaurantId ?? null,
   };

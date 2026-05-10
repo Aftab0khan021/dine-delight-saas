@@ -23,7 +23,7 @@ function ReviewsContent() {
   const { restaurant } = useRestaurantContext();
   const { toast } = useToast();
   const qc = useQueryClient();
-  const { tier } = useAITier();
+  const { tier } = useAITier(restaurant?.id);
   const sentimentTier = tier("sentiment_analysis");
 
   const reviewsQuery = useQuery({
