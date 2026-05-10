@@ -405,7 +405,7 @@ function CouponsContent() {
             </Card>
 
             {/* Loyalty Program — gated by loyalty_program flag */}
-            <FeatureGate featureKey="loyalty_program" featureName="Loyalty Program" description="Reward repeat customers with loyalty points and referral bonuses." hideWhenDisabled>
+            <FeatureGate featureKey="loyalty_program" featureName="Loyalty Program" description="Reward repeat customers with loyalty points and referral bonuses." mode="inline">
             <Card className="shadow-sm">
                 <CardHeader>
                     <div className="flex items-center justify-between">

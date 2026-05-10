@@ -26,6 +26,7 @@ import {
   UserCheck,
   PieChart,
   MapPin,
+  Sparkles,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -174,6 +175,30 @@ export function AdminSidebar() {
           {navItems.filter(i => growthNavItems.some(g => g.to === i.to)).map((item) => (
             <NavItem key={item.to} item={item} isCollapsed={isCollapsed} />
           ))}
+
+          {/* Explore Features — always visible */}
+          <li className="pt-2">
+            <NavLink
+              to="/admin/explore"
+              title={isCollapsed ? "Explore Features" : undefined}
+              className={({ isActive }) =>
+                cn(
+                  "flex items-center rounded-lg transition-colors",
+                  isCollapsed ? "justify-center h-10 w-10 mx-auto" : "gap-3 px-3 py-2",
+                  isActive
+                    ? "bg-primary/10 text-primary shadow-sm"
+                    : "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:text-amber-700"
+                )
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <Sparkles className={cn("shrink-0", isCollapsed ? "h-5 w-5" : "h-4 w-4", !isActive && !isCollapsed && "opacity-80")} />
+                  {!isCollapsed && <span className="text-sm font-medium truncate">Explore Features</span>}
+                </>
+              )}
+            </NavLink>
+          </li>
         </ul>
       </nav>
 

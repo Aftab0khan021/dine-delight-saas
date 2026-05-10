@@ -43,6 +43,7 @@ import AdminReviews from "./apps/admin-panel/pages/Reviews";
 import AdminCustomers from "./apps/admin-panel/pages/Customers";
 import AdminAnalytics from "./apps/admin-panel/pages/Analytics";
 import AdminDeliveryZones from "./apps/admin-panel/pages/DeliveryZones";
+import AdminExploreFeatures from "./apps/admin-panel/pages/ExploreFeatures";
 
 // Super Admin
 import SuperAdminAuth from "./apps/super-admin/pages/Auth";
@@ -161,6 +162,7 @@ const App = () => (
             <Route path="customers" element={<AdminCustomers />} />
             <Route path="analytics" element={<AdminAnalytics />} />
             <Route path="delivery-zones" element={<AdminDeliveryZones />} />
+            <Route path="explore" element={<AdminExploreFeatures />} />
           </Route>
 
           {/* Super Admin Routes */}
