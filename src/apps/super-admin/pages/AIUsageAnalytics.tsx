@@ -42,7 +42,14 @@ export default function AIUsageAnalytics() {
             const { data } = await supabase
                 .from('ai_providers')
                 .select('provider_name, estimated_cost_per_1k, is_free');
-            setProviderCosts(data || []);
+            // Deduplicate by provider_name
+            const seen = new Set<string>();
+            const unique = (data || []).filter(p => {
+                if (seen.has(p.provider_name)) return false;
+                seen.add(p.provider_name);
+                return true;
+            });
+            setProviderCosts(unique);
         } catch (error) {
             console.error('Error fetching provider costs:', error);
         }

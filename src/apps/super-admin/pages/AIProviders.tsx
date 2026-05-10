@@ -43,7 +43,15 @@ export default function AIProvidersPage() {
                 .order('accuracy_rating', { ascending: false });
 
             if (error) throw error;
-            setProviders(data || []);
+            // Deduplicate by provider_type + provider_name (migration may have run twice)
+            const seen = new Set<string>();
+            const unique = (data || []).filter(p => {
+                const key = `${p.provider_type}:${p.provider_name}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+            setProviders(unique);
         } catch (error) {
             console.error('Error fetching providers:', error);
         } finally {

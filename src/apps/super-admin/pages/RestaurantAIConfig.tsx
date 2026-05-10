@@ -163,9 +163,21 @@ export default function RestaurantAIConfig() {
 
             if (providersError) throw providersError;
 
-            setNlpProviders(providersData.filter(p => p.provider_type === 'nlp'));
-            setImageProviders(providersData.filter(p => p.provider_type === 'image'));
-            setVoiceProviders(providersData.filter(p => p.provider_type === 'voice'));
+            // Deduplicate by provider_name (migration may have run twice)
+            const dedup = (arr: typeof providersData) => {
+                const seen = new Set<string>();
+                return arr.filter(p => {
+                    const key = `${p.provider_type}:${p.provider_name}`;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                });
+            };
+            const unique = dedup(providersData);
+
+            setNlpProviders(unique.filter(p => p.provider_type === 'nlp'));
+            setImageProviders(unique.filter(p => p.provider_type === 'image'));
+            setVoiceProviders(unique.filter(p => p.provider_type === 'voice'));
 
         } catch (error) {
             console.error('Error fetching data:', error);

@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { DollarSign, TrendingUp, TrendingDown, Download } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Download, Inbox } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface CostData {
@@ -22,53 +22,100 @@ interface ProviderCost {
     cost: number;
 }
 
+interface ProviderRate {
+    provider_name: string;
+    estimated_cost_per_1k: string;
+    is_free: boolean;
+}
+
 export default function AICostTracking() {
     const [loading, setLoading] = useState(true);
     const [timeRange, setTimeRange] = useState('30');
     const [totalCost, setTotalCost] = useState(0);
-    const [lastMonthCost, setLastMonthCost] = useState(0);
+    const [prevPeriodCost, setPrevPeriodCost] = useState(0);
     const [restaurantCosts, setRestaurantCosts] = useState<CostData[]>([]);
     const [providerCosts, setProviderCosts] = useState<ProviderCost[]>([]);
+    const [providerRates, setProviderRates] = useState<ProviderRate[]>([]);
 
     useEffect(() => {
-        fetchCostData();
-    }, [timeRange]);
+        fetchProviderRates();
+    }, []);
+
+    useEffect(() => {
+        if (providerRates.length > 0 || true) {
+            fetchCostData();
+        }
+    }, [timeRange, providerRates]);
+
+    // Fetch real provider rates from DB
+    const fetchProviderRates = async () => {
+        try {
+            const { data } = await supabase
+                .from('ai_providers')
+                .select('provider_name, estimated_cost_per_1k, is_free');
+            // Deduplicate by provider_name
+            const seen = new Set<string>();
+            const unique = (data || []).filter(p => {
+                if (seen.has(p.provider_name)) return false;
+                seen.add(p.provider_name);
+                return true;
+            });
+            setProviderRates(unique);
+        } catch (error) {
+            console.error('Error fetching provider rates:', error);
+        }
+    };
+
+    // Parse cost string to per-request cost
+    const getCostPerRequest = (providerName: string): number => {
+        const rate = providerRates.find(p => p.provider_name === providerName);
+        if (!rate || rate.is_free) return 0;
+        const costStr = rate.estimated_cost_per_1k || '';
+        if (costStr.toLowerCase() === 'free') return 0;
+        const match = costStr.match(/[\d.]+/);
+        if (!match) return 0;
+        return parseFloat(match[0]) / 1000;
+    };
 
     const fetchCostData = async () => {
+        setLoading(true);
         try {
             const daysAgo = parseInt(timeRange);
+
+            // Current period
             const startDate = new Date();
             startDate.setDate(startDate.getDate() - daysAgo);
 
-            // Fetch NLP usage
+            // Previous period (same duration, just before start)
+            const prevStart = new Date(startDate);
+            prevStart.setDate(prevStart.getDate() - daysAgo);
+
+            // Fetch current period NLP usage
             const { data: nlpData } = await supabase
                 .from('nlp_parse_cache')
                 .select(`
-          provider_used,
-          restaurant_id,
-          restaurants!inner(name)
-        `)
+                    provider_used,
+                    restaurant_id,
+                    restaurants!inner(name)
+                `)
                 .gte('created_at', startDate.toISOString());
 
-            // Calculate costs
-            const costPerRequest: Record<string, number> = {
-                openai: 0.002,
-                huggingface: 0.001,
-                google: 0.0015,
-                regex: 0,
-                tensorflow: 0,
-                'whisper-local': 0,
-            };
+            // Fetch previous period for comparison
+            const { data: prevData } = await supabase
+                .from('nlp_parse_cache')
+                .select('provider_used')
+                .gte('created_at', prevStart.toISOString())
+                .lt('created_at', startDate.toISOString());
 
-            // By provider
+            // Calculate current period costs by provider
             const providerMap: Record<string, { requests: number; cost: number }> = {};
-            nlpData?.forEach((item) => {
+            (nlpData || []).forEach((item) => {
                 const provider = item.provider_used;
                 if (!providerMap[provider]) {
                     providerMap[provider] = { requests: 0, cost: 0 };
                 }
                 providerMap[provider].requests++;
-                providerMap[provider].cost += costPerRequest[provider] || 0;
+                providerMap[provider].cost += getCostPerRequest(provider);
             });
 
             const providerCostData = Object.entries(providerMap).map(([provider, data]) => ({
@@ -81,7 +128,7 @@ export default function AICostTracking() {
 
             // By restaurant
             const restaurantMap: Record<string, any> = {};
-            nlpData?.forEach((item: any) => {
+            (nlpData || []).forEach((item: any) => {
                 const restId = item.restaurant_id;
                 if (!restaurantMap[restId]) {
                     restaurantMap[restId] = {
@@ -94,7 +141,7 @@ export default function AICostTracking() {
                     };
                 }
                 restaurantMap[restId].nlp_requests++;
-                restaurantMap[restId].total_cost += costPerRequest[item.provider_used] || 0;
+                restaurantMap[restId].total_cost += getCostPerRequest(item.provider_used);
             });
 
             const restaurantCostData = Object.values(restaurantMap)
@@ -103,10 +150,15 @@ export default function AICostTracking() {
 
             setRestaurantCosts(restaurantCostData);
 
-            // Total costs
+            // Total costs — current period
             const total = providerCostData.reduce((sum, p) => sum + p.cost, 0);
             setTotalCost(total);
-            setLastMonthCost(total * 0.8); // Simulated
+
+            // Previous period cost (real data, not simulated)
+            const prevTotal = (prevData || []).reduce((sum, item) => {
+                return sum + getCostPerRequest(item.provider_used);
+            }, 0);
+            setPrevPeriodCost(prevTotal);
 
         } catch (error) {
             console.error('Error fetching cost data:', error);
@@ -123,7 +175,7 @@ export default function AICostTracking() {
                 r.nlp_requests,
                 r.image_requests,
                 r.voice_minutes,
-                r.total_cost.toFixed(2),
+                r.total_cost.toFixed(4),
             ]),
         ].map(row => row.join(',')).join('\n');
 
@@ -135,7 +187,12 @@ export default function AICostTracking() {
         a.click();
     };
 
-    const costTrend = ((totalCost - lastMonthCost) / lastMonthCost) * 100;
+    // Real trend calculation (avoid divide by zero)
+    const costTrend = prevPeriodCost > 0
+        ? ((totalCost - prevPeriodCost) / prevPeriodCost) * 100
+        : totalCost > 0 ? 100 : 0;
+
+    const hasData = providerCosts.length > 0 || restaurantCosts.length > 0;
 
     if (loading) {
         return (
@@ -151,7 +208,7 @@ export default function AICostTracking() {
                 <div>
                     <h1 className="text-2xl sm:text-3xl font-bold">AI Cost Tracking</h1>
                     <p className="text-muted-foreground mt-1">
-                        Monitor and analyze AI service costs
+                        Monitor and analyze AI service costs across all restaurants
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -165,7 +222,7 @@ export default function AICostTracking() {
                             <SelectItem value="90">Last 90 Days</SelectItem>
                         </SelectContent>
                     </Select>
-                    <Button onClick={exportCSV}>
+                    <Button onClick={exportCSV} disabled={!hasData}>
                         <Download className="w-4 h-4 mr-2" />
                         Export CSV
                     </Button>
@@ -176,26 +233,26 @@ export default function AICostTracking() {
             <div className="grid gap-4 md:grid-cols-3">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Cost</CardTitle>
-                        <DollarSign className="h-4 h-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium">Current Period</CardTitle>
+                        <DollarSign className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">${totalCost.toFixed(2)}</div>
+                        <div className="text-2xl font-bold">${totalCost.toFixed(4)}</div>
                         <p className="text-xs text-muted-foreground">
-                            For selected period
+                            Last {timeRange} days
                         </p>
                     </CardContent>
                 </Card>
 
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Last Month</CardTitle>
+                        <CardTitle className="text-sm font-medium">Previous Period</CardTitle>
                         <DollarSign className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">${lastMonthCost.toFixed(2)}</div>
+                        <div className="text-2xl font-bold">${prevPeriodCost.toFixed(4)}</div>
                         <p className="text-xs text-muted-foreground">
-                            Previous period
+                            {timeRange} days before that
                         </p>
                     </CardContent>
                 </Card>
@@ -205,13 +262,17 @@ export default function AICostTracking() {
                         <CardTitle className="text-sm font-medium">Trend</CardTitle>
                         {costTrend > 0 ? (
                             <TrendingUp className="h-4 w-4 text-red-500" />
-                        ) : (
+                        ) : costTrend < 0 ? (
                             <TrendingDown className="h-4 w-4 text-green-500" />
+                        ) : (
+                            <DollarSign className="h-4 w-4 text-muted-foreground" />
                         )}
                     </CardHeader>
                     <CardContent>
-                        <div className={`text-2xl font-bold ${costTrend > 0 ? 'text-red-500' : 'text-green-500'}`}>
-                            {costTrend > 0 ? '+' : ''}{costTrend.toFixed(1)}%
+                        <div className={`text-2xl font-bold ${
+                            costTrend > 0 ? 'text-red-500' : costTrend < 0 ? 'text-green-500' : 'text-muted-foreground'
+                        }`}>
+                            {costTrend === 0 && !hasData ? '—' : `${costTrend > 0 ? '+' : ''}${costTrend.toFixed(1)}%`}
                         </div>
                         <p className="text-xs text-muted-foreground">
                             vs previous period
@@ -220,82 +281,111 @@ export default function AICostTracking() {
                 </Card>
             </div>
 
-            {/* Cost by Provider */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Cost by Provider</CardTitle>
-                    <CardDescription>Breakdown of costs by AI provider</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="overflow-x-auto">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Provider</TableHead>
-                                <TableHead className="text-right">Requests</TableHead>
-                                <TableHead className="text-right">Total Cost</TableHead>
-                                <TableHead className="text-right">Avg Cost/Request</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {providerCosts.map((provider) => (
-                                <TableRow key={provider.provider}>
-                                    <TableCell className="font-medium">{provider.provider}</TableCell>
-                                    <TableCell className="text-right">{provider.requests.toLocaleString()}</TableCell>
-                                    <TableCell className="text-right">${provider.cost.toFixed(2)}</TableCell>
-                                    <TableCell className="text-right">
-                                        ${(provider.cost / provider.requests).toFixed(4)}
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                    </div>
-                </CardContent>
-            </Card>
+            {!hasData ? (
+                <Card>
+                    <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                        <Inbox className="h-12 w-12 text-muted-foreground/40 mb-4" />
+                        <h3 className="text-lg font-semibold">No Cost Data Yet</h3>
+                        <p className="text-muted-foreground mt-2 max-w-md">
+                            Cost tracking data will appear here once restaurants start using paid AI features.
+                            Free tier features (templates, keyword analysis) have zero cost.
+                        </p>
+                    </CardContent>
+                </Card>
+            ) : (
+                <>
+                    {/* Cost by Provider */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Cost by Provider</CardTitle>
+                            <CardDescription>Breakdown of costs by AI provider (rates from provider catalog)</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Provider</TableHead>
+                                        <TableHead className="text-right">Requests</TableHead>
+                                        <TableHead className="text-right">Total Cost</TableHead>
+                                        <TableHead className="text-right">Avg Cost/Request</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {providerCosts.map((provider) => (
+                                        <TableRow key={provider.provider}>
+                                            <TableCell className="font-medium">{provider.provider}</TableCell>
+                                            <TableCell className="text-right">{provider.requests.toLocaleString()}</TableCell>
+                                            <TableCell className="text-right">${provider.cost.toFixed(4)}</TableCell>
+                                            <TableCell className="text-right">
+                                                ${provider.requests > 0 ? (provider.cost / provider.requests).toFixed(6) : '0.000000'}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {providerCosts.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                                                No provider usage data
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                            </div>
+                        </CardContent>
+                    </Card>
 
-            {/* Top Restaurants by Cost */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Top Restaurants by Cost</CardTitle>
-                    <CardDescription>Highest AI service costs by restaurant</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="overflow-x-auto">
-                    <div className="min-w-[600px]">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Restaurant</TableHead>
-                                <TableHead className="text-right">NLP Requests</TableHead>
-                                <TableHead className="text-right">Image Requests</TableHead>
-                                <TableHead className="text-right">Voice Minutes</TableHead>
-                                <TableHead className="text-right">Total Cost</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {restaurantCosts.map((restaurant, index) => (
-                                <TableRow key={restaurant.restaurant_id}>
-                                    <TableCell>
-                                        <div className="flex items-center gap-2">
-                                            <Badge variant="outline">#{index + 1}</Badge>
-                                            <span className="font-medium">{restaurant.restaurant_name}</span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="text-right">{restaurant.nlp_requests.toLocaleString()}</TableCell>
-                                    <TableCell className="text-right">{restaurant.image_requests.toLocaleString()}</TableCell>
-                                    <TableCell className="text-right">{restaurant.voice_minutes.toFixed(1)}</TableCell>
-                                    <TableCell className="text-right font-bold">
-                                        ${restaurant.total_cost.toFixed(2)}
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                    </div>
-                    </div>
-                </CardContent>
-            </Card>
+                    {/* Top Restaurants by Cost */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Top Restaurants by Cost</CardTitle>
+                            <CardDescription>Highest AI service costs by restaurant</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="overflow-x-auto">
+                            <div className="min-w-[600px]">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Restaurant</TableHead>
+                                        <TableHead className="text-right">NLP Requests</TableHead>
+                                        <TableHead className="text-right">Image Requests</TableHead>
+                                        <TableHead className="text-right">Voice Minutes</TableHead>
+                                        <TableHead className="text-right">Total Cost</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {restaurantCosts.map((restaurant, index) => (
+                                        <TableRow key={restaurant.restaurant_id}>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    <Badge variant="outline">#{index + 1}</Badge>
+                                                    <span className="font-medium">{restaurant.restaurant_name}</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-right">{restaurant.nlp_requests.toLocaleString()}</TableCell>
+                                            <TableCell className="text-right">{restaurant.image_requests.toLocaleString()}</TableCell>
+                                            <TableCell className="text-right">{restaurant.voice_minutes.toFixed(1)}</TableCell>
+                                            <TableCell className="text-right font-bold">
+                                                ${restaurant.total_cost.toFixed(4)}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {restaurantCosts.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                                                No restaurant cost data
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                            </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </>
+            )}
         </div>
     );
 }
