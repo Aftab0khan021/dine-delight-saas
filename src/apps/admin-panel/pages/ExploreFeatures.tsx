@@ -24,6 +24,7 @@ import {
   Shield,
   Settings,
   Gift,
+  CreditCard,
   type LucideIcon,
 } from "lucide-react";
 
@@ -101,6 +102,14 @@ const FEATURE_CATALOG: FeatureMeta[] = [
     description: "Create custom staff roles with granular permissions to control access.",
     icon: Settings,
     route: "/admin/staff-categories",
+    tier: "core",
+  },
+  {
+    key: "online_payments",
+    name: "Online Payments",
+    description: "Accept card, UPI, and digital payments from customers at checkout.",
+    icon: CreditCard,
+    route: "/admin/billing",
     tier: "core",
   },
   // Growth features

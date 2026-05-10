@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useSEO } from "@/hooks/useSEO";
+import { usePublicFeatureAccess } from "../hooks/usePublicFeatureAccess";
 import {
   ArrowLeft,
   CalendarDays,
@@ -79,6 +80,9 @@ export default function TableReservation() {
     title: restaurant ? `Book a Table — ${restaurant.name} | Dine Delight` : "Reserve a Table | Dine Delight",
     description: restaurant ? `Reserve a table at ${restaurant.name}. Choose your date, time, party size and enjoy a great dining experience.` : undefined,
   });
+
+  // Feature flag check (must be before any early returns to obey Rules of Hooks)
+  const { isFeatureEnabled: isResFlagOn, isLoading: featuresLoading } = usePublicFeatureAccess(restaurant?.id);
 
   const settings = normalizeSettings(restaurant?.settings);
   const themeColor = settings?.theme?.primary_color || "#f59e0b"; // amber-500
@@ -166,6 +170,21 @@ export default function TableReservation() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background text-destructive">
         Restaurant not found.
+      </div>
+    );
+  }
+
+  if (!featuresLoading && !isResFlagOn('table_reservations')) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6 text-center">
+        <CalendarDays className="h-16 w-16 text-muted-foreground/30 mb-4" />
+        <h2 className="text-2xl font-bold">Reservations Not Available</h2>
+        <p className="text-muted-foreground mt-2 max-w-md">
+          Table reservations are not currently available for this restaurant.
+        </p>
+        <Button className="mt-6" asChild>
+          <Link to={`/r/${slug}`}>Back to Restaurant</Link>
+        </Button>
       </div>
     );
   }

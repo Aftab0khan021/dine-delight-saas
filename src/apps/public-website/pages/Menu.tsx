@@ -30,6 +30,7 @@ import { SplitBillView } from "../components/SplitBillView";
 import { Turnstile } from "@/components/security/Turnstile";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 import { formatMoney } from "@/lib/formatting";
+import { usePublicFeatureAccess } from "../hooks/usePublicFeatureAccess";
 import confetti from "canvas-confetti";
 
 type RestaurantRow = Tables<"restaurants">;
@@ -168,6 +169,16 @@ export default function PublicMenu() {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online' | 'upi'>('cash');
   const [upiApp, setUpiApp] = useState<'google_pay' | 'phonepe' | 'paytm' | null>(null);
   const onlinePaymentsEnabled = !!(restaurantQuery.data as any)?.online_payments_enabled;
+
+  // Feature flags — gate public features by subscription
+  const { isFeatureEnabled } = usePublicFeatureAccess(restaurantQuery.data?.id);
+  const deliveryEnabled = isFeatureEnabled('delivery_zones');
+  const couponsEnabled = isFeatureEnabled('coupons');
+  const loyaltyFlagEnabled = isFeatureEnabled('loyalty_program');
+  const onlinePaymentsFlagEnabled = isFeatureEnabled('online_payments');
+
+  // Online payments require BOTH: restaurant toggle ON + subscription flag ON
+  const canUseOnlinePayments = onlinePaymentsEnabled && onlinePaymentsFlagEnabled;
 
   // Order type: dine_in locked when coming via table QR, else pickup/delivery
   const [orderType, setOrderType] = useState<'dine_in' | 'pickup' | 'delivery'>(
@@ -482,7 +493,7 @@ export default function PublicMenu() {
 
       let data: any;
 
-      if (paymentMethod === 'online' && onlinePaymentsEnabled) {
+      if (paymentMethod === 'online' && canUseOnlinePayments) {
         // === ONLINE PAYMENT FLOW ===
         // Validate amount
         if (activeCart.subtotalCents <= 0) {
@@ -568,7 +579,7 @@ export default function PublicMenu() {
       } else if (paymentMethod === 'upi') {
         // === UPI PAYMENT FLOW ===
 
-        if (onlinePaymentsEnabled) {
+        if (canUseOnlinePayments) {
           // ─── RAZORPAY UPI (auto-verified, like Swiggy/Zomato) ───
           if (activeCart.subtotalCents <= 0) throw new Error("Cannot pay ₹0 via UPI.");
 
@@ -658,8 +669,8 @@ export default function PublicMenu() {
       setCartOpen(true);
       fireConfetti(); // M15
       toast({
-        title: (paymentMethod === 'online' || (paymentMethod === 'upi' && onlinePaymentsEnabled)) ? "Payment successful! 🎉" : "Order placed! 🎉",
-        description: (paymentMethod === 'online' || (paymentMethod === 'upi' && onlinePaymentsEnabled))
+        title: (paymentMethod === 'online' || (paymentMethod === 'upi' && canUseOnlinePayments)) ? "Payment successful! 🎉" : "Order placed! 🎉",
+        description: (paymentMethod === 'online' || (paymentMethod === 'upi' && canUseOnlinePayments))
           ? "Your order has been paid and confirmed."
           : customerPhone ? "Receipt sent to your WhatsApp!" : "Save your order token to track status.",
       });
@@ -890,7 +901,7 @@ export default function PublicMenu() {
           <div className="w-full max-w-3xl mx-auto px-4 pt-2">
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               {prep && <span className="flex items-center gap-1">🕐 Pickup ready in ~{prep} min</span>}
-              {del && <span className="flex items-center gap-1">🚚 Delivery ~{del} min</span>}
+              {deliveryEnabled && del && <span className="flex items-center gap-1">🚚 Delivery ~{del} min</span>}
             </div>
           </div>
         );
@@ -906,7 +917,7 @@ export default function PublicMenu() {
           </div>
         ) : (
           <div className="flex gap-1 p-1 bg-muted rounded-lg">
-            {([['pickup', 'Pickup', ShoppingBag], ['delivery', 'Delivery', Truck]] as const).map(([type, label, Icon]) => (
+            {([['pickup', 'Pickup', ShoppingBag], ...(deliveryEnabled ? [['delivery', 'Delivery', Truck]] : [])] as const).map(([type, label, Icon]) => (
               <button key={type} onClick={() => setOrderType(type as any)}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-sm font-medium transition-colors ${orderType === type ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
                 <Icon className="h-3.5 w-3.5" />{label}
@@ -916,8 +927,8 @@ export default function PublicMenu() {
         )}
       </div>
 
-      {/* Offers Banner */}
-      {menuCoupons && menuCoupons.length > 0 && (
+      {/* Offers Banner — only when coupons feature is enabled */}
+      {couponsEnabled && menuCoupons && menuCoupons.length > 0 && (
         <div className="w-full max-w-3xl mx-auto px-4 pt-3">
           <div className="flex items-center gap-2 mb-2">
             <Tag className="h-4 w-4 text-amber-500" />
@@ -1597,7 +1608,7 @@ export default function PublicMenu() {
                 </div>
 
                 {/* Payment method selector */}
-                {onlinePaymentsEnabled && (
+                {canUseOnlinePayments && (
                   <div className="border rounded-lg p-3 space-y-3 bg-muted/40">
                     <p className="text-xs text-muted-foreground font-medium">Select Payment Method</p>
                     
@@ -1728,7 +1739,7 @@ export default function PublicMenu() {
                 )}
 
                 {/* Loyalty Points */}
-                {loyaltyConfig && customerPhone && customerPhone.length >= 10 && (
+                {loyaltyFlagEnabled && loyaltyConfig && customerPhone && customerPhone.length >= 10 && (
                   <div className="border rounded-lg p-3 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 space-y-1">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-medium text-amber-800 dark:text-amber-300 flex items-center gap-1">⭐ Loyalty Points</span>
@@ -1745,7 +1756,8 @@ export default function PublicMenu() {
                   </div>
                 )}
 
-                {/* Coupon Code */}
+                {/* Coupon Code — only when coupons feature is enabled */}
+                {couponsEnabled && (
                 <div className="border rounded-lg p-3 space-y-2 bg-muted/40">
                   <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
                     <Tag className="h-3 w-3" /> Have a coupon?
@@ -1807,6 +1819,7 @@ export default function PublicMenu() {
                   )}
                   {couponError && <p className="text-xs text-destructive">{couponError}</p>}
                 </div>
+                )}
 
                 {/* Security check */}
                 {!turnstileToken ? (
@@ -1836,8 +1849,8 @@ export default function PublicMenu() {
                   {placingOrder ? "Processing…" :
                     useCollabCart && !collabCart.isLeader ? "Waiting for table leader…" :
                     !turnstileToken ? "Verifying…" :
-                    paymentMethod === 'upi' && onlinePaymentsEnabled ? `Pay ${formatMoney(activeCart.totalCents + gstCents + totalExtraChargesCents + tipCents, currencyCode)} via UPI` :
-                    paymentMethod === 'online' && onlinePaymentsEnabled ? `Pay ${formatMoney(activeCart.totalCents + gstCents + totalExtraChargesCents + tipCents, currencyCode)}` :
+                    paymentMethod === 'upi' && canUseOnlinePayments ? `Pay ${formatMoney(activeCart.totalCents + gstCents + totalExtraChargesCents + tipCents, currencyCode)} via UPI` :
+                    paymentMethod === 'online' && canUseOnlinePayments ? `Pay ${formatMoney(activeCart.totalCents + gstCents + totalExtraChargesCents + tipCents, currencyCode)}` :
                     "Place Order"}
                 </Button>
                 {checkoutError ? (

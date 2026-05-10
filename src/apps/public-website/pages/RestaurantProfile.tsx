@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { formatMoney } from "@/lib/formatting";
 import { Turnstile } from "@/components/security/Turnstile";
+import { usePublicFeatureAccess } from "../hooks/usePublicFeatureAccess";
 
 function normalizeSettings(settings: any | null) {
   return settings && typeof settings === "object" && !Array.isArray(settings) ? settings : {};
@@ -268,6 +269,13 @@ export default function RestaurantProfile() {
     }
   }, [restaurant]);
 
+  // Feature flags — must be before any early returns (Rules of Hooks)
+  const { isFeatureEnabled: isFF } = usePublicFeatureAccess(restaurant?.id);
+  const couponsFF = isFF('coupons');
+  const reviewsFF = isFF('reviews');
+  const whatsappFF = isFF('whatsapp_crm');
+  const reservationsFF = isFF('table_reservations');
+
   if (isLoading) return <div className="h-screen flex items-center justify-center">Loading...</div>;
   if (error || !restaurant) return <div className="h-screen flex items-center justify-center text-red-500">Restaurant not found</div>;
 
@@ -446,8 +454,8 @@ export default function RestaurantProfile() {
           </AnimatedSection>
         )}
 
-        {/* Exciting Offers — R10 animated */}
-        {activeCoupons && activeCoupons.length > 0 && (
+        {/* Exciting Offers — gated by coupons feature flag */}
+        {couponsFF && activeCoupons && activeCoupons.length > 0 && (
           <AnimatedSection delay={100}>
             <section className="space-y-4">
             <div className="text-center">
@@ -626,7 +634,8 @@ export default function RestaurantProfile() {
         )}
       </div>
 
-      {/* ───── Customer Reviews & Ratings ───── */}
+      {/* ───── Customer Reviews & Ratings ── gated by reviews feature flag ── */}
+      {reviewsFF && (
       <AnimatedSection className="max-w-5xl mx-auto px-4 py-12">
         <div className="text-center mb-8">
           <h2 className="text-2xl font-bold tracking-tight">Customer Reviews</h2>
@@ -696,6 +705,7 @@ export default function RestaurantProfile() {
           </Button>
         </div>
       </AnimatedSection>
+      )}
 
       {/* Schema.org Structured Data */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
@@ -724,8 +734,8 @@ export default function RestaurantProfile() {
         &copy; {new Date().getFullYear()} {restaurant.name}. Powered by Dine Delight.
       </footer>
 
-      {/* WhatsApp Floating Button */}
-      {whatsappNumber && (
+      {/* WhatsApp Floating Button — gated by whatsapp_crm feature flag */}
+      {whatsappFF && whatsappNumber && (
         <a href={`https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi! I'd like to know more about ${restaurant.name}`)}`} target="_blank" rel="noopener noreferrer" className="fixed bottom-20 right-4 z-40 h-14 w-14 rounded-full bg-green-500 text-white shadow-lg flex items-center justify-center hover:bg-green-600 hover:scale-110 transition-all" aria-label="Chat on WhatsApp">
           <MessageCircle className="h-7 w-7" />
         </a>
@@ -747,7 +757,7 @@ export default function RestaurantProfile() {
               <Share2 className="h-4 w-4" />
               <span className="hidden sm:inline ml-1">Share</span>
             </Button>
-            {reservationEnabled && (
+            {reservationsFF && reservationEnabled && (
               <Button size="sm" variant="outline" className="rounded-full px-4 font-bold" asChild>
                 <Link to={`/r/${slug}/reserve`}><CalendarDays className="mr-1 h-4 w-4" />Book Table</Link>
               </Button>

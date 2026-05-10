@@ -77,6 +77,22 @@ export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
         category: 'core',
         defaultValue: false,
     },
+    {
+        key: 'online_payments',
+        name: 'Online Payments',
+        description: 'Accept card, UPI (GPay, PhonePe, Paytm), and digital payments at checkout',
+        type: 'boolean',
+        category: 'core',
+        defaultValue: false,
+    },
+    {
+        key: 'staff_categories',
+        name: 'Staff Categories',
+        description: 'Create custom staff roles with granular permission assignments',
+        type: 'boolean',
+        category: 'core',
+        defaultValue: false,
+    },
 
     // Limits
     {

@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { MapPin, Phone, Star, Package, LogOut, ArrowLeft, Loader2, ArrowRight, Edit2, Plus, Trash2, Truck, Store, UtensilsCrossed, RefreshCw } from "lucide-react";
 import { formatMoney } from "@/lib/formatting";
 import { Turnstile } from "@/components/security/Turnstile";
+import { usePublicFeatureAccess } from "../hooks/usePublicFeatureAccess";
 
 export default function CustomerDashboard() {
   const { restaurantSlug } = useParams();
@@ -59,6 +60,10 @@ export default function CustomerDashboard() {
   });
 
   const restaurant = restaurantQuery.data;
+
+  // Feature flags — must be called before early returns (Rules of Hooks)
+  const { isFeatureEnabled: isFF } = usePublicFeatureAccess(restaurant?.id);
+  const loyaltyFF = isFF('loyalty_program');
 
   // Restore session from localStorage
   useEffect(() => {
@@ -381,8 +386,8 @@ export default function CustomerDashboard() {
         {step === "dashboard" && (
           <div className="space-y-6">
             
-            {/* Loyalty Section */}
-            {loyaltyQuery.data && (
+            {/* Loyalty Section — gated by loyalty_program feature flag */}
+            {loyaltyFF && loyaltyQuery.data && (
               <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950/40 dark:to-amber-900/40 border-amber-200 dark:border-amber-800">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
