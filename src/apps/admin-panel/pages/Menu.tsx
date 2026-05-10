@@ -87,7 +87,7 @@ export default function AdminMenu() {
   const { restaurant } = useRestaurantContext();
   const qc = useQueryClient();
   const { toast } = useToast();
-  const { tier, getAccessToken } = useAITier(restaurant?.id);
+  const { tier, getAccessToken } = useAITier();
 
   const currencyCode = restaurant?.currency_code || "INR";
 
@@ -147,18 +147,12 @@ export default function AdminMenu() {
     queryKey: ["admin", "menu", restaurant?.id, "popularity"],
     enabled: !!restaurant?.id,
     queryFn: async () => {
-      try {
-        const { data } = await supabase
-          .from("menu_item_popularity")
-          .select("menu_item_id, last_ordered_at")
-          .eq("restaurant_id", restaurant!.id);
-        return data || [];
-      } catch {
-        // View may not exist in this environment — fail gracefully
-        return [];
-      }
+      const { data } = await supabase
+        .from("menu_item_popularity")
+        .select("menu_item_id, last_ordered_at")
+        .eq("restaurant_id", restaurant!.id);
+      return data || [];
     },
-    retry: false,
   });
 
   // Build a map: menu_item_id -> last_ordered_at
