@@ -118,96 +118,42 @@ export default function AcceptInvitation() {
         try {
             const token = searchParams.get("token");
 
-            // Fix #1: Atomically claim the token using a SECURITY DEFINER function.
-            // This bypasses RLS on invitation_tokens and prevents race conditions.
-            const { data: claimResult, error: claimError } = await supabase
-                .rpc("claim_invitation_token", { p_token: token });
-
-            if (claimError || !claimResult?.success) {
-                const msg = claimError?.message || claimResult?.error || "Unknown error";
-                console.error("Token claim error:", claimError || claimResult);
-                setError("Failed to process invitation: " + msg);
-                setSettingPassword(false);
-                return;
-            }
-
-            // Use data from the RPC result (has email, restaurant_id, etc.)
-            const claimedData = claimResult;
-
-            // Fix #8 & #11: Create user account with full_name in metadata
-            const { data: authData, error: signUpError } = await supabase.auth.signUp({
-                email: invitationData.email,
-                password: password,
-                options: {
-                    data: {
-                        full_name: fullName.trim(),
-                        restaurant_id: invitationData.restaurant_id,
-                        staff_category_id: invitationData.staff_category_id,
-                        role: invitationData.role,
-                    },
+            // Call the edge function to handle everything server-side.
+            // This bypasses CAPTCHA since it uses admin API.
+            const { data, error: fnError } = await supabase.functions.invoke("accept-invitation", {
+                body: {
+                    token,
+                    fullName: fullName.trim(),
+                    password,
                 },
             });
 
-            if (signUpError) {
-                console.error("Sign up error:", signUpError);
-                setError(signUpError.message);
+            if (fnError) {
+                console.error("Accept invitation error:", fnError);
+                setError(data?.error || fnError.message || "Failed to accept invitation.");
                 setSettingPassword(false);
                 return;
             }
 
-            if (!authData.user) {
-                setError("Failed to create account. Please try again.");
+            if (data?.error) {
+                setError(data.error);
                 setSettingPassword(false);
                 return;
             }
 
-            // Fix #2: Verify that the DB trigger created the user_roles row.
-            // If it didn't (trigger failure), create it explicitly as a fallback.
-            const { data: existingRole } = await supabase
-                .from("user_roles")
-                .select("user_id")
-                .eq("user_id", authData.user.id)
-                .eq("restaurant_id", invitationData.restaurant_id)
-                .maybeSingle();
+            // Sign in with the new credentials
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+                email: data.email || invitationData?.email,
+                password,
+            });
 
-            if (!existingRole) {
-                console.warn("Trigger didn't create user_role, inserting fallback...");
-                await supabase
-                    .from("user_roles")
-                    .insert({
-                        user_id: authData.user.id,
-                        restaurant_id: invitationData.restaurant_id,
-                        role: invitationData.role || "user",
-                        staff_category_id: invitationData.staff_category_id || null,
-                    });
+            if (signInError) {
+                console.error("Auto sign-in failed:", signInError);
+                // Account was created, just redirect to login
+                setSuccess(true);
+                setTimeout(() => navigate("/admin/auth"), 2000);
+                return;
             }
-
-            // Also verify profile exists
-            const { data: existingProfile } = await supabase
-                .from("profiles")
-                .select("id")
-                .eq("id", authData.user.id)
-                .maybeSingle();
-
-            if (!existingProfile) {
-                console.warn("Trigger didn't create profile, inserting fallback...");
-                await supabase
-                    .from("profiles")
-                    .insert({
-                        id: authData.user.id,
-                        email: invitationData.email,
-                        full_name: fullName.trim(),
-                        account_status: "active",
-                    });
-            }
-
-            // Update staff_invites status
-            await supabase
-                .from("staff_invites")
-                .update({ status: 'accepted' })
-                .eq("email", invitationData.email)
-                .eq("restaurant_id", invitationData.restaurant_id)
-                .eq("status", "pending");
 
             setSuccess(true);
 
