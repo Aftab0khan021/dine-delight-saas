@@ -44,14 +44,18 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
             errorInfo,
         });
 
-        // Send error to Sentry for monitoring
-        Sentry.captureException(error, {
-            contexts: {
-                react: {
-                    componentStack: errorInfo.componentStack,
+        // Send error to Sentry for monitoring (safe — may fail if DSN is invalid)
+        try {
+            Sentry.captureException(error, {
+                contexts: {
+                    react: {
+                        componentStack: errorInfo.componentStack,
+                    },
                 },
-            },
-        });
+            });
+        } catch {
+            // Sentry not available or DSN invalid — ignore
+        }
     }
 
     handleReset = () => {

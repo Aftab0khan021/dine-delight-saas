@@ -41,15 +41,20 @@ export function useAITier() {
     queryKey: ["ai-config", restaurantId],
     enabled: !!restaurantId,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    retry: false,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("restaurants")
-        .select("ai_config")
-        .eq("id", restaurantId!)
-        .single();
+      try {
+        const { data, error } = await supabase
+          .from("restaurants")
+          .select("ai_config")
+          .eq("id", restaurantId!)
+          .single();
 
-      if (error || !data?.ai_config) return DEFAULT_CONFIG;
-      return { ...DEFAULT_CONFIG, ...(data.ai_config as unknown as AIConfig) };
+        if (error || !data?.ai_config) return DEFAULT_CONFIG;
+        return { ...DEFAULT_CONFIG, ...(data.ai_config as unknown as AIConfig) };
+      } catch {
+        return DEFAULT_CONFIG;
+      }
     },
   });
 
@@ -58,22 +63,31 @@ export function useAITier() {
     queryKey: ["ai-api-keys-exist", restaurantId],
     enabled: !!restaurantId && !!aiConfig?.enabled,
     staleTime: 5 * 60 * 1000,
+    retry: false,
     queryFn: async () => {
-      const { count, error } = await supabase
-        .from("restaurant_api_keys")
-        .select("id", { count: "exact", head: true })
-        .eq("restaurant_id", restaurantId!)
-        .eq("is_active", true);
+      try {
+        const { count, error } = await supabase
+          .from("restaurant_api_keys" as any)
+          .select("id", { count: "exact", head: true })
+          .eq("restaurant_id", restaurantId!)
+          .eq("is_active", true);
 
-      if (error) return false;
-      return (count ?? 0) > 0;
+        if (error) return false;
+        return (count ?? 0) > 0;
+      } catch {
+        return false;
+      }
     },
   });
 
   // Get current session token for edge function calls
   const getAccessToken = async (): Promise<string | null> => {
-    const { data } = await supabase.auth.getSession();
-    return data.session?.access_token ?? null;
+    try {
+      const { data } = await supabase.auth.getSession();
+      return data.session?.access_token ?? null;
+    } catch {
+      return null;
+    }
   };
 
   const config = aiConfig ?? DEFAULT_CONFIG;
@@ -91,14 +105,14 @@ export function useAITier() {
   /**
    * Returns 'paid' or 'free' for a feature.
    */
-  const tier = (featureKey: string): "free" | "paid" => {
+  const checkTier = (featureKey: string): "free" | "paid" => {
     return isPaidAvailable(featureKey) ? "paid" : "free";
   };
 
   return {
     aiConfig: config,
     isPaidAvailable,
-    tier,
+    tier: checkTier,
     getAccessToken,
     restaurantId: restaurantId ?? null,
   };
