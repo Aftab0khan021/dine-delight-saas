@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Settings, Users, Loader2 } from "lucide-react";
 import { CategoryDialog } from "../components/staff/CategoryDialog";
 import { CategoryCard } from "../components/staff/CategoryCard";
+import { FeatureGate } from "../components/FeatureGate";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -45,6 +46,14 @@ type CategoryPermission = {
 };
 
 export default function StaffCategories() {
+    return (
+        <FeatureGate featureKey="staff_categories" featureName="Staff Categories" description="Create custom staff roles and assign granular permissions to control access.">
+            <StaffCategoriesContent />
+        </FeatureGate>
+    );
+}
+
+function StaffCategoriesContent() {
     const { restaurant } = useRestaurantContext();
     const { toast } = useToast();
     const queryClient = useQueryClient();

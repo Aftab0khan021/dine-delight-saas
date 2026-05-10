@@ -50,7 +50,7 @@ export default function SuperAdminErrors() {
     const [statusFilter, setStatusFilter] = useState<ErrorStatus | "all">("all");
 
     // Fetch errors
-    const { data: errors, isLoading, refetch } = useQuery({
+    const { data: errors, isLoading, isError, refetch } = useQuery({
         queryKey: ["superadmin", "error-logs", errorTypeFilter, severityFilter, statusFilter],
         queryFn: async () => {
             let query = supabase
@@ -247,6 +247,10 @@ export default function SuperAdminErrors() {
                             {[1, 2, 3, 4].map((i) => (
                                 <Skeleton key={i} className="h-12 w-full" />
                             ))}
+                        </div>
+                    ) : isError ? (
+                        <div className="text-sm text-muted-foreground text-center py-8">
+                            Unable to load error logs. Please try refreshing.
                         </div>
                     ) : (
                         <div className="space-y-2">

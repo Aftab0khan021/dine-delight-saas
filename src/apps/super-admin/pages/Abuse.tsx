@@ -217,7 +217,7 @@ export default function SuperAdminAbuse() {
         whitelisted_by: user?.id,
       }));
 
-      const { error } = await supabase.from("abuse_whitelist").upsert(records);
+      const { error } = await supabase.from("abuse_whitelist").upsert(records, { onConflict: "restaurant_id" });
       if (error) throw error;
     },
     onSuccess: () => {

@@ -133,9 +133,14 @@ export default function SuperAdminSupport() {
     // Update ticket status mutation
     const updateStatusMutation = useMutation({
         mutationFn: async ({ id, status }: { id: string; status: TicketStatus }) => {
+            const updates: Record<string, unknown> = { status };
+            if (status === "resolved") {
+                updates.resolved_at = new Date().toISOString();
+            }
+
             const { error } = await supabase
                 .from("support_tickets")
-                .update({ status })
+                .update(updates)
                 .eq("id", id);
 
             if (error) throw error;

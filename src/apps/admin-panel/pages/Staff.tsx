@@ -177,8 +177,17 @@ export default function AdminStaff() {
     mutationFn: async () => {
       if (!restaurant?.id || !roleTarget) throw new Error("Missing data");
 
+      // When staff categories exist, the select value is a category UUID.
+      // Write it to staff_category_id (not role). Role stays "user".
+      const hasCategories = categoriesQuery.data && categoriesQuery.data.length > 0;
+      const isCategory = hasCategories && categoriesQuery.data!.some((c: any) => c.id === newRole);
+
+      const updatePayload = isCategory
+        ? { staff_category_id: newRole, role: "user" as const }
+        : { role: newRole, staff_category_id: null };
+
       const { error } = await supabase.from("user_roles")
-        .update({ role: newRole })
+        .update(updatePayload)
         .eq("restaurant_id", restaurant.id)
         .eq("user_id", roleTarget.id);
 
@@ -243,7 +252,7 @@ export default function AdminStaff() {
       const { data, error } = await supabase.functions.invoke("invite-staff", {
         body: {
           email: email,
-          restaurant_id: restaurant.id,
+          restaurantId: restaurant.id,
           action: "resend",
         },
       });
