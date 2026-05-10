@@ -2,9 +2,12 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Star, DollarSign, CheckCircle, XCircle } from 'lucide-react';
+import { Star, DollarSign, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface AIProvider {
     id: string;
@@ -20,9 +23,11 @@ interface AIProvider {
 }
 
 export default function AIProvidersPage() {
+    const { toast } = useToast();
     const [providers, setProviders] = useState<AIProvider[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<string>('all');
+    const [toggling, setToggling] = useState<string | null>(null);
 
     useEffect(() => {
         fetchProviders();
@@ -30,10 +35,12 @@ export default function AIProvidersPage() {
 
     const fetchProviders = async () => {
         try {
+            // Bug Fix #1: Chain two .order() calls instead of comma-separated
             const { data, error } = await supabase
                 .from('ai_providers')
                 .select('*')
-                .order('provider_type, accuracy_rating', { ascending: false });
+                .order('provider_type')
+                .order('accuracy_rating', { ascending: false });
 
             if (error) throw error;
             setProviders(data || []);
@@ -41,6 +48,37 @@ export default function AIProvidersPage() {
             console.error('Error fetching providers:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Bug Fix #6: Add activate/deactivate toggle
+    const handleToggleActive = async (provider: AIProvider) => {
+        setToggling(provider.id);
+        try {
+            const { error } = await supabase
+                .from('ai_providers')
+                .update({ is_active: !provider.is_active })
+                .eq('id', provider.id);
+
+            if (error) throw error;
+
+            setProviders(prev =>
+                prev.map(p => p.id === provider.id ? { ...p, is_active: !p.is_active } : p)
+            );
+
+            toast({
+                title: provider.is_active ? 'Provider Deactivated' : 'Provider Activated',
+                description: `${provider.display_name} has been ${provider.is_active ? 'deactivated' : 'activated'}.`,
+            });
+        } catch (error) {
+            console.error('Error toggling provider:', error);
+            toast({
+                title: 'Error',
+                description: 'Failed to update provider status',
+                variant: 'destructive',
+            });
+        } finally {
+            setToggling(null);
         }
     };
 
@@ -57,6 +95,18 @@ export default function AIProvidersPage() {
         ));
     };
 
+    // Bug Fix #9: Format cost display — remove $ from DB value if icon is used
+    const formatCost = (cost: string) => {
+        if (!cost) return 'N/A';
+        if (cost.toLowerCase() === 'free') return 'Free';
+        return cost; // DB already includes $ sign
+    };
+
+    // Stats
+    const activeCount = providers.filter(p => p.is_active).length;
+    const freeCount = providers.filter(p => p.is_free).length;
+    const typeCount = new Set(providers.map(p => p.provider_type)).size;
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
@@ -67,25 +117,52 @@ export default function AIProvidersPage() {
 
     return (
         <div className="w-full space-y-6">
-            <div>
-                <h1 className="text-3xl font-bold">AI Providers</h1>
-                <p className="text-muted-foreground mt-2">
-                    Manage AI service providers for NLP, image recognition, and voice transcription
-                </p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                    <h1 className="text-2xl sm:text-3xl font-bold">AI Providers</h1>
+                    <p className="text-muted-foreground mt-1">
+                        Manage AI service providers for NLP, image recognition, and voice transcription
+                    </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => { setLoading(true); fetchProviders(); }}>
+                    <RefreshCw className="w-4 h-4 mr-2" /> Refresh
+                </Button>
+            </div>
+
+            {/* Stats row */}
+            <div className="grid gap-4 grid-cols-3">
+                <Card>
+                    <CardContent className="pt-4">
+                        <p className="text-xs text-muted-foreground">Total Providers</p>
+                        <p className="text-2xl font-bold">{providers.length}</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="pt-4">
+                        <p className="text-xs text-muted-foreground">Active</p>
+                        <p className="text-2xl font-bold text-green-600">{activeCount}</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="pt-4">
+                        <p className="text-xs text-muted-foreground">Free Tier</p>
+                        <p className="text-2xl font-bold text-blue-600">{freeCount}</p>
+                    </CardContent>
+                </Card>
             </div>
 
             <Tabs value={filter} onValueChange={setFilter}>
                 <TabsList>
-                    <TabsTrigger value="all">All Providers</TabsTrigger>
-                    <TabsTrigger value="nlp">NLP</TabsTrigger>
-                    <TabsTrigger value="image">Image</TabsTrigger>
-                    <TabsTrigger value="voice">Voice</TabsTrigger>
+                    <TabsTrigger value="all">All ({providers.length})</TabsTrigger>
+                    <TabsTrigger value="nlp">NLP ({providers.filter(p => p.provider_type === 'nlp').length})</TabsTrigger>
+                    <TabsTrigger value="image">Image ({providers.filter(p => p.provider_type === 'image').length})</TabsTrigger>
+                    <TabsTrigger value="voice">Voice ({providers.filter(p => p.provider_type === 'voice').length})</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value={filter} className="space-y-4 mt-6">
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                         {filteredProviders.map((provider) => (
-                            <Card key={provider.id} className="relative">
+                            <Card key={provider.id} className={`relative transition-opacity ${!provider.is_active ? 'opacity-60' : ''}`}>
                                 <CardHeader>
                                     <div className="flex items-start justify-between">
                                         <div className="flex-1">
@@ -94,11 +171,12 @@ export default function AIProvidersPage() {
                                                 {provider.provider_type.toUpperCase()} Provider
                                             </CardDescription>
                                         </div>
-                                        {provider.is_active ? (
-                                            <CheckCircle className="w-5 h-5 text-green-500" />
-                                        ) : (
-                                            <XCircle className="w-5 h-5 text-gray-400" />
-                                        )}
+                                        {/* Bug Fix #6: Activate/Deactivate toggle */}
+                                        <Switch
+                                            checked={provider.is_active}
+                                            onCheckedChange={() => handleToggleActive(provider)}
+                                            disabled={toggling === provider.id}
+                                        />
                                     </div>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
@@ -114,12 +192,11 @@ export default function AIProvidersPage() {
                                     </div>
 
                                     <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <DollarSign className="w-4 h-4 text-muted-foreground" />
-                                            <span className="text-sm font-medium">
-                                                {provider.estimated_cost_per_1k}
-                                            </span>
-                                        </div>
+                                        {/* Bug Fix #9: Show cost without double dollar */}
+                                        <span className="text-sm font-medium">
+                                            {formatCost(provider.estimated_cost_per_1k)}
+                                            {!provider.is_free && <span className="text-muted-foreground text-xs ml-1">/ 1K requests</span>}
+                                        </span>
                                         <div className="flex gap-2">
                                             {provider.is_free && (
                                                 <Badge variant="secondary">Free</Badge>
@@ -136,15 +213,17 @@ export default function AIProvidersPage() {
 
                     {filteredProviders.length === 0 && (
                         <div className="text-center py-12">
-                            <p className="text-muted-foreground">No providers found</p>
+                            <p className="text-muted-foreground">No providers found for this category</p>
                         </div>
                     )}
                 </TabsContent>
             </Tabs>
 
+            {/* Comparison Table */}
             <Card>
                 <CardHeader>
                     <CardTitle>Provider Comparison</CardTitle>
+                    <CardDescription>Side-by-side comparison of all providers</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="overflow-x-auto">
@@ -154,20 +233,21 @@ export default function AIProvidersPage() {
                             <TableRow>
                                 <TableHead>Provider</TableHead>
                                 <TableHead>Type</TableHead>
-                                <TableHead>Cost</TableHead>
+                                <TableHead>Cost / 1K</TableHead>
                                 <TableHead>Accuracy</TableHead>
                                 <TableHead>Free</TableHead>
                                 <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {providers.map((provider) => (
-                                <TableRow key={provider.id}>
+                                <TableRow key={provider.id} className={!provider.is_active ? 'opacity-50' : ''}>
                                     <TableCell className="font-medium">{provider.display_name}</TableCell>
                                     <TableCell>
                                         <Badge variant="outline">{provider.provider_type.toUpperCase()}</Badge>
                                     </TableCell>
-                                    <TableCell>{provider.estimated_cost_per_1k}</TableCell>
+                                    <TableCell>{formatCost(provider.estimated_cost_per_1k)}</TableCell>
                                     <TableCell>
                                         <div className="flex items-center gap-1">
                                             {renderStars(provider.accuracy_rating)}
@@ -181,11 +261,16 @@ export default function AIProvidersPage() {
                                         )}
                                     </TableCell>
                                     <TableCell>
-                                        {provider.is_active ? (
-                                            <Badge variant="default">Active</Badge>
-                                        ) : (
-                                            <Badge variant="secondary">Inactive</Badge>
-                                        )}
+                                        <Badge variant={provider.is_active ? "default" : "secondary"}>
+                                            {provider.is_active ? 'Active' : 'Inactive'}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <Switch
+                                            checked={provider.is_active}
+                                            onCheckedChange={() => handleToggleActive(provider)}
+                                            disabled={toggling === provider.id}
+                                        />
                                     </TableCell>
                                 </TableRow>
                             ))}

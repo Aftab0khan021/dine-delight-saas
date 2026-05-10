@@ -5,25 +5,99 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Save, Key, TrendingUp } from 'lucide-react';
+import { Save, AlertCircle, Sparkles, BarChart3, MessageSquare, TrendingUp, Brain, Eye, Mic, Image } from 'lucide-react';
 import APIKeyManagement from '../components/APIKeyManagement';
+
+// Bug Fix #7: Define features with descriptions and status
+const AI_FEATURES = [
+    {
+        key: 'smart_ranking',
+        label: 'Smart Menu Ranking',
+        description: 'Auto-sort menu items by popularity so best-sellers appear first',
+        icon: TrendingUp,
+        tier: 'free' as const,
+    },
+    {
+        key: 'ai_descriptions',
+        label: 'AI Menu Descriptions',
+        description: 'Generate appetizing menu item descriptions using AI templates or GPT',
+        icon: Sparkles,
+        tier: 'free' as const,
+    },
+    {
+        key: 'sentiment_analysis',
+        label: 'Review Sentiment',
+        description: 'Auto-classify customer reviews as positive, neutral, or negative',
+        icon: MessageSquare,
+        tier: 'free' as const,
+    },
+    {
+        key: 'order_heatmap',
+        label: 'Order Heatmap',
+        description: 'Visual heatmap showing busiest ordering hours and days',
+        icon: BarChart3,
+        tier: 'free' as const,
+    },
+    {
+        key: 'recommendations',
+        label: 'Smart Upsell Suggestions',
+        description: 'Suggest add-ons at checkout based on co-order patterns',
+        icon: Brain,
+        tier: 'paid' as const,
+    },
+    {
+        key: 'personalized_greetings',
+        label: 'Personalized Greetings',
+        description: 'Custom WhatsApp messages based on customer order history',
+        icon: MessageSquare,
+        tier: 'paid' as const,
+    },
+    {
+        key: 'natural_language_ordering',
+        label: 'Natural Language Ordering',
+        description: 'Allow customers to order using natural language text',
+        icon: Brain,
+        tier: 'paid' as const,
+    },
+    {
+        key: 'image_recognition',
+        label: 'Image Recognition',
+        description: 'Identify food items from photos for menu creation',
+        icon: Image,
+        tier: 'paid' as const,
+    },
+    {
+        key: 'voice_messages',
+        label: 'Voice Ordering',
+        description: 'Transcribe voice messages to text orders',
+        icon: Mic,
+        tier: 'paid' as const,
+    },
+    {
+        key: 'birthday_offers',
+        label: 'Birthday Auto-Offers',
+        description: 'Automatically send birthday coupons to customers',
+        icon: Sparkles,
+        tier: 'paid' as const,
+    },
+    {
+        key: 'real_time_notifications',
+        label: 'Real-time Notifications',
+        description: 'Push notifications for order status and promotions',
+        icon: Eye,
+        tier: 'paid' as const,
+    },
+];
 
 interface AIConfig {
     enabled: boolean;
     nlp_provider: string;
     image_provider: string;
     voice_provider: string;
-    features: {
-        natural_language_ordering: boolean;
-        voice_messages: boolean;
-        image_recognition: boolean;
-        personalized_greetings: boolean;
-        recommendations: boolean;
-        birthday_offers: boolean;
-        real_time_notifications: boolean;
-    };
+    features: Record<string, boolean>;
 }
 
 interface Provider {
@@ -42,15 +116,7 @@ export default function RestaurantAIConfig() {
         nlp_provider: 'regex',
         image_provider: 'tensorflow',
         voice_provider: 'whisper-local',
-        features: {
-            natural_language_ordering: false,
-            voice_messages: false,
-            image_recognition: false,
-            personalized_greetings: false,
-            recommendations: false,
-            birthday_offers: false,
-            real_time_notifications: false,
-        },
+        features: Object.fromEntries(AI_FEATURES.map(f => [f.key, false])),
     });
 
     const [nlpProviders, setNlpProviders] = useState<Provider[]>([]);
@@ -74,7 +140,19 @@ export default function RestaurantAIConfig() {
             setRestaurant(restaurantData);
 
             if (restaurantData.ai_config) {
-                setConfig(restaurantData.ai_config);
+                // Merge saved config with defaults for any new features
+                const saved = restaurantData.ai_config;
+                const mergedFeatures = { ...config.features };
+                if (saved.features) {
+                    Object.keys(saved.features).forEach(key => {
+                        mergedFeatures[key] = saved.features[key];
+                    });
+                }
+                setConfig({
+                    ...config,
+                    ...saved,
+                    features: mergedFeatures,
+                });
             }
 
             // Fetch providers
@@ -127,6 +205,11 @@ export default function RestaurantAIConfig() {
         }
     };
 
+    // Count active features by tier
+    const freeFeatures = AI_FEATURES.filter(f => f.tier === 'free');
+    const paidFeatures = AI_FEATURES.filter(f => f.tier === 'paid');
+    const enabledCount = AI_FEATURES.filter(f => config.features[f.key]).length;
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
@@ -152,7 +235,7 @@ export default function RestaurantAIConfig() {
                 <CardHeader>
                     <CardTitle>Enable AI Features</CardTitle>
                     <CardDescription>
-                        Turn on AI-powered features for this restaurant
+                        Master toggle for all AI-powered features ({enabledCount} / {AI_FEATURES.length} active)
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -175,7 +258,7 @@ export default function RestaurantAIConfig() {
                         <CardHeader>
                             <CardTitle>Provider Selection</CardTitle>
                             <CardDescription>
-                                Choose AI providers for different features
+                                Choose AI providers for different capabilities
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -189,11 +272,19 @@ export default function RestaurantAIConfig() {
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {nlpProviders.map((provider) => (
-                                            <SelectItem key={provider.provider_name} value={provider.provider_name}>
-                                                {provider.display_name}
-                                            </SelectItem>
-                                        ))}
+                                        {nlpProviders.length > 0 ? (
+                                            nlpProviders.map((provider) => (
+                                                <SelectItem key={provider.provider_name} value={provider.provider_name}>
+                                                    {provider.display_name}
+                                                </SelectItem>
+                                            ))
+                                        ) : (
+                                            /* Bug Fix #11: Show message when no active providers */
+                                            <div className="p-2 text-xs text-muted-foreground text-center">
+                                                <AlertCircle className="w-3 h-3 inline mr-1" />
+                                                No active NLP providers
+                                            </div>
+                                        )}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -208,11 +299,18 @@ export default function RestaurantAIConfig() {
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {imageProviders.map((provider) => (
-                                            <SelectItem key={provider.provider_name} value={provider.provider_name}>
-                                                {provider.display_name}
-                                            </SelectItem>
-                                        ))}
+                                        {imageProviders.length > 0 ? (
+                                            imageProviders.map((provider) => (
+                                                <SelectItem key={provider.provider_name} value={provider.provider_name}>
+                                                    {provider.display_name}
+                                                </SelectItem>
+                                            ))
+                                        ) : (
+                                            <div className="p-2 text-xs text-muted-foreground text-center">
+                                                <AlertCircle className="w-3 h-3 inline mr-1" />
+                                                No active Image providers
+                                            </div>
+                                        )}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -227,42 +325,98 @@ export default function RestaurantAIConfig() {
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {voiceProviders.map((provider) => (
-                                            <SelectItem key={provider.provider_name} value={provider.provider_name}>
-                                                {provider.display_name}
-                                            </SelectItem>
-                                        ))}
+                                        {voiceProviders.length > 0 ? (
+                                            voiceProviders.map((provider) => (
+                                                <SelectItem key={provider.provider_name} value={provider.provider_name}>
+                                                    {provider.display_name}
+                                                </SelectItem>
+                                            ))
+                                        ) : (
+                                            <div className="p-2 text-xs text-muted-foreground text-center">
+                                                <AlertCircle className="w-3 h-3 inline mr-1" />
+                                                No active Voice providers
+                                            </div>
+                                        )}
                                     </SelectContent>
                                 </Select>
                             </div>
                         </CardContent>
                     </Card>
 
+                    {/* Bug Fix #7: Replaced dead features with organized free/paid sections */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Features</CardTitle>
+                            <CardTitle>Free Features</CardTitle>
                             <CardDescription>
-                                Enable or disable specific AI features
+                                Built-in AI features — no API key required
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            {Object.entries(config.features).map(([key, value]) => (
-                                <div key={key} className="flex items-center justify-between">
-                                    <Label htmlFor={key} className="flex-1 cursor-pointer">
-                                        {key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                                    </Label>
-                                    <Switch
-                                        id={key}
-                                        checked={value}
-                                        onCheckedChange={(checked) =>
-                                            setConfig({
-                                                ...config,
-                                                features: { ...config.features, [key]: checked },
-                                            })
-                                        }
-                                    />
-                                </div>
-                            ))}
+                            {freeFeatures.map((feature) => {
+                                const Icon = feature.icon;
+                                return (
+                                    <div key={feature.key} className="flex items-start justify-between gap-4 py-2">
+                                        <div className="flex items-start gap-3 flex-1">
+                                            <Icon className="w-4 h-4 mt-0.5 text-green-600 shrink-0" />
+                                            <div>
+                                                <Label htmlFor={feature.key} className="cursor-pointer font-medium flex items-center gap-2">
+                                                    {feature.label}
+                                                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">Free</Badge>
+                                                </Label>
+                                                <p className="text-xs text-muted-foreground mt-0.5">{feature.description}</p>
+                                            </div>
+                                        </div>
+                                        <Switch
+                                            id={feature.key}
+                                            checked={config.features[feature.key] ?? false}
+                                            onCheckedChange={(checked) =>
+                                                setConfig({
+                                                    ...config,
+                                                    features: { ...config.features, [feature.key]: checked },
+                                                })
+                                            }
+                                        />
+                                    </div>
+                                );
+                            })}
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Paid Features</CardTitle>
+                            <CardDescription>
+                                Advanced AI features — requires API key from restaurant owner
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            {paidFeatures.map((feature) => {
+                                const Icon = feature.icon;
+                                return (
+                                    <div key={feature.key} className="flex items-start justify-between gap-4 py-2">
+                                        <div className="flex items-start gap-3 flex-1">
+                                            <Icon className="w-4 h-4 mt-0.5 text-amber-500 shrink-0" />
+                                            <div>
+                                                <Label htmlFor={feature.key} className="cursor-pointer font-medium flex items-center gap-2">
+                                                    {feature.label}
+                                                    <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-amber-400 text-amber-600">Paid</Badge>
+                                                </Label>
+                                                <p className="text-xs text-muted-foreground mt-0.5">{feature.description}</p>
+                                            </div>
+                                        </div>
+                                        <Switch
+                                            id={feature.key}
+                                            checked={config.features[feature.key] ?? false}
+                                            onCheckedChange={(checked) =>
+                                                setConfig({
+                                                    ...config,
+                                                    features: { ...config.features, [feature.key]: checked },
+                                                })
+                                            }
+                                        />
+                                    </div>
+                                );
+                            })}
                         </CardContent>
                     </Card>
 
