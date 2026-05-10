@@ -61,6 +61,9 @@ type OrderData = {
   status: string;
   placed_at: string;
   table_label: string | null;
+  subtotal_cents: number;
+  tax_cents: number;
+  tip_cents: number;
   discount_cents: number;
   discount_type: string | null;
   discount_reason: string | null;
@@ -72,6 +75,7 @@ type OrderData = {
   order_type: string | null;
   rating: number | null;
   delivery_address: string | null;
+  bill_breakdown: any;
 };
 
 // --- Subcomponent: Order Card (Repo A Style) ---
@@ -157,6 +161,42 @@ function OrderCard({
             -{formatMoney(order.discount_cents, currencyCode)}
           </Badge>
         )}
+      </div>
+
+      {/* Bill Breakdown */}
+      <div className="mt-2 space-y-0.5 text-[11px] text-muted-foreground border-t pt-1.5">
+        <div className="flex justify-between">
+          <span>Subtotal</span>
+          <span>{formatMoney(order.subtotal_cents || order.total_cents, currencyCode)}</span>
+        </div>
+        {(order.tax_cents > 0) && (
+          <div className="flex justify-between">
+            <span>{order.bill_breakdown?.tax_label || 'Tax'}{order.bill_breakdown?.tax_rate_pct ? ` (${order.bill_breakdown.tax_rate_pct}%)` : ''}</span>
+            <span>{formatMoney(order.tax_cents, currencyCode)}</span>
+          </div>
+        )}
+        {order.bill_breakdown?.extra_charges?.filter((c: any) => c.cents > 0).map((c: any, idx: number) => (
+          <div key={idx} className="flex justify-between">
+            <span>{c.label}</span>
+            <span>{formatMoney(c.cents, currencyCode)}</span>
+          </div>
+        ))}
+        {(order.tip_cents > 0) && (
+          <div className="flex justify-between">
+            <span>Tip</span>
+            <span>{formatMoney(order.tip_cents, currencyCode)}</span>
+          </div>
+        )}
+        {order.discount_cents > 0 && (
+          <div className="flex justify-between text-green-600">
+            <span>Discount</span>
+            <span>-{formatMoney(order.discount_cents, currencyCode)}</span>
+          </div>
+        )}
+        <div className="flex justify-between font-bold text-foreground text-xs pt-0.5 border-t border-dashed">
+          <span>Total</span>
+          <span>{formatMoney(order.total_cents, currencyCode)}</span>
+        </div>
       </div>
 
       {/* Delivery address */}
@@ -341,7 +381,7 @@ export default function AdminOrders() {
       // Fetch Orders with pagination
       const { data: orders, error, count } = await supabase
         .from("orders")
-        .select("id, status, placed_at, table_label, discount_cents, discount_type, discount_reason, payment_method, payment_status, total_cents, order_type, rating, delivery_address", { count: 'exact' })
+        .select("id, status, placed_at, table_label, subtotal_cents, tax_cents, tip_cents, discount_cents, discount_type, discount_reason, payment_method, payment_status, total_cents, order_type, rating, delivery_address, bill_breakdown", { count: 'exact' })
         .eq("restaurant_id", restaurant!.id)
         .gte("placed_at", startISO)
         .lt("placed_at", endISO)

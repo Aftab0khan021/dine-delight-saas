@@ -28,11 +28,20 @@ interface OrderDetails {
   id: string;
   status: OrderStatus;
   placed_at: string;
+  subtotal_cents: number;
+  tax_cents: number;
+  tip_cents: number;
+  discount_cents?: number;
   total_cents: number;
   currency_code: string;
-  discount_cents?: number;
   order_type?: string;
   table_label?: string;
+  coupon_code?: string;
+  bill_breakdown?: {
+    tax_label?: string;
+    tax_rate_pct?: number;
+    extra_charges?: Array<{ label: string; cents: number }>;
+  };
   restaurant?: {
     name: string;
     slug: string;
@@ -270,28 +279,70 @@ export default function TrackOrder() {
 
             <Separator />
 
-            {/* Subtotal + discount breakdown */}
+            {/* Bill Breakdown */}
             {(() => {
-              const subtotal = items.reduce((s, i) => s + i.line_total_cents, 0);
+              const subtotal = order.subtotal_cents || items.reduce((s, i) => s + i.line_total_cents, 0);
+              const taxCents = order.tax_cents || 0;
+              const tipCents = order.tip_cents || 0;
               const discount = order.discount_cents ?? 0;
+              const breakdown = order.bill_breakdown;
+              const extraCharges = breakdown?.extra_charges ?? [];
+              const taxLabel = breakdown?.tax_label || 'Tax';
+              const taxRatePct = breakdown?.tax_rate_pct || 0;
+
               return (
-                <div className="space-y-1 text-sm">
-                  {discount > 0 && (
-                    <>
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>Subtotal</span>
-                        <span>{formatMoney(subtotal, order.currency_code)}</span>
-                      </div>
-                      <div className="flex justify-between text-green-600 font-medium">
-                        <span>Discount</span>
-                        <span>−{formatMoney(discount, order.currency_code)}</span>
-                      </div>
-                    </>
+                <div className="space-y-1.5 text-sm">
+                  {/* Subtotal */}
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Subtotal</span>
+                    <span>{formatMoney(subtotal, order.currency_code)}</span>
+                  </div>
+
+                  {/* Tax */}
+                  {taxCents > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>{taxLabel}{taxRatePct > 0 ? ` (${taxRatePct}%)` : ''}</span>
+                      <span>{formatMoney(taxCents, order.currency_code)}</span>
+                    </div>
                   )}
+
+                  {/* Extra Charges (CGST, SGST, Service Charge, Packing, etc.) */}
+                  {extraCharges.map((charge, idx) => (
+                    charge.cents > 0 && (
+                      <div key={idx} className="flex justify-between text-muted-foreground">
+                        <span>{charge.label}</span>
+                        <span>{formatMoney(charge.cents, order.currency_code)}</span>
+                      </div>
+                    )
+                  ))}
+
+                  {/* Tip */}
+                  {tipCents > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Tip</span>
+                      <span>{formatMoney(tipCents, order.currency_code)}</span>
+                    </div>
+                  )}
+
+                  {/* Coupon Discount */}
+                  {discount > 0 && (
+                    <div className="flex justify-between text-green-600 font-medium">
+                      <span>Discount {order.coupon_code && <code className="text-[10px] bg-green-100 dark:bg-green-900/30 px-1 rounded">{order.coupon_code}</code>}</span>
+                      <span>−{formatMoney(discount, order.currency_code)}</span>
+                    </div>
+                  )}
+
+                  <Separator />
+
+                  {/* Grand Total */}
                   <div className="flex justify-between font-bold text-lg pt-1">
-                    <span>Total</span>
+                    <span>Grand Total</span>
                     <span>{formatMoney(order.total_cents, order.currency_code)}</span>
                   </div>
+
+                  {discount > 0 && (
+                    <p className="text-xs text-green-600 text-right font-medium">🎉 You saved {formatMoney(discount, order.currency_code)}!</p>
+                  )}
                 </div>
               );
             })()}
@@ -306,8 +357,14 @@ export default function TrackOrder() {
                 size="sm"
                 onClick={() => {
                   const receiptHtml = (() => {
-                    const subtotalCents = items.reduce((s, i) => s + i.line_total_cents, 0);
+                    const subtotalCents = order.subtotal_cents || items.reduce((s, i) => s + i.line_total_cents, 0);
                     const discountCents = order.discount_cents ?? 0;
+                    const taxCents = order.tax_cents || 0;
+                    const tipCents = order.tip_cents || 0;
+                    const breakdown = order.bill_breakdown;
+                    const extraCharges = breakdown?.extra_charges ?? [];
+                    const taxLabel = breakdown?.tax_label || 'Tax';
+                    const taxRatePct = breakdown?.tax_rate_pct || 0;
                     const orderTypeLabel =
                       order.order_type === 'delivery' ? 'Delivery'
                       : order.order_type === 'pickup' ? 'Pickup'
@@ -352,11 +409,12 @@ export default function TrackOrder() {
     ${items.map(i => `<div class="item"><div class="item-left"><span class="qty">${i.quantity}x</span><span>${escHtml(i.name_snapshot)}</span></div><span>${formatMoney(i.line_total_cents, order.currency_code)}</span></div>`).join('')}
   </div>
   <div class="bill-summary">
-    ${discountCents > 0 ? `
-      <div class="bill-row"><span>Subtotal</span><span>${formatMoney(subtotalCents, order.currency_code)}</span></div>
-      <div class="bill-row discount"><span>Discount</span><span>−${formatMoney(discountCents, order.currency_code)}</span></div>
-    ` : ''}
-    <div class="bill-row total"><span>Total</span><span>${formatMoney(order.total_cents, order.currency_code)}</span></div>
+    <div class="bill-row"><span>Subtotal</span><span>${formatMoney(subtotalCents, order.currency_code)}</span></div>
+    ${taxCents > 0 ? `<div class="bill-row"><span>${escHtml(taxLabel)}${taxRatePct > 0 ? ` (${taxRatePct}%)` : ''}</span><span>${formatMoney(taxCents, order.currency_code)}</span></div>` : ''}
+    ${extraCharges.filter((c: any) => c.cents > 0).map((c: any) => `<div class="bill-row"><span>${escHtml(c.label)}</span><span>${formatMoney(c.cents, order.currency_code)}</span></div>`).join('')}
+    ${tipCents > 0 ? `<div class="bill-row"><span>Tip</span><span>${formatMoney(tipCents, order.currency_code)}</span></div>` : ''}
+    ${discountCents > 0 ? `<div class="bill-row discount"><span>Discount${order.coupon_code ? ` (${escHtml(order.coupon_code)})` : ''}</span><span>−${formatMoney(discountCents, order.currency_code)}</span></div>` : ''}
+    <div class="bill-row total"><span>Grand Total</span><span>${formatMoney(order.total_cents, order.currency_code)}</span></div>
   </div>
   <div class="footer"><p>Thank you for your order!</p><p style="margin-top:4px;color:#f97316">Powered by Dine Delight</p></div>
 </body></html>`;

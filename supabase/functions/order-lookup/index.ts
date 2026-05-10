@@ -122,8 +122,15 @@ serve(async (req) => {
       status,
       placed_at,
       subtotal_cents,
+      tax_cents,
+      tip_cents,
+      discount_cents,
       total_cents,
       currency_code,
+      order_type,
+      table_label,
+      coupon_code,
+      bill_breakdown,
       restaurant:restaurants (
         name,
         slug

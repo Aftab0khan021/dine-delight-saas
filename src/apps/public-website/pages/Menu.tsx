@@ -489,6 +489,12 @@ export default function PublicMenu() {
         turnstileToken,
         customer_phone: customerPhone.trim() || undefined,
         customer_name: customerName.trim() || undefined,
+        // Bill breakdown — stored alongside total_cents for receipt/tracking
+        tax_cents: gstCents,
+        tax_label: taxSettings.label,
+        tax_rate_pct: Math.round(taxSettings.rate * 100),
+        tip_cents: tipCents,
+        extra_charges: billChargeAmounts.map(c => ({ label: c.label, cents: c.cents })),
       };
 
       let data: any;

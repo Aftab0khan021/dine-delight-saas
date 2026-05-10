@@ -57,7 +57,7 @@ serve(async (req) => {
       return json({ error: "Invalid JSON" }, 400);
     }
 
-    const { restaurant_id, items, table_label, turnstileToken, customer_phone, customer_name, payment_method, payment_verified, order_type, delivery_address } = payload;
+    const { restaurant_id, items, table_label, turnstileToken, customer_phone, customer_name, payment_method, payment_verified, order_type, delivery_address, tax_cents: clientTaxCents, tax_label: clientTaxLabel, tax_rate_pct: clientTaxRatePct, tip_cents: clientTipCents, extra_charges: clientExtraCharges } = payload;
 
     // Resolve Turnstile secret key strictly from environment variables.
     // Prefer TURNSTILE_SECRET_KEY_PROD, fall back to TURNSTILE_SECRET_KEY_DEV.
@@ -307,9 +307,13 @@ serve(async (req) => {
       }
     }
 
-    // Final Calculation
+    // Final Calculation — include tax, tip, and extra charges from client
     const subtotal = totalCents;
-    const finalTotal = Math.max(0, subtotal - discountCents);
+    const taxCents = Math.max(0, Math.round(Number(clientTaxCents) || 0));
+    const tipCents = Math.max(0, Math.round(Number(clientTipCents) || 0));
+    const extraCharges = Array.isArray(clientExtraCharges) ? clientExtraCharges : [];
+    const extraChargesCents = extraCharges.reduce((sum: number, c: any) => sum + (Math.round(Number(c?.cents) || 0)), 0);
+    const finalTotal = Math.max(0, subtotal + taxCents + tipCents + extraChargesCents - discountCents);
 
     // Generate secure order token for tracking
     const order_token = crypto.randomUUID();
@@ -321,6 +325,8 @@ serve(async (req) => {
         restaurant_id,
         status: 'pending',
         subtotal_cents: subtotal,
+        tax_cents: taxCents,
+        tip_cents: tipCents,
         discount_cents: discountCents,
         total_cents: finalTotal,
         coupon_id: couponId,
@@ -335,6 +341,11 @@ serve(async (req) => {
         customer_name: customer_name || null,
         order_type: order_type || (table_label ? 'dine_in' : 'pickup'),
         delivery_address: order_type === 'delivery' && delivery_address ? delivery_address : null,
+        bill_breakdown: {
+          tax_label: clientTaxLabel || 'GST',
+          tax_rate_pct: Number(clientTaxRatePct) || 0,
+          extra_charges: extraCharges.map((c: any) => ({ label: String(c?.label || ''), cents: Math.round(Number(c?.cents) || 0) })),
+        },
       })
       .select()
       .single();
