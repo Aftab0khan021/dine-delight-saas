@@ -207,7 +207,8 @@ export default function ExploreFeatures() {
         if (feat.requiredPermission && !hasPermission(feat.requiredPermission as any)) continue;
       }
 
-      if (isFeatureEnabled(feat.key)) {
+      // Admins see all features as active; staff are gated by feature flags
+      if (isAdmin || isFeatureEnabled(feat.key)) {
         active.push(feat);
       } else {
         locked.push(feat);

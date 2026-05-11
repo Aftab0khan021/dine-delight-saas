@@ -118,8 +118,8 @@ export function AdminSidebar() {
       if (item.permission && !hasPermission(item.permission as any)) return false;
 
       // Feature flag gating — hide items when feature is disabled
-      // While features are loading, show all items to avoid flash
-      if (item.featureKey && !featuresLoading && !isFeatureEnabled(item.featureKey)) return false;
+      // Admins always see all features; staff are gated by feature flags
+      if (item.featureKey && !isAdmin && !featuresLoading && !isFeatureEnabled(item.featureKey)) return false;
 
       // No restrictions, show it
       return true;
