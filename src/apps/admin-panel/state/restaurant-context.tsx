@@ -89,11 +89,53 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       effectiveCategoryId = null; // Admins don't use staff categories
       console.log("🔍 [RestaurantContext] ✅ User is ADMIN for restaurant:", effectiveRestaurantId);
     } else if (staffRow) {
-      // User is staff only
+      // User appears to be staff only — BUT check if they're actually the restaurant creator
+      // whose restaurant_admin role was lost (self-healing mechanism)
       effectiveRole = "user";
       effectiveRestaurantId = staffRow.restaurant_id;
       effectiveCategoryId = staffRow.staff_category_id;
-      console.log("🔍 [RestaurantContext] 👤 User is STAFF with category:", effectiveCategoryId);
+
+      // Self-heal: check if this user has an approved restaurant_admin_requests entry
+      const { data: adminRequest } = await supabase
+        .from("restaurant_admin_requests")
+        .select("id, restaurant_name")
+        .eq("user_id", session.user.id)
+        .eq("status", "approved")
+        .maybeSingle();
+
+      if (adminRequest && effectiveRestaurantId) {
+        console.warn("🔧 [RestaurantContext] SELF-HEAL: User has approved admin request but missing restaurant_admin role! Auto-promoting...");
+        // Try to restore the missing restaurant_admin role via RPC (bypasses RLS)
+        try {
+          const { data: healResult } = await supabase.rpc("self_heal_admin_role", {
+            p_user_id: session.user.id,
+            p_restaurant_id: effectiveRestaurantId,
+          });
+
+          if (healResult?.success) {
+            console.log("🔧 [RestaurantContext] ✅ Self-healed:", healResult.message);
+            effectiveRole = "restaurant_admin";
+            effectiveCategoryId = null;
+          } else {
+            console.warn("🔧 [RestaurantContext] ⚠️ Self-heal failed:", healResult?.error);
+          }
+        } catch (healError) {
+          console.warn("🔧 [RestaurantContext] ⚠️ Self-heal RPC not available:", healError);
+          // Fallback: check permissions count
+          const { data: perms } = await supabase.rpc("get_user_permissions", {
+            p_user_id: session.user.id,
+            p_restaurant_id: effectiveRestaurantId,
+          });
+          const { data: allPerms } = await supabase.from("permissions").select("code");
+          if (perms && allPerms && perms.length >= allPerms.length) {
+            console.log("🔧 [RestaurantContext] ✅ DB confirms admin via permissions count");
+            effectiveRole = "restaurant_admin";
+            effectiveCategoryId = null;
+          }
+        }
+      } else {
+        console.log("🔍 [RestaurantContext] 👤 User is STAFF with category:", effectiveCategoryId);
+      }
     } else {
       // Fallback: pick the first available role
       const firstRow = allUserRoles[0];
