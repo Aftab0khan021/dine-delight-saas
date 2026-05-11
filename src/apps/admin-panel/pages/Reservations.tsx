@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Clock, Users, Check, X, Phone, ChevronDown } from "lucide-react";
+import { CalendarDays, Clock, Users, Check, X, Phone, ChevronDown, List, Grid3X3 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
@@ -12,6 +12,8 @@ import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import FloorPlanEditor from "../components/reservations/FloorPlanEditor";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
@@ -127,80 +129,99 @@ function ReservationsContent() {
         <Card className="shadow-sm"><CardContent className="p-4 text-center"><p className="text-2xl font-bold text-green-600">{stats.seated}</p><p className="text-xs text-muted-foreground">Seated</p></CardContent></Card>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-center">
-        <Input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="w-auto" />
-        <div className="flex gap-1 flex-wrap">
-          <Button size="sm" variant={statusFilter === "all" ? "default" : "outline"} onClick={() => { setStatusFilter("all"); setPage(0); }}>All</Button>
-          {STATUSES.map(s => (
-            <Button key={s} size="sm" variant={statusFilter === s ? "default" : "outline"} onClick={() => { setStatusFilter(s); setPage(0); }} className="capitalize">{s.replace("_", " ")}</Button>
-          ))}
-        </div>
-      </div>
+      {/* View Tabs: List vs Floor Plan */}
+      <Tabs defaultValue="list" className="w-full">
+        <TabsList className="grid w-full max-w-xs grid-cols-2">
+          <TabsTrigger value="list" className="gap-1.5"><List className="h-3.5 w-3.5" />List View</TabsTrigger>
+          <TabsTrigger value="floorplan" className="gap-1.5"><Grid3X3 className="h-3.5 w-3.5" />Floor Plan</TabsTrigger>
+        </TabsList>
 
-      {/* Reservations List */}
-      {isLoading ? (
-        <Card className="p-6"><p className="text-sm text-muted-foreground">Loading...</p></Card>
-      ) : paginatedItems.length === 0 ? (
-        <Card className="p-8 text-center">
-          <CalendarDays className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
-          <p className="text-muted-foreground">No reservations for this date</p>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {paginatedItems.map((r: any) => (
-            <Card key={r.id} className="shadow-sm">
-              <CardContent className="p-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold">{r.customer_name}</span>
-                      <Badge className={`text-xs ${STATUS_COLORS[r.status] || ""}`}>{r.status.replace("_", " ")}</Badge>
-                    </div>
-                    <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-                      <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{r.reservation_time?.slice(0, 5)}</span>
-                      <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" />{r.party_size} guests</span>
-                      <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" />{r.customer_phone}</span>
-                    </div>
-                    {r.notes && <p className="text-xs text-muted-foreground italic mt-1">{r.notes}</p>}
-                  </div>
-                  <div className="flex gap-2 shrink-0">
-                    {r.status === "pending" && (
-                      <>
-                        <Button size="sm" onClick={() => updateStatus.mutate({ id: r.id, status: "confirmed", reservation: r })}><Check className="mr-1 h-3.5 w-3.5" />Confirm</Button>
-                        <Button size="sm" variant="destructive" onClick={() => updateStatus.mutate({ id: r.id, status: "cancelled", reservation: r })}><X className="mr-1 h-3.5 w-3.5" />Decline</Button>
-                      </>
-                    )}
-                    {r.status === "confirmed" && (
-                      <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ id: r.id, status: "seated", reservation: r })}>Mark Seated</Button>
-                    )}
-                    {r.status === "seated" && (
-                      <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ id: r.id, status: "completed", reservation: r })}>Complete</Button>
-                    )}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild><Button size="sm" variant="ghost"><ChevronDown className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {STATUSES.map(s => (
-                          <DropdownMenuItem key={s} onClick={() => updateStatus.mutate({ id: r.id, status: s, reservation: r })} className="capitalize">{s.replace("_", " ")}</DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-              </CardContent>
+        <TabsContent value="list" className="space-y-4 mt-4">
+          {/* Filters */}
+          <div className="flex flex-wrap gap-3 items-center">
+            <Input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="w-auto" />
+            <div className="flex gap-1 flex-wrap">
+              <Button size="sm" variant={statusFilter === "all" ? "default" : "outline"} onClick={() => { setStatusFilter("all"); setPage(0); }}>All</Button>
+              {STATUSES.map(s => (
+                <Button key={s} size="sm" variant={statusFilter === s ? "default" : "outline"} onClick={() => { setStatusFilter(s); setPage(0); }} className="capitalize">{s.replace("_", " ")}</Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Reservations List */}
+          {isLoading ? (
+            <Card className="p-6"><p className="text-sm text-muted-foreground">Loading...</p></Card>
+          ) : paginatedItems.length === 0 ? (
+            <Card className="p-8 text-center">
+              <CalendarDays className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="text-muted-foreground">No reservations for this date</p>
             </Card>
-          ))}
-        </div>
-      )}
+          ) : (
+            <div className="space-y-3">
+              {paginatedItems.map((r: any) => (
+                <Card key={r.id} className="shadow-sm">
+                  <CardContent className="p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold">{r.customer_name}</span>
+                          <Badge className={`text-xs ${STATUS_COLORS[r.status] || ""}`}>{r.status.replace("_", " ")}</Badge>
+                        </div>
+                        <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{r.reservation_time?.slice(0, 5)}</span>
+                          <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" />{r.party_size} guests</span>
+                          <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" />{r.customer_phone}</span>
+                        </div>
+                        {r.notes && <p className="text-xs text-muted-foreground italic mt-1">{r.notes}</p>}
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        {r.status === "pending" && (
+                          <>
+                            <Button size="sm" onClick={() => updateStatus.mutate({ id: r.id, status: "confirmed", reservation: r })}><Check className="mr-1 h-3.5 w-3.5" />Confirm</Button>
+                            <Button size="sm" variant="destructive" onClick={() => updateStatus.mutate({ id: r.id, status: "cancelled", reservation: r })}><X className="mr-1 h-3.5 w-3.5" />Decline</Button>
+                          </>
+                        )}
+                        {r.status === "confirmed" && (
+                          <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ id: r.id, status: "seated", reservation: r })}>Mark Seated</Button>
+                        )}
+                        {r.status === "seated" && (
+                          <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ id: r.id, status: "completed", reservation: r })}>Complete</Button>
+                        )}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild><Button size="sm" variant="ghost"><ChevronDown className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {STATUSES.map(s => (
+                              <DropdownMenuItem key={s} onClick={() => updateStatus.mutate({ id: r.id, status: s, reservation: r })} className="capitalize">{s.replace("_", " ")}</DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
-          <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}>Previous</Button>
-          <span className="text-sm text-muted-foreground">Page {page + 1} of {totalPages} ({filtered.length} reservations)</span>
-          <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}>Next</Button>
-        </div>
-      )}
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+              <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}>Previous</Button>
+              <span className="text-sm text-muted-foreground">Page {page + 1} of {totalPages} ({filtered.length} reservations)</span>
+              <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}>Next</Button>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="floorplan" className="mt-4">
+          {restaurant?.id && (
+            <FloorPlanEditor
+              restaurantId={restaurant.id}
+              todayReservations={(allItems || []).filter((r: any) => ["confirmed", "seated", "pending"].includes(r.status))}
+            />
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

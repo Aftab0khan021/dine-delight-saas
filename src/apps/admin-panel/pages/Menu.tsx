@@ -78,6 +78,7 @@ type MenuItemRow = {
   spice_level: number | null;
   allergens: string[] | null;
   packaging_charge_cents: number | null;
+  additional_images?: string[] | null;
   translations?: Record<string, any>;
 };
 
@@ -276,6 +277,7 @@ export default function AdminMenu() {
         spice_level: values.spice_level != null ? Number(values.spice_level) : null,
         allergens: values.allergens || [],
         packaging_charge_cents: Number(values.packaging_charge_cents) || 0,
+        additional_images: values.additional_images || [],
         restaurant_id: restaurant!.id
       };
 
@@ -492,11 +494,16 @@ export default function AdminMenu() {
                   className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background p-3 transition-all hover:shadow-sm"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg border border-border bg-muted">
+                    <div className="relative grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg border border-border bg-muted">
                       {item.image_url ? (
                         <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
                       ) : (
                         <ImageIcon className="h-5 w-5 text-muted-foreground/50" />
+                      )}
+                      {((item.additional_images?.length || 0) > 0) && (
+                        <span className="absolute bottom-0 right-0 bg-black/70 text-white text-[8px] font-bold px-1 rounded-tl">
+                          +{item.additional_images!.length}
+                        </span>
                       )}
                     </div>
 
@@ -788,6 +795,7 @@ function CategorySheet({ open, onOpenChange, data, onSave, onDelete, categories 
 function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currencyCode, onSave, onDelete, aiTier, isPaidAI, getAccessToken }: any) {
   const form = useForm();
   const [uploading, setUploading] = useState(false);
+  const [uploadingAdditional, setUploadingAdditional] = useState(false);
   const [generatingDesc, setGeneratingDesc] = useState(false);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, upsert = false) => {
@@ -843,11 +851,55 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currenc
         spice_level: data?.spice_level ?? 0,
         allergens: data?.allergens || [],
         packaging_charge_cents: data?.packaging_charge_cents || 0,
+        additional_images: data?.additional_images || [],
       });
     }
   }, [open, data, categories]);
 
-  const onSubmit = (values: any) => onSave({ ...values, price_cents: Number(values.price_cents) });
+  const onSubmit = (values: any) => onSave({ ...values, price_cents: Number(values.price_cents), additional_images: values.additional_images || [] });
+
+  // Upload handler for additional images
+  const handleAdditionalImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.length) return;
+    const file = e.target.files[0];
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) return;
+    if (file.size > 5 * 1024 * 1024) return;
+    const fileExt = file.name.split(".").pop();
+    const fileName = `${crypto.randomUUID()}.${fileExt}`;
+    setUploadingAdditional(true);
+    try {
+      const { error } = await supabase.storage.from("menu-items").upload(fileName, file);
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from("menu-items").getPublicUrl(fileName);
+      const current = form.getValues("additional_images") || [];
+      form.setValue("additional_images", [...current, urlData.publicUrl], { shouldDirty: true });
+    } finally {
+      setUploadingAdditional(false);
+      e.target.value = '';
+    }
+  };
+
+  const removeAdditionalImage = (index: number) => {
+    const current = form.getValues("additional_images") || [];
+    form.setValue("additional_images", current.filter((_: string, i: number) => i !== index), { shouldDirty: true });
+  };
+
+  const makeImagePrimary = (index: number) => {
+    const current: string[] = form.getValues("additional_images") || [];
+    const oldPrimary = form.getValues("image_url");
+    const newPrimary = current[index];
+    const newAdditional = current.filter((_: string, i: number) => i !== index);
+    if (oldPrimary) newAdditional.unshift(oldPrimary);
+    form.setValue("image_url", newPrimary, { shouldDirty: true });
+    form.setValue("additional_images", newAdditional, { shouldDirty: true });
+  };
+
+  const allImages: string[] = [
+    form.watch("image_url"),
+    ...(form.watch("additional_images") || []),
+  ].filter(Boolean);
+  const canAddMore = allImages.length < 5;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -1048,57 +1100,67 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currenc
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Item Image</Label>
-            {/* Hidden field stores the URL without exposing it */}
+          <div className="space-y-3">
+            <Label>Item Photos <span className="text-xs text-muted-foreground font-normal">({allImages.length}/5)</span></Label>
+            {/* Hidden fields */}
             <input type="hidden" {...form.register("image_url")} />
-            {form.watch("image_url") ? (
-              <div className="space-y-2">
-                <img
-                  src={form.watch("image_url")}
-                  alt="Preview"
-                  className="h-32 w-full object-cover rounded-md border"
-                />
-                <div className="flex items-center gap-2">
-                  <label className="cursor-pointer">
-                    <input
-                      type="file"
-                      accept="image/png, image/jpeg, image/webp"
-                      className="hidden"
-                      onChange={(e) => handleImageUpload(e, true)}
-                      disabled={uploading}
-                    />
-                    <Button type="button" variant="outline" size="sm" asChild disabled={uploading}>
-                      <span>
-                        {uploading ? "Uploading..." : "Replace Image"}
-                      </span>
-                    </Button>
+
+            {/* Photo Gallery Grid */}
+            {allImages.length > 0 ? (
+              <div className="grid grid-cols-3 gap-2">
+                {/* Primary image */}
+                {form.watch("image_url") && (
+                  <div className="relative group aspect-square rounded-lg border-2 border-primary overflow-hidden">
+                    <img src={form.watch("image_url")} alt="Primary" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
+                      <span className="text-[9px] text-white font-bold bg-primary px-1.5 py-0.5 rounded">PRIMARY</span>
+                      <div className="flex gap-1">
+                        <label className="cursor-pointer">
+                          <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => handleImageUpload(e, true)} disabled={uploading} />
+                          <span className="text-[10px] text-white underline">{uploading ? "..." : "Replace"}</span>
+                        </label>
+                        <button type="button" className="text-[10px] text-red-300 underline" onClick={() => {
+                          const extras: string[] = form.getValues("additional_images") || [];
+                          if (extras.length > 0) {
+                            form.setValue("image_url", extras[0], { shouldDirty: true });
+                            form.setValue("additional_images", extras.slice(1), { shouldDirty: true });
+                          } else {
+                            form.setValue("image_url", "", { shouldDirty: true });
+                          }
+                        }}>Remove</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Additional images */}
+                {(form.watch("additional_images") || []).map((url: string, idx: number) => (
+                  <div key={idx} className="relative group aspect-square rounded-lg border overflow-hidden">
+                    <img src={url} alt={`Photo ${idx + 2}`} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
+                      <button type="button" className="text-[10px] text-white underline" onClick={() => makeImagePrimary(idx)}>Set Primary</button>
+                      <button type="button" className="text-[10px] text-red-300 underline" onClick={() => removeAdditionalImage(idx)}>Remove</button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Add more slot */}
+                {canAddMore && (
+                  <label className="aspect-square rounded-lg border-2 border-dashed border-muted-foreground/25 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors">
+                    <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={form.watch("image_url") ? handleAdditionalImageUpload : (e) => handleImageUpload(e, false)} disabled={uploading || uploadingAdditional} />
+                    <ImageIcon className="h-5 w-5 text-muted-foreground/50" />
+                    <span className="text-[10px] text-muted-foreground">{uploading || uploadingAdditional ? "Uploading..." : "+ Add"}</span>
                   </label>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => form.setValue("image_url", "", { shouldDirty: true })}>
-                    Remove
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <ImageIcon className="h-3 w-3" /> Image uploaded
-                </p>
+                )}
               </div>
             ) : (
-              <div className="space-y-2">
-                <label className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 p-4 cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors">
-                  <input
-                    type="file"
-                    accept="image/png, image/jpeg, image/webp"
-                    className="hidden"
-                    onChange={(e) => handleImageUpload(e, false)}
-                    disabled={uploading}
-                  />
-                  <ImageIcon className="h-6 w-6 text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">
-                    {uploading ? "Uploading..." : "Click to upload image (PNG, JPEG, WebP — max 5MB)"}
-                  </span>
-                </label>
-              </div>
+              <label className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 p-4 cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors">
+                <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => handleImageUpload(e, false)} disabled={uploading} />
+                <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">{uploading ? "Uploading..." : "Click to upload photos (up to 5, max 5MB each)"}</span>
+              </label>
             )}
+            <p className="text-[10px] text-muted-foreground">First image is the primary photo shown on your menu. Hover to manage.</p>
           </div>
 
           <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
