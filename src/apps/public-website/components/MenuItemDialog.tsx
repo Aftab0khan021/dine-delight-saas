@@ -175,12 +175,30 @@ export function MenuItemDialog({ item, open, onOpenChange, onAddToCart, restaura
                     {item.description && <p className="text-sm text-muted-foreground">{item.description}</p>}
                 </DialogHeader>
 
-                {/* P2: Item image */}
-                {item.image_url && (
-                    <div className="rounded-lg overflow-hidden border bg-muted -mt-2">
-                        <img src={item.image_url} alt={item.name} className="w-full h-48 object-cover" />
-                    </div>
-                )}
+                {/* P2: Item image(s) carousel */}
+                {(() => {
+                    const images: string[] = [
+                        item.image_url,
+                        ...((item as any).additional_images || []),
+                    ].filter(Boolean);
+                    if (images.length === 0) return null;
+                    return (
+                        <div className="rounded-lg overflow-hidden border bg-muted -mt-2 relative">
+                            <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                                {images.map((src, idx) => (
+                                    <img key={idx} src={src} alt={`${item.name} photo ${idx + 1}`} className="w-full h-48 object-cover shrink-0 snap-center" />
+                                ))}
+                            </div>
+                            {images.length > 1 && (
+                                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
+                                    {images.map((_: string, idx: number) => (
+                                        <span key={idx} className="w-1.5 h-1.5 rounded-full bg-white/80 shadow-sm" />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })()}
 
                 {isLoading ? (
                     <div className="py-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>

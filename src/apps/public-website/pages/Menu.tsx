@@ -1214,13 +1214,28 @@ export default function PublicMenu() {
                               {isNew && <span className="inline-flex items-center gap-0.5 text-[9px] font-bold bg-green-500 text-white px-1.5 py-0.5 rounded-full">🆕 New</span>}
                             </div>
                             <button className="absolute top-2 right-2 z-10 h-6 w-6 rounded-full bg-black/40 flex items-center justify-center" onClick={handleShare}><Share2 className="h-3 w-3 text-white" /></button>
-                            {item.image_url ? (
-                              <img src={item.image_url} alt={item.name} className="h-36 w-full object-cover cursor-pointer" onClick={() => setLightboxImg(item.image_url)} />
-                            ) : (
-                              <div className="h-36 bg-muted flex items-center justify-center text-3xl">
-                                {item.food_type === 'nonveg' ? '🍗' : item.food_type === 'egg' ? '🥚' : '🥗'}
-                              </div>
-                            )}
+                            {(() => {
+                              const images: string[] = [item.image_url, ...((item as any).additional_images || [])].filter(Boolean);
+                              if (images.length > 0) {
+                                return (
+                                  <div className="relative">
+                                    <img src={images[0]} alt={item.name} className="h-36 w-full object-cover cursor-pointer" onClick={() => setLightboxImg(images[0])} />
+                                    {images.length > 1 && (
+                                      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+                                        {images.map((_: string, i: number) => (
+                                          <span key={i} className="w-1.5 h-1.5 rounded-full bg-white/80 shadow-sm" />
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div className="h-36 bg-muted flex items-center justify-center text-3xl">
+                                  {item.food_type === 'nonveg' ? '🍗' : item.food_type === 'egg' ? '🥚' : '🥗'}
+                                </div>
+                              );
+                            })()}
                             <div className="p-3 flex flex-col flex-1">
                               <div className="flex items-center gap-1 mb-1">
                                 <span className={`h-2 w-2 rounded-sm shrink-0 ${item.food_type === 'nonveg' ? 'bg-red-500' : item.food_type === 'egg' ? 'bg-yellow-500' : 'bg-green-500'}`} />
@@ -1250,7 +1265,14 @@ export default function PublicMenu() {
                           <div className="flex gap-4">
                             <div className="relative shrink-0">
                               {item.image_url ? (
-                                <img src={item.image_url} alt={item.name} className="h-20 w-20 rounded-md object-cover border cursor-pointer hover:opacity-80 transition-opacity" loading="lazy" onClick={() => setLightboxImg(item.image_url)} />
+                                <div className="relative">
+                                  <img src={item.image_url} alt={item.name} className="h-20 w-20 rounded-md object-cover border cursor-pointer hover:opacity-80 transition-opacity" loading="lazy" onClick={() => setLightboxImg(item.image_url)} />
+                                  {((item as any).additional_images?.length || 0) > 0 && (
+                                    <span className="absolute bottom-0 right-0 bg-black/70 text-white text-[8px] font-bold px-1 rounded-tl">
+                                      +{(item as any).additional_images.length}
+                                    </span>
+                                  )}
+                                </div>
                               ) : null}
                               {/* M5: Badges */}
                               {(isBestseller || isSpecial || isNew) && (
