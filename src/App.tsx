@@ -45,6 +45,7 @@ import AdminAnalytics from "./apps/admin-panel/pages/Analytics";
 import AdminDeliveryZones from "./apps/admin-panel/pages/DeliveryZones";
 import AdminExploreFeatures from "./apps/admin-panel/pages/ExploreFeatures";
 import { ProtectedRoute } from "./apps/admin-panel/components/ProtectedRoute";
+import { usePermissionContext } from "./apps/admin-panel/state/permission-context";
 
 // Super Admin
 import SuperAdminAuth from "./apps/super-admin/pages/Auth";
@@ -112,6 +113,50 @@ function AuthHashHandler() {
   return null;
 }
 
+/**
+ * Smart redirect for /admin index.
+ * Admins → dashboard.
+ * Staff → first page they have permission for.
+ */
+function SmartAdminRedirect() {
+  const { isAdmin, hasPermission, loading } = usePermissionContext();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  // Admins always go to dashboard
+  if (isAdmin) return <Navigate to="/admin/dashboard" replace />;
+
+  // Staff: find first page they have access to
+  const staffRoutes = [
+    { path: "/admin/dashboard", perm: "view_dashboard" },
+    { path: "/admin/orders", perm: "view_orders" },
+    { path: "/admin/kitchen", perm: "view_kitchen" },
+    { path: "/admin/menu", perm: "view_menu" },
+    { path: "/admin/qr", perm: "view_qr" },
+    { path: "/admin/staff", perm: "view_staff" },
+    { path: "/admin/branding", perm: "manage_settings" },
+    { path: "/admin/coupons", perm: "view_coupons" },
+    { path: "/admin/reservations", perm: "view_reservations" },
+    { path: "/admin/reviews", perm: "view_reviews" },
+    { path: "/admin/inventory", perm: "view_inventory" },
+    { path: "/admin/analytics", perm: "view_analytics" },
+  ];
+
+  for (const route of staffRoutes) {
+    if (hasPermission(route.perm as any)) {
+      return <Navigate to={route.path} replace />;
+    }
+  }
+
+  // No permissions at all — fallback to dashboard (will show permission denied)
+  return <Navigate to="/admin/dashboard" replace />;
+}
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -137,8 +182,8 @@ const App = () => (
           <Route path="/auth/set-password" element={<SetPassword />} />
           <Route path="/auth/accept-invitation" element={<AcceptInvitation />} />
           <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<Navigate to="/admin/dashboard" replace />} />
-            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route index element={<SmartAdminRedirect />} />
+            <Route path="dashboard" element={<ProtectedRoute permission="view_dashboard"><AdminDashboard /></ProtectedRoute>} />
             <Route path="orders" element={<ProtectedRoute permission="view_orders"><AdminOrders /></ProtectedRoute>} />
             <Route path="menu" element={<ProtectedRoute permission="view_menu"><AdminMenu /></ProtectedRoute>} />
             <Route path="qr" element={<ProtectedRoute permission="view_qr"><AdminQrMenu /></ProtectedRoute>} />

@@ -45,7 +45,7 @@ type NavItem = {
 };
 
 const coreNavItems: NavItem[] = [
-  { to: "/admin/dashboard",        label: "Dashboard",        icon: LayoutDashboard },
+  { to: "/admin/dashboard",        label: "Dashboard",        icon: LayoutDashboard, permission: PERMISSIONS.VIEW_DASHBOARD },
   { to: "/admin/orders",           label: "Orders",           icon: ReceiptText,    permission: PERMISSIONS.VIEW_ORDERS },
   { to: "/admin/kitchen",          label: "Kitchen Board",    icon: ChefHat,        permission: PERMISSIONS.VIEW_KITCHEN, featureKey: "kitchen_display" },
   { to: "/admin/menu",             label: "Menu",             icon: Salad,          permission: PERMISSIONS.VIEW_MENU },

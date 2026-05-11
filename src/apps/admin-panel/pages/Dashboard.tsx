@@ -5,6 +5,7 @@ import { ArrowUpRight, Plus, QrCode, ReceiptText, Sparkles, Lock, TrendingUp } f
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
+import { usePermissionContext } from "../state/permission-context";
 import { cn } from "@/lib/utils";
 import { useFeatureAccess } from "../hooks/useFeatureAccess";
 import { formatMoney, shortId } from "@/lib/formatting";
@@ -16,9 +17,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Link } from "react-router-dom";
 
-// --- Visual Component: Sparkline (From Repo A) ---
+// --- Visual Component: Sparkline ---
 function Sparkline({ values, className }: { values: number[]; className?: string }) {
-  // Guard: need at least 2 points to draw a line
   if (!values || values.length < 2) {
     return <div className={cn("w-24 h-8", className)} aria-hidden />;
   }
@@ -61,8 +61,8 @@ function Sparkline({ values, className }: { values: number[]; className?: string
 
 const statusVariant = (status: string) => {
   switch (status) {
-    case "pending": return "default"; // New
-    case "in_progress": return "secondary"; // Preparing
+    case "pending": return "default";
+    case "in_progress": return "secondary";
     case "ready": return "outline";
     default: return "secondary";
   }
@@ -70,13 +70,19 @@ const statusVariant = (status: string) => {
 
 export default function AdminDashboard() {
   const { restaurant } = useRestaurantContext();
+  const { hasPermission, isAdmin } = usePermissionContext();
 
   // Check if analytics feature is enabled
   const { isFeatureEnabled } = useFeatureAccess(restaurant?.id);
   const analyticsEnabled = isFeatureEnabled('analytics');
 
-  // --- 1. Data Fetching (From Repo B) ---
-  // Use today's date string as key so memos refresh at midnight
+  // Permission checks for each dashboard section
+  const canViewOrders = isAdmin || hasPermission("view_orders" as any);
+  const canViewMenu = isAdmin || hasPermission("view_menu" as any);
+  const canViewQr = isAdmin || hasPermission("view_qr" as any);
+  const canViewAnalytics = isAdmin || hasPermission("view_analytics" as any);
+
+  // --- 1. Data Fetching ---
   const todayKey = new Date().toDateString();
 
   const { startISO, endISO } = useMemo(() => {
@@ -85,10 +91,10 @@ export default function AdminDashboard() {
     return { startISO: start.toISOString(), endISO: end.toISOString() };
   }, [todayKey]);
 
-  // Fetch Today's Orders for KPIs
+  // Fetch Today's Orders for KPIs — only if user can view orders
   const todayOrdersQuery = useQuery({
     queryKey: ["admin", "dashboard", restaurant?.id, "todayOrders", todayKey],
-    enabled: !!restaurant?.id,
+    enabled: !!restaurant?.id && canViewOrders,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
@@ -101,12 +107,12 @@ export default function AdminDashboard() {
     },
   });
 
-  // Fetch Latest 5 Orders from Last 24 Hours for the List
+  // Fetch Latest 5 Orders — only if user can view orders
   const last24hStart = useMemo(() => subHours(new Date(), 24).toISOString(), [todayKey]);
 
   const latestOrdersQuery = useQuery({
     queryKey: ["admin", "dashboard", restaurant?.id, "latestOrders"],
-    enabled: !!restaurant?.id,
+    enabled: !!restaurant?.id && canViewOrders,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
@@ -120,10 +126,10 @@ export default function AdminDashboard() {
     },
   });
 
-  // Fetch Setup Status (Menu Items, QR Codes, Branding)
+  // Fetch Setup Status — only if admin
   const setupQuery = useQuery({
     queryKey: ["admin", "dashboard", restaurant?.id, "setupChecklist"],
-    enabled: !!restaurant?.id,
+    enabled: !!restaurant?.id && isAdmin,
     queryFn: async () => {
       const [{ data: restaurantRow }, menuCount, qrCount] = await Promise.all([
         supabase.from("restaurants").select("logo_url, currency_code").eq("id", restaurant!.id).maybeSingle(),
@@ -146,7 +152,6 @@ export default function AdminDashboard() {
     const revenue = todayOrders.reduce((sum, o) => sum + (o.total_cents ?? 0), 0);
     const currency = setupQuery.data?.currencyCode ?? todayOrders[0]?.currency_code ?? "INR";
 
-    // Calculate Avg Prep Time
     const completed = todayOrders.filter((o) => o.completed_at).map((o) =>
       new Date(o.completed_at!).getTime() - new Date(o.placed_at).getTime()
     );
@@ -186,7 +191,19 @@ export default function AdminDashboard() {
     { label: "QR Published", detail: "Generate & print", status: (setupQuery.data?.qrCodesCount ?? 0) > 0 ? "Done" : "Pending" },
   ];
 
-  // --- 3. Render (Repo A Layout) ---
+  // Build quick actions based on permissions
+  const quickActions = [];
+  if (canViewMenu) {
+    quickActions.push({ to: "/admin/menu", label: "Add Item", icon: Plus });
+  }
+  if (canViewQr) {
+    quickActions.push({ to: "/admin/qr", label: "Print QR", icon: QrCode });
+  }
+  if (canViewOrders) {
+    quickActions.push({ to: "/admin/orders", label: "View Orders", icon: ReceiptText });
+  }
+
+  // --- 3. Render ---
   return (
     <div className="flex flex-col gap-4 w-full">
       <section className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between w-full">
@@ -197,145 +214,147 @@ export default function AdminDashboard() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" asChild>
-            <Link to="/admin/orders">View orders <ArrowUpRight className="ml-2 h-4 w-4" /></Link>
-          </Button>
-          <Button asChild>
-            <Link to="/admin/menu">Add menu item <Plus className="ml-2 h-4 w-4" /></Link>
-          </Button>
+          {canViewOrders && (
+            <Button variant="secondary" asChild>
+              <Link to="/admin/orders">View orders <ArrowUpRight className="ml-2 h-4 w-4" /></Link>
+            </Button>
+          )}
+          {canViewMenu && (
+            <Button asChild>
+              <Link to="/admin/menu">Add menu item <Plus className="ml-2 h-4 w-4" /></Link>
+            </Button>
+          )}
         </div>
       </section>
 
-      {/* KPI Cards */}
-      <section className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        {analyticsEnabled ? (
-          kpis.map((k) => (
-            <Card key={k.label} className="shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">{k.label}</CardTitle>
-              </CardHeader>
-              <CardContent className="flex items-end justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-2xl font-semibold tracking-tight">{k.value}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">{k.delta}</div>
-                </div>
-                <div className="flex items-end gap-3 pb-1">
-                  <Sparkline values={k.trend} />
-                </div>
+      {/* KPI Cards — only shown if user can view orders */}
+      {canViewOrders && (
+        <section className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+          {analyticsEnabled || canViewAnalytics ? (
+            kpis.map((k) => (
+              <Card key={k.label} className="shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">{k.label}</CardTitle>
+                </CardHeader>
+                <CardContent className="flex items-end justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-2xl font-semibold tracking-tight">{k.value}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">{k.delta}</div>
+                  </div>
+                  <div className="flex items-end gap-3 pb-1">
+                    <Sparkline values={k.trend} />
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <Card className="shadow-sm sm:col-span-2 lg:col-span-4">
+              <CardContent className="p-6">
+                <Alert>
+                  <Lock className="h-4 w-4" />
+                  <AlertTitle>Analytics Feature Locked</AlertTitle>
+                  <AlertDescription>
+                    Upgrade your plan to unlock detailed analytics, revenue tracking, and performance insights.
+                  </AlertDescription>
+                </Alert>
               </CardContent>
             </Card>
-          ))
-        ) : (
-          <Card className="shadow-sm sm:col-span-2 lg:col-span-4">
-            <CardContent className="p-6">
-              <Alert>
-                <Lock className="h-4 w-4" />
-                <AlertTitle>Analytics Feature Locked</AlertTitle>
-                <AlertDescription>
-                  Upgrade your plan to unlock detailed analytics, revenue tracking, and performance insights.
-                </AlertDescription>
-              </Alert>
-            </CardContent>
-          </Card>
-        )}
-      </section>
+          )}
+        </section>
+      )}
 
       {/* Main Content Grid */}
       <section className="grid gap-3 lg:grid-cols-3">
 
-        {/* LEFT: Live Orders */}
-        <Card className="shadow-sm lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between gap-4">
-            <div>
-              <CardTitle className="text-base">Live orders</CardTitle>
-              <div className="mt-1 text-xs text-muted-foreground">Latest 5 orders.</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="relative inline-flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/40 motion-reduce:hidden" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-              </span>
-              <span className="text-xs text-muted-foreground">Live</span>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {(latestOrdersQuery.data ?? []).map((o) => (
-                <div key={o.id} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background p-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">#{shortId(o.id)}</span>
-                      <span className="text-xs text-muted-foreground">{o.table_label || "No Table"}</span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {new Date(o.placed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </div>
-                  </div>
-                  <Badge variant={statusVariant(o.status)} className="shrink-0 capitalize">
-                    {o.status.replace('_', ' ')}
-                  </Badge>
-                </div>
-              ))}
-              {(latestOrdersQuery.data?.length === 0) && (
-                <div className="text-center py-8 text-sm text-muted-foreground border-dashed border rounded-xl">
-                  No orders today yet.
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* RIGHT: Checklist & Quick Actions */}
-        <div className="space-y-3">
-
-          {/* Setup Checklist */}
-          <Card className="shadow-sm">
-            <CardHeader><CardTitle className="text-base">Setup checklist</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <div className="rounded-xl border border-border bg-background p-3">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  <div className="text-sm font-medium">Ready in 3 steps</div>
-                </div>
-                <ul className="mt-3 space-y-2 text-sm">
-                  {setupChecklist.map((i) => (
-                    <li key={i.label} className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium">{i.label}</div>
-                        <div className="text-xs text-muted-foreground">{i.detail}</div>
+        {/* LEFT: Live Orders — only shown if user can view orders */}
+        {canViewOrders && (
+          <Card className="shadow-sm lg:col-span-2">
+            <CardHeader className="flex flex-row items-center justify-between gap-4">
+              <div>
+                <CardTitle className="text-base">Live orders</CardTitle>
+                <div className="mt-1 text-xs text-muted-foreground">Latest 5 orders.</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="relative inline-flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/40 motion-reduce:hidden" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                </span>
+                <span className="text-xs text-muted-foreground">Live</span>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {(latestOrdersQuery.data ?? []).map((o) => (
+                  <div key={o.id} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background p-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">#{shortId(o.id)}</span>
+                        <span className="text-xs text-muted-foreground">{o.table_label || "No Table"}</span>
                       </div>
-                      <Badge variant={i.status === "Done" ? "default" : "secondary"} className="shrink-0">{i.status}</Badge>
-                    </li>
-                  ))}
-                </ul>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(o.placed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                    <Badge variant={statusVariant(o.status)} className="shrink-0 capitalize">
+                      {o.status.replace('_', ' ')}
+                    </Badge>
+                  </div>
+                ))}
+                {(latestOrdersQuery.data?.length === 0) && (
+                  <div className="text-center py-8 text-sm text-muted-foreground border-dashed border rounded-xl">
+                    No orders today yet.
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
+        )}
 
-          {/* Quick Actions */}
-          <Card className="shadow-sm">
-            <CardHeader><CardTitle className="text-base">Quick actions</CardTitle></CardHeader>
-            <CardContent className="grid gap-2">
-              <Button className="w-full justify-between" variant="secondary" asChild>
-                <Link to="/admin/menu">
-                  <span className="flex items-center gap-2"><Plus className="h-4 w-4" /> Add Item</span>
-                  <ArrowUpRight className="h-4 w-4" />
-                </Link>
-              </Button>
-              <Button className="w-full justify-between" variant="secondary" asChild>
-                <Link to="/admin/qr">
-                  <span className="flex items-center gap-2"><QrCode className="h-4 w-4" /> Print QR</span>
-                  <ArrowUpRight className="h-4 w-4" />
-                </Link>
-              </Button>
-              <Button className="w-full justify-between" variant="secondary" asChild>
-                <Link to="/admin/orders">
-                  <span className="flex items-center gap-2"><ReceiptText className="h-4 w-4" /> View Orders</span>
-                  <ArrowUpRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
+        {/* RIGHT: Checklist & Quick Actions */}
+        <div className={cn("space-y-3", !canViewOrders && "lg:col-span-3")}>
+
+          {/* Setup Checklist — admin only */}
+          {isAdmin && (
+            <Card className="shadow-sm">
+              <CardHeader><CardTitle className="text-base">Setup checklist</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <div className="rounded-xl border border-border bg-background p-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    <div className="text-sm font-medium">Ready in 3 steps</div>
+                  </div>
+                  <ul className="mt-3 space-y-2 text-sm">
+                    {setupChecklist.map((i) => (
+                      <li key={i.label} className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium">{i.label}</div>
+                          <div className="text-xs text-muted-foreground">{i.detail}</div>
+                        </div>
+                        <Badge variant={i.status === "Done" ? "default" : "secondary"} className="shrink-0">{i.status}</Badge>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Quick Actions — only show actions user has permission for */}
+          {quickActions.length > 0 && (
+            <Card className="shadow-sm">
+              <CardHeader><CardTitle className="text-base">Quick actions</CardTitle></CardHeader>
+              <CardContent className="grid gap-2">
+                {quickActions.map(action => (
+                  <Button key={action.to} className="w-full justify-between" variant="secondary" asChild>
+                    <Link to={action.to}>
+                      <span className="flex items-center gap-2"><action.icon className="h-4 w-4" /> {action.label}</span>
+                      <ArrowUpRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                ))}
+              </CardContent>
+            </Card>
+          )}
         </div>
       </section>
     </div>

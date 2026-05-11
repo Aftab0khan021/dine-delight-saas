@@ -37,6 +37,9 @@ export type CategoryPermission = {
 // ============================================================================
 
 export const PERMISSIONS = {
+  // Dashboard
+  VIEW_DASHBOARD: "view_dashboard",
+
   // Orders
   VIEW_ORDERS: "view_orders",
   MANAGE_ORDERS: "manage_orders",
