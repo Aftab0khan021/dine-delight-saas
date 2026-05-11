@@ -154,7 +154,7 @@ const App = () => (
             <Route path="insights" element={<ProtectedRoute adminOnly><AdminMenuInsights /></ProtectedRoute>} />
             <Route path="developer" element={<ProtectedRoute adminOnly><AdminDeveloperAPI /></ProtectedRoute>} />
             <Route path="kitchen" element={<ProtectedRoute permission="view_kitchen"><AdminKitchenDashboard /></ProtectedRoute>} />
-            <Route path="reservations" element={<ProtectedRoute permission="manage_settings"><AdminReservations /></ProtectedRoute>} />
+            <Route path="reservations" element={<ProtectedRoute permission="view_reservations"><AdminReservations /></ProtectedRoute>} />
             <Route path="inventory" element={<ProtectedRoute permission="view_inventory"><AdminInventory /></ProtectedRoute>} />
             {/* WhatsApp bot settings (from dev merge) */}
             <Route path="whatsapp" element={<ProtectedRoute adminOnly><AdminWhatsAppSettings /></ProtectedRoute>} />
@@ -163,7 +163,7 @@ const App = () => (
             <Route path="customers" element={<ProtectedRoute adminOnly><AdminCustomers /></ProtectedRoute>} />
             <Route path="analytics" element={<ProtectedRoute permission="view_analytics"><AdminAnalytics /></ProtectedRoute>} />
             <Route path="delivery-zones" element={<ProtectedRoute adminOnly><AdminDeliveryZones /></ProtectedRoute>} />
-            <Route path="explore" element={<AdminExploreFeatures />} />
+            <Route path="explore" element={<ProtectedRoute adminOnly><AdminExploreFeatures /></ProtectedRoute>} />
           </Route>
 
           {/* Super Admin Routes */}

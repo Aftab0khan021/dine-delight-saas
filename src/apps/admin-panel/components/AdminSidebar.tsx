@@ -111,15 +111,18 @@ export function AdminSidebar() {
   // Filter nav items based on permissions AND feature flags
   const navItems = useMemo(() => {
     return allNavItems.filter(item => {
-      // Admin-only items
+      // Admin-only items — completely hidden from staff
       if (item.adminOnly && !isAdmin) return false;
 
-      // Permission-based items
-      if (item.permission && !hasPermission(item.permission as any)) return false;
-
-      // Feature flag gating — hide items when feature is disabled
-      // Admins always see all features; staff are gated by feature flags
-      if (item.featureKey && !isAdmin && !featuresLoading && !isFeatureEnabled(item.featureKey)) return false;
+      // For staff (non-admin): STRICT filtering
+      // Staff ONLY sees items they have explicit permission for.
+      // Items without a permission key (like Dashboard) are always visible.
+      if (!isAdmin) {
+        // Permission check: if item requires a permission, staff must have it
+        if (item.permission && !hasPermission(item.permission as any)) return false;
+        // Feature flag check: if item is feature-gated, the feature must be enabled
+        if (item.featureKey && !featuresLoading && !isFeatureEnabled(item.featureKey)) return false;
+      }
 
       // No restrictions, show it
       return true;
@@ -176,29 +179,31 @@ export function AdminSidebar() {
             <NavItem key={item.to} item={item} isCollapsed={isCollapsed} />
           ))}
 
-          {/* Explore Features — always visible */}
-          <li className="pt-2">
-            <NavLink
-              to="/admin/explore"
-              title={isCollapsed ? "Explore Features" : undefined}
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center rounded-lg transition-colors",
-                  isCollapsed ? "justify-center h-10 w-10 mx-auto" : "gap-3 px-3 py-2",
-                  isActive
-                    ? "bg-primary/10 text-primary shadow-sm"
-                    : "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:text-amber-700"
-                )
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <Sparkles className={cn("shrink-0", isCollapsed ? "h-5 w-5" : "h-4 w-4", !isActive && !isCollapsed && "opacity-80")} />
-                  {!isCollapsed && <span className="text-sm font-medium truncate">Explore Features</span>}
-                </>
-              )}
-            </NavLink>
-          </li>
+          {/* Explore Features — admin only */}
+          {isAdmin && (
+            <li className="pt-2">
+              <NavLink
+                to="/admin/explore"
+                title={isCollapsed ? "Explore Features" : undefined}
+                className={({ isActive }) =>
+                  cn(
+                    "flex items-center rounded-lg transition-colors",
+                    isCollapsed ? "justify-center h-10 w-10 mx-auto" : "gap-3 px-3 py-2",
+                    isActive
+                      ? "bg-primary/10 text-primary shadow-sm"
+                      : "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:text-amber-700"
+                  )
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    <Sparkles className={cn("shrink-0", isCollapsed ? "h-5 w-5" : "h-4 w-4", !isActive && !isCollapsed && "opacity-80")} />
+                    {!isCollapsed && <span className="text-sm font-medium truncate">Explore Features</span>}
+                  </>
+                )}
+              </NavLink>
+            </li>
+          )}
         </ul>
       </nav>
 

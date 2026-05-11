@@ -196,19 +196,26 @@ export default function ExploreFeatures() {
   const { hasPermission, isAdmin } = usePermissionContext();
   const { features, isLoading, isFeatureEnabled } = useFeatureAccess(restaurant?.id);
 
+  // This page is admin-only — staff should never see it
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <Lock className="h-12 w-12 text-muted-foreground/40 mb-4" />
+        <h2 className="text-lg font-semibold text-muted-foreground">Admin Only</h2>
+        <p className="text-sm text-muted-foreground/80 mt-1">
+          Feature management is available to restaurant administrators only.
+        </p>
+      </div>
+    );
+  }
+
   const { activeFeatures, lockedFeatures } = useMemo(() => {
     const active: FeatureMeta[] = [];
     const locked: FeatureMeta[] = [];
 
     for (const feat of FEATURE_CATALOG) {
-      // Non-admin users can only see features they have permission for
-      if (!isAdmin) {
-        if (feat.adminOnly) continue; // Skip admin-only features entirely
-        if (feat.requiredPermission && !hasPermission(feat.requiredPermission as any)) continue;
-      }
-
-      // Admins see all features as active; staff are gated by feature flags
-      if (isAdmin || isFeatureEnabled(feat.key)) {
+      // Admins see all features — active ones and locked (upgradable) ones
+      if (isFeatureEnabled(feat.key)) {
         active.push(feat);
       } else {
         locked.push(feat);
@@ -216,7 +223,7 @@ export default function ExploreFeatures() {
     }
 
     return { activeFeatures: active, lockedFeatures: locked };
-  }, [features, isFeatureEnabled, isAdmin, hasPermission]);
+  }, [features, isFeatureEnabled]);
 
   if (isLoading) {
     return (
