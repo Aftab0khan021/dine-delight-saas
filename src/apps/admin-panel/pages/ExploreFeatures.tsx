@@ -54,8 +54,8 @@ const FEATURE_CATALOG: FeatureMeta[] = [
   },
   {
     key: "coupons",
-    name: "Coupons & Discounts",
-    description: "Create promo codes, discount campaigns, and automated promotions.",
+    name: "Rewards & Offers",
+    description: "Create promo codes, discount campaigns, and reward programs.",
     icon: Ticket,
     route: "/admin/coupons",
     tier: "core",

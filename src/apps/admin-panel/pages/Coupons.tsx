@@ -89,7 +89,7 @@ type CouponForm = z.infer<typeof couponSchema>;
 
 export default function AdminCoupons() {
     return (
-        <FeatureGate featureKey="coupons" featureName="Coupons & Discounts" description="Create and manage promo codes, discount campaigns, loyalty points, and referral programs.">
+        <FeatureGate featureKey="coupons" featureName="Rewards & Offers" description="Create and manage promo codes, discount campaigns, loyalty points, and referral programs.">
             <CouponsContent />
         </FeatureGate>
     );
@@ -302,9 +302,9 @@ function CouponsContent() {
         <div className="flex flex-col gap-4 w-full">
             <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                    <h1 className="text-2xl font-semibold tracking-tight">Coupons & Discounts</h1>
+                    <h1 className="text-2xl font-semibold tracking-tight">Rewards & Offers</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        Manage promo codes and discounts for your customers.
+                        Manage promo codes, discounts, and reward programs for your customers.
                     </p>
                 </div>
                 <Button onClick={() => { clearForm(); setDialogOpen(true); }} className="shrink-0">

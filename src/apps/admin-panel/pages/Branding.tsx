@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, ExternalLink, Globe, Image as ImageIcon, Palette, Save, Store, X, Phone, Mail, Clock, Upload, Loader2, MapPin, Instagram, Facebook, Twitter, Youtube, MessageCircle, Plus, Trash2, CalendarDays, Filter, Link2, RefreshCw, CheckCircle, AlertTriangle, DollarSign } from "lucide-react";
+import { Copy, ExternalLink, Globe, Image as ImageIcon, Palette, Save, Store, X, Phone, Mail, Clock, Upload, Loader2, MapPin, Instagram, Facebook, Twitter, Youtube, MessageCircle, Plus, Trash2, Link2, RefreshCw, CheckCircle, AlertTriangle, DollarSign } from "lucide-react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useFeatureAccess } from "../hooks/useFeatureAccess";
 import { OperatingHoursEditor } from "../components/branding/OperatingHoursEditor";
 import { SocialLinksCard } from "../components/branding/SocialLinksCard";
-import { TestimonialsCard, type Testimonial } from "../components/branding/TestimonialsCard";
+
 import { BrandingPreview } from "../components/branding/BrandingPreview";
 
 // UI Components
@@ -94,18 +94,13 @@ export default function AdminBranding() {
   // --- NEW: Enhancement settings (stored in settings JSONB) ---
   const [socialLinks, setSocialLinks] = useState({ instagram: "", facebook: "", twitter: "", youtube: "" });
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
-  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [whatsappNumber, setWhatsappNumber] = useState("");
-  const [reservationEnabled, setReservationEnabled] = useState(false);
-  const [totalTables, setTotalTables] = useState(10);
-  const [dietaryFiltersEnabled, setDietaryFiltersEnabled] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
 
   // Payment settings state
   const [savingPayment, setSavingPayment] = useState(false);
 
-  // Cuisine types state
-  const [cuisineTypes, setCuisineTypes] = useState<string[]>([]);
+
 
   // --- Data Fetching ---
   const { data: restaurantData, isLoading } = useQuery({
@@ -170,17 +165,7 @@ export default function AdminBranding() {
       // Sync enhancement settings
       setSocialLinks(s.social_links || { instagram: "", facebook: "", twitter: "", youtube: "" });
       setGalleryImages(Array.isArray(s.gallery_images) ? s.gallery_images : []);
-      setTestimonials(Array.isArray(s.testimonials) ? s.testimonials : []);
       setWhatsappNumber(s.whatsapp_number || "");
-      setReservationEnabled(!!s.reservation_enabled);
-      setTotalTables(s.total_tables || 10);
-      setDietaryFiltersEnabled(!!s.dietary_filters_enabled);
-
-      // Sync payment settings (kept for reference — managed in Billing page)
-
-
-      // Sync cuisine types
-      setCuisineTypes(Array.isArray((restaurantData as any).cuisine_types) ? (restaurantData as any).cuisine_types : []);
     }
   }, [restaurantData]);
 
@@ -260,11 +245,7 @@ export default function AdminBranding() {
         // Enhancement settings
         social_links: socialLinks,
         gallery_images: galleryImages,
-        testimonials,
         whatsapp_number: whatsappNumber || null,
-        reservation_enabled: reservationEnabled,
-        total_tables: totalTables,
-        dietary_filters_enabled: dietaryFiltersEnabled,
         // Note: tax, tip, loyalty, referral, payment configs are now managed
         // in Billing and Coupons pages. They are preserved via ...currentSettings spread.
       };
@@ -280,7 +261,7 @@ export default function AdminBranding() {
         is_holiday_mode: isHolidayMode,
         holiday_mode_message: holidayMessage || null,
         max_variants_per_item: maxVariants,
-        cuisine_types: cuisineTypes,
+
       } as any).eq("id", restaurant!.id);
 
       if (error) throw error;
@@ -806,15 +787,12 @@ export default function AdminBranding() {
             </CardContent>
           </Card>
 
-          {/* Card 7: Customer Testimonials */}
-          <TestimonialsCard testimonials={testimonials} onChange={setTestimonials} />
-
-          {/* Card 8: WhatsApp & Reservations */}
+          {/* Card 7: WhatsApp */}
           <Card className="shadow-sm">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <MessageCircle className="h-4 w-4 text-muted-foreground" />
-                WhatsApp & Reservations
+                WhatsApp
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -826,75 +804,6 @@ export default function AdminBranding() {
                 <Input value={whatsappNumber} onChange={e => setWhatsappNumber(e.target.value)} placeholder="+91 9876543210" />
                 <p className="text-xs text-muted-foreground">A floating WhatsApp button will appear on your public pages</p>
               </div>
-
-              <Separator />
-
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="space-y-0.5">
-                  <Label className="text-base flex items-center gap-2"><CalendarDays className="h-4 w-4" /> Table Reservations</Label>
-                  <p className="text-sm text-muted-foreground">Allow customers to book tables from your public page</p>
-                </div>
-                <Switch checked={reservationEnabled} onCheckedChange={setReservationEnabled} />
-              </div>
-
-              {reservationEnabled && (
-                <div className="space-y-2">
-                  <Label>Total Tables</Label>
-                  <Input type="number" min={1} max={100} value={totalTables} onChange={e => setTotalTables(Number(e.target.value))} />
-                  <p className="text-xs text-muted-foreground">Manage reservations from the Reservations page in the sidebar</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Card 9: Menu Filters */}
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Filter className="h-4 w-4 text-muted-foreground" />
-                Menu Features
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="space-y-0.5">
-                  <Label className="text-base">Dietary Filters</Label>
-                  <p className="text-sm text-muted-foreground">Show Veg/Non-Veg/Spicy filter buttons on your public menu</p>
-                </div>
-                <Switch checked={dietaryFiltersEnabled} onCheckedChange={setDietaryFiltersEnabled} />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Restaurant Cuisine Types */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">🍽️ Cuisine Types</CardTitle>
-              <CardDescription>Select the cuisine types your restaurant specializes in</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-1.5">
-                {['North Indian', 'South Indian', 'Chinese', 'Italian', 'Continental', 'Mughlai', 'Thai', 'Mexican', 'Japanese', 'Korean', 'Mediterranean', 'Street Food', 'Fast Food', 'Desserts', 'Bakery', 'Beverages', 'Biryani', 'Seafood', 'Healthy', 'Vegan'].map(cuisine => {
-                  const selected = cuisineTypes.includes(cuisine);
-                  return (
-                    <button
-                      key={cuisine}
-                      type="button"
-                      onClick={() => {
-                        setCuisineTypes(prev => selected ? prev.filter(c => c !== cuisine) : [...prev, cuisine]);
-                      }}
-                      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                        selected
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-muted text-muted-foreground hover:border-border'
-                      }`}
-                    >
-                      {selected ? '✓ ' : ''}{cuisine}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-xs text-muted-foreground mt-3">Selected cuisines are saved when you click "Save Changes" above.</p>
             </CardContent>
           </Card>
 

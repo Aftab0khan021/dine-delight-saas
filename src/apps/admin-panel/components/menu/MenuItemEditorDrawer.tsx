@@ -264,8 +264,9 @@ export default function MenuItemEditorDrawer({
                   {/* URL Tab Content */}
                   <TabsContent value="url" className="mt-4 space-y-2">
                     <Input 
-                      {...form.register("image_url")} 
-                      placeholder="https://example.com/burger.jpg" 
+                      placeholder="https://example.com/burger.jpg"
+                      value={currentImage && !currentImage.includes('supabase') ? currentImage : ''}
+                      onChange={(e) => form.setValue("image_url", e.target.value || null, { shouldDirty: true })}
                     />
                     <p className="text-xs text-muted-foreground">
                       Paste a direct link to an image hosted elsewhere.

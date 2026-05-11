@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
@@ -10,6 +11,7 @@ import { Star, Eye, EyeOff, Trash2, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { analyzeSentimentFree, type SentimentResult } from "../lib/ai-utils";
 import { useAITier } from "../hooks/useAITier";
+import { TestimonialsCard, type Testimonial } from "../components/branding/TestimonialsCard";
 
 export default function Reviews() {
   return (
@@ -218,6 +220,63 @@ function ReviewsContent() {
           )}
         </CardContent>
       </Card>
+      {/* Customer Testimonials */}
+      <TestimonialsSection restaurantId={restaurant?.id} />
+    </div>
+  );
+}
+
+// --- Subcomponent: Testimonials Section ---
+function TestimonialsSection({ restaurantId }: { restaurantId?: string }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  const { data: restaurantData } = useQuery({
+    queryKey: ["admin", "restaurant", restaurantId, "testimonials"],
+    enabled: !!restaurantId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("restaurants")
+        .select("settings")
+        .eq("id", restaurantId!)
+        .single();
+      return data;
+    },
+  });
+
+  useEffect(() => {
+    if (restaurantData) {
+      const s = restaurantData.settings && typeof restaurantData.settings === "object" ? restaurantData.settings as any : {};
+      setTestimonials(Array.isArray(s.testimonials) ? s.testimonials : []);
+    }
+  }, [restaurantData]);
+
+  const handleSave = async () => {
+    if (!restaurantId) return;
+    setSaving(true);
+    try {
+      const currentSettings = restaurantData?.settings && typeof restaurantData.settings === "object" ? restaurantData.settings as any : {};
+      const { error } = await supabase.from("restaurants").update({
+        settings: { ...currentSettings, testimonials },
+      } as any).eq("id", restaurantId);
+      if (error) throw error;
+      toast({ title: "Saved", description: "Testimonials updated." });
+      qc.invalidateQueries({ queryKey: ["admin", "restaurant"] });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <TestimonialsCard testimonials={testimonials} onChange={setTestimonials} />
+      <Button onClick={handleSave} disabled={saving} size="sm">
+        {saving ? "Saving..." : "Save Testimonials"}
+      </Button>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, Clock, Users, Check, X, Phone, ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
@@ -114,6 +116,9 @@ function ReservationsContent() {
         <p className="text-sm text-muted-foreground">Manage table bookings from your customers</p>
       </div>
 
+      {/* Reservation Settings */}
+      <ReservationSettings restaurantId={restaurant?.id} />
+
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="shadow-sm"><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{stats.total}</p><p className="text-xs text-muted-foreground">Total Today</p></CardContent></Card>
@@ -197,5 +202,86 @@ function ReservationsContent() {
         </div>
       )}
     </div>
+  );
+}
+
+// --- Subcomponent: Reservation Settings ---
+function ReservationSettings({ restaurantId }: { restaurantId?: string }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [reservationEnabled, setReservationEnabled] = useState(false);
+  const [totalTables, setTotalTables] = useState(10);
+  const [saving, setSaving] = useState(false);
+
+  const { data: restaurantData } = useQuery({
+    queryKey: ["admin", "restaurant", restaurantId, "reservation-settings"],
+    enabled: !!restaurantId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("restaurants")
+        .select("settings")
+        .eq("id", restaurantId!)
+        .single();
+      return data;
+    },
+  });
+
+  useEffect(() => {
+    if (restaurantData) {
+      const s = restaurantData.settings && typeof restaurantData.settings === "object" ? restaurantData.settings as any : {};
+      setReservationEnabled(!!s.reservation_enabled);
+      setTotalTables(s.total_tables || 10);
+    }
+  }, [restaurantData]);
+
+  const handleSave = async () => {
+    if (!restaurantId) return;
+    setSaving(true);
+    try {
+      const currentSettings = restaurantData?.settings && typeof restaurantData.settings === "object" ? restaurantData.settings as any : {};
+      const { error } = await supabase.from("restaurants").update({
+        settings: { ...currentSettings, reservation_enabled: reservationEnabled, total_tables: totalTables },
+      } as any).eq("id", restaurantId);
+      if (error) throw error;
+      toast({ title: "Saved", description: "Reservation settings updated." });
+      qc.invalidateQueries({ queryKey: ["admin", "restaurant"] });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="shadow-sm">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <CalendarDays className="h-4 w-4 text-muted-foreground" />
+          Reservation Settings
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between p-4 border rounded-lg">
+          <div className="space-y-0.5">
+            <Label className="text-base flex items-center gap-2">
+              <CalendarDays className="h-4 w-4" /> Table Reservations
+            </Label>
+            <p className="text-sm text-muted-foreground">Allow customers to book tables from your public page</p>
+          </div>
+          <Switch checked={reservationEnabled} onCheckedChange={setReservationEnabled} />
+        </div>
+
+        {reservationEnabled && (
+          <div className="space-y-2">
+            <Label>Total Tables</Label>
+            <Input type="number" min={1} max={100} value={totalTables} onChange={e => setTotalTables(Number(e.target.value))} />
+          </div>
+        )}
+
+        <Button onClick={handleSave} disabled={saving} size="sm">
+          {saving ? "Saving..." : "Save Settings"}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

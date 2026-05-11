@@ -579,7 +579,116 @@ export default function AdminMenu() {
         isPaidAI={isPaidAvailable("menu_description")}
         getAccessToken={getAccessToken}
       />
+
+      {/* Menu Settings: Dietary Filters + Cuisine Types */}
+      <MenuSettingsSection restaurantId={restaurant?.id} />
     </div>
+  );
+}
+
+// --- Subcomponent: Menu Settings (Dietary Filters + Cuisine Types) ---
+function MenuSettingsSection({ restaurantId }: { restaurantId?: string }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [dietaryFiltersEnabled, setDietaryFiltersEnabled] = useState(false);
+  const [cuisineTypes, setCuisineTypes] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  const { data: restaurantData } = useQuery({
+    queryKey: ["admin", "restaurant", restaurantId, "menu-settings"],
+    enabled: !!restaurantId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("restaurants")
+        .select("settings, cuisine_types")
+        .eq("id", restaurantId!)
+        .single();
+      return data;
+    },
+  });
+
+  useEffect(() => {
+    if (restaurantData) {
+      const s = restaurantData.settings && typeof restaurantData.settings === "object" ? restaurantData.settings as any : {};
+      setDietaryFiltersEnabled(!!s.dietary_filters_enabled);
+      setCuisineTypes(Array.isArray((restaurantData as any).cuisine_types) ? (restaurantData as any).cuisine_types : []);
+    }
+  }, [restaurantData]);
+
+  const handleSave = async () => {
+    if (!restaurantId) return;
+    setSaving(true);
+    try {
+      const currentSettings = restaurantData?.settings && typeof restaurantData.settings === "object" ? restaurantData.settings as any : {};
+      const { error } = await supabase.from("restaurants").update({
+        settings: { ...currentSettings, dietary_filters_enabled: dietaryFiltersEnabled },
+        cuisine_types: cuisineTypes,
+      } as any).eq("id", restaurantId);
+      if (error) throw error;
+      toast({ title: "Saved", description: "Menu settings updated." });
+      qc.invalidateQueries({ queryKey: ["admin", "restaurant"] });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const CUISINE_OPTIONS = [
+    'North Indian', 'South Indian', 'Chinese', 'Italian', 'Continental', 'Mughlai',
+    'Thai', 'Mexican', 'Japanese', 'Korean', 'Mediterranean', 'Street Food',
+    'Fast Food', 'Desserts', 'Bakery', 'Beverages', 'Biryani', 'Seafood', 'Healthy', 'Vegan'
+  ];
+
+  return (
+    <Card className="shadow-sm">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-muted-foreground" />
+          Menu Settings
+        </CardTitle>
+        <CardDescription>Configure dietary options and cuisine types for your menu.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Dietary Filters */}
+        <div className="flex items-center justify-between p-4 border rounded-lg">
+          <div className="space-y-0.5">
+            <Label className="text-base">Dietary Filters</Label>
+            <p className="text-sm text-muted-foreground">Show Veg/Non-Veg/Spicy filter buttons on your public menu</p>
+          </div>
+          <Switch checked={dietaryFiltersEnabled} onCheckedChange={setDietaryFiltersEnabled} />
+        </div>
+
+        {/* Cuisine Types */}
+        <div className="space-y-3">
+          <Label className="text-base">🍽️ Cuisine Types</Label>
+          <p className="text-sm text-muted-foreground">Select the cuisine types your restaurant specializes in</p>
+          <div className="flex flex-wrap gap-1.5">
+            {CUISINE_OPTIONS.map(cuisine => {
+              const selected = cuisineTypes.includes(cuisine);
+              return (
+                <button
+                  key={cuisine}
+                  type="button"
+                  onClick={() => setCuisineTypes(prev => selected ? prev.filter(c => c !== cuisine) : [...prev, cuisine])}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    selected
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-muted text-muted-foreground hover:border-border'
+                  }`}
+                >
+                  {selected ? '✓ ' : ''}{cuisine}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <Button onClick={handleSave} disabled={saving} size="sm">
+          {saving ? "Saving..." : "Save Menu Settings"}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -941,29 +1050,53 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currenc
 
           <div className="space-y-2">
             <Label>Item Image</Label>
-            <Input
-              type="file"
-              accept="image/png, image/jpeg, image/webp"
-              onChange={(e) => handleImageUpload(e, false)}
-              disabled={uploading}
-            />
-            <Input
-              {...form.register("image_url")}
-              placeholder="https://example.com/image.jpg"
-            />
-            {form.watch("image_url") && (
+            {/* Hidden field stores the URL without exposing it */}
+            <input type="hidden" {...form.register("image_url")} />
+            {form.watch("image_url") ? (
               <div className="space-y-2">
                 <img
                   src={form.watch("image_url")}
                   alt="Preview"
                   className="h-32 w-full object-cover rounded-md border"
                 />
-                <Input
-                  type="file"
-                  accept="image/png, image/jpeg, image/webp"
-                  onChange={(e) => handleImageUpload(e, true)}
-                  disabled={uploading}
-                />
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      accept="image/png, image/jpeg, image/webp"
+                      className="hidden"
+                      onChange={(e) => handleImageUpload(e, true)}
+                      disabled={uploading}
+                    />
+                    <Button type="button" variant="outline" size="sm" asChild disabled={uploading}>
+                      <span>
+                        {uploading ? "Uploading..." : "Replace Image"}
+                      </span>
+                    </Button>
+                  </label>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => form.setValue("image_url", "", { shouldDirty: true })}>
+                    Remove
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <ImageIcon className="h-3 w-3" /> Image uploaded
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <label className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 p-4 cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors">
+                  <input
+                    type="file"
+                    accept="image/png, image/jpeg, image/webp"
+                    className="hidden"
+                    onChange={(e) => handleImageUpload(e, false)}
+                    disabled={uploading}
+                  />
+                  <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">
+                    {uploading ? "Uploading..." : "Click to upload image (PNG, JPEG, WebP — max 5MB)"}
+                  </span>
+                </label>
               </div>
             )}
           </div>

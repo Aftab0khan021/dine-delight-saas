@@ -54,7 +54,7 @@ const coreNavItems: NavItem[] = [
   { to: "/admin/staff-categories", label: "Staff Categories", icon: Settings,       permission: PERMISSIONS.MANAGE_CATEGORIES_STAFF, adminOnly: true },
   { to: "/admin/branding",         label: "Branding",         icon: Palette,        permission: PERMISSIONS.MANAGE_SETTINGS },
   { to: "/admin/billing",          label: "Billing",          icon: CreditCard,     adminOnly: true },
-  { to: "/admin/coupons",          label: "Coupons",          icon: Ticket,         permission: PERMISSIONS.VIEW_COUPONS, featureKey: "coupons" },
+  { to: "/admin/coupons",          label: "Rewards & Offers", icon: Ticket,         permission: PERMISSIONS.VIEW_COUPONS, featureKey: "coupons" },
   { to: "/admin/reservations",     label: "Reservations",     icon: CalendarDays,   permission: PERMISSIONS.VIEW_RESERVATIONS, featureKey: "table_reservations" },
   { to: "/admin/reviews",          label: "Reviews",          icon: Star,           permission: PERMISSIONS.VIEW_REVIEWS, featureKey: "reviews" },
   { to: "/admin/inventory",        label: "Inventory",        icon: Package,        permission: PERMISSIONS.VIEW_INVENTORY, featureKey: "inventory_management" },

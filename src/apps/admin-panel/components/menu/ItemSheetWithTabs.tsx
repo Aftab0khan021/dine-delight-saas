@@ -125,13 +125,28 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
 
                             <div className="space-y-2">
                                 <Label>Item Image</Label>
-                                <Input type="file" accept="image/png, image/jpeg, image/webp" onChange={handleImageUpload} disabled={uploading} />
-                                <Input {...form.register("image_url")} placeholder="https://example.com/image.jpg" />
-                                {form.watch("image_url") && (
+                                <input type="hidden" {...form.register("image_url")} />
+                                {form.watch("image_url") ? (
                                     <div className="space-y-2">
                                         <img src={form.watch("image_url")} alt="Preview" className="h-32 w-full object-cover rounded-md border" />
-                                        <Input type="file" accept="image/png, image/jpeg, image/webp" onChange={handleReplaceImage} disabled={uploading} />
+                                        <div className="flex items-center gap-2">
+                                            <label className="cursor-pointer">
+                                                <input type="file" accept="image/png, image/jpeg, image/webp" className="hidden" onChange={handleReplaceImage} disabled={uploading} />
+                                                <Button type="button" variant="outline" size="sm" asChild disabled={uploading}>
+                                                    <span>{uploading ? "Uploading..." : "Replace Image"}</span>
+                                                </Button>
+                                            </label>
+                                            <Button type="button" variant="ghost" size="sm" onClick={() => form.setValue("image_url", "", { shouldDirty: true })}>
+                                                Remove
+                                            </Button>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">✓ Image uploaded</p>
                                     </div>
+                                ) : (
+                                    <label className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 p-4 cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors">
+                                        <input type="file" accept="image/png, image/jpeg, image/webp" className="hidden" onChange={handleImageUpload} disabled={uploading} />
+                                        <span className="text-xs text-muted-foreground">{uploading ? "Uploading..." : "Click to upload image"}</span>
+                                    </label>
                                 )}
                             </div>
 
