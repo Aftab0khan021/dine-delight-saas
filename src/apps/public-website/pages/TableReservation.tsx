@@ -25,6 +25,9 @@ import {
   Search,
   XCircle,
   CircleDot,
+  Grid3X3,
+  Square,
+  Circle,
 } from "lucide-react";
 
 function normalizeSettings(settings: any | null) {
@@ -52,6 +55,7 @@ export default function TableReservation() {
   const [resParty, setResParty] = useState(2);
   const [resNotes, setResNotes] = useState("");
   const [resOccasion, setResOccasion] = useState("");
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [resSubmitting, setResSubmitting] = useState(false);
   const [resSuccess, setResSuccess] = useState(false);
 
@@ -121,6 +125,7 @@ export default function TableReservation() {
       reservation_time: resTime,
       notes: notesText || null,
       status: "pending",
+      table_id: selectedTableId || null,
     });
     setResSubmitting(false);
     if (error) {
@@ -363,6 +368,16 @@ export default function TableReservation() {
                 </CardContent>
               </Card>
 
+              {/* Table Selection (visual floor plan) */}
+              <TablePicker
+                restaurantId={restaurant!.id}
+                date={resDate}
+                partySize={resParty}
+                selectedTableId={selectedTableId}
+                onSelect={setSelectedTableId}
+                themeColor={themeColor}
+              />
+
               {/* Special Requests */}
               <Card>
                 <CardContent className="p-5 space-y-4">
@@ -480,5 +495,150 @@ export default function TableReservation() {
         </div>
       </main>
     </div>
+  );
+}
+
+// --- Public Table Picker (visual table selection for customers) ---
+function TablePicker({
+  restaurantId,
+  date,
+  partySize,
+  selectedTableId,
+  onSelect,
+  themeColor,
+}: {
+  restaurantId: string;
+  date: string;
+  partySize: number;
+  selectedTableId: string | null;
+  onSelect: (id: string | null) => void;
+  themeColor: string;
+}) {
+  // Fetch all active tables
+  const { data: tables = [] } = useQuery({
+    queryKey: ["public", "tables", restaurantId],
+    enabled: !!restaurantId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("restaurant_tables")
+        .select("id, label, capacity, is_active, shape, floor")
+        .eq("restaurant_id", restaurantId)
+        .eq("is_active", true)
+        .order("label");
+      if (error) throw error;
+      return (data ?? []) as { id: string; label: string; capacity: number; is_active: boolean; shape: string; floor: string }[];
+    },
+  });
+
+  // Fetch reservations for the selected date to mark tables as taken
+  const { data: reservedTableIds = [] } = useQuery({
+    queryKey: ["public", "reserved-tables", restaurantId, date],
+    enabled: !!restaurantId && !!date,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("reservations")
+        .select("table_id")
+        .eq("restaurant_id", restaurantId)
+        .eq("reservation_date", date)
+        .in("status", ["pending", "confirmed", "seated"]);
+      return (data ?? []).map((r: any) => r.table_id).filter(Boolean) as string[];
+    },
+  });
+
+  if (tables.length === 0) return null;
+
+  // Group by floor
+  const floors = Array.from(new Set(tables.map(t => t.floor || "main"))).sort();
+
+  return (
+    <Card>
+      <CardContent className="p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <Grid3X3 className="h-4 w-4 text-muted-foreground" />
+          <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Choose a Table</h3>
+          <span className="text-xs text-muted-foreground ml-auto">(Optional)</span>
+        </div>
+
+        {/* Legend */}
+        <div className="flex gap-4 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-sm border-2 border-green-500 bg-green-50 dark:bg-green-950/30" />
+            Available
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-sm border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30" />
+            Reserved
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-sm border-2 bg-primary/10" style={{ borderColor: themeColor }} />
+            Selected
+          </div>
+        </div>
+
+        {!date && (
+          <p className="text-sm text-muted-foreground text-center py-4">Select a date above to see available tables</p>
+        )}
+
+        {date && floors.map(floor => {
+          const floorTables = tables.filter(t => (t.floor || "main") === floor);
+          return (
+            <div key={floor} className="space-y-2">
+              {floors.length > 1 && (
+                <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider capitalize">{floor}</p>
+              )}
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {floorTables.map(table => {
+                  const isReserved = reservedTableIds.includes(table.id);
+                  const tooSmall = table.capacity < partySize;
+                  const isSelected = selectedTableId === table.id;
+                  const isDisabled = isReserved || tooSmall;
+                  const isRound = table.shape === "round";
+
+                  return (
+                    <button
+                      key={table.id}
+                      type="button"
+                      disabled={isDisabled}
+                      onClick={() => onSelect(isSelected ? null : table.id)}
+                      className={`
+                        relative flex flex-col items-center justify-center gap-0.5 p-3 border-2 transition-all
+                        ${isRound ? "rounded-full" : "rounded-xl"}
+                        ${isSelected
+                          ? "shadow-md scale-[1.02]"
+                          : isDisabled
+                            ? "opacity-50 cursor-not-allowed border-muted bg-muted/30"
+                            : "hover:shadow-sm hover:scale-[1.01] cursor-pointer border-green-400 bg-green-50/50 dark:bg-green-950/20"
+                        }
+                      `}
+                      style={isSelected ? { borderColor: themeColor, backgroundColor: `${themeColor}10` } : isReserved ? { borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.08)' } : undefined}
+                    >
+                      <span className="text-xs font-bold truncate max-w-full">{table.label}</span>
+                      <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                        <Users className="h-2.5 w-2.5" />{table.capacity}
+                      </span>
+                      {isReserved && (
+                        <span className="absolute -top-1 -right-1 text-[8px] bg-amber-500 text-white px-1 rounded-full font-bold">Booked</span>
+                      )}
+                      {tooSmall && !isReserved && (
+                        <span className="absolute -top-1 -right-1 text-[8px] bg-gray-500 text-white px-1 rounded-full font-bold">Small</span>
+                      )}
+                      {isSelected && (
+                        <CheckCircle2 className="absolute -top-1.5 -right-1.5 h-4 w-4" style={{ color: themeColor }} />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+
+        {selectedTableId && (
+          <p className="text-xs text-center" style={{ color: themeColor }}>
+            ✓ Table selected — the restaurant will try to seat you here
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
