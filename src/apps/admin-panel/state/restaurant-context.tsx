@@ -55,12 +55,17 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
 
     // 1. Check if the user has any restaurant-level role (NOT super_admin)
     // IMPORTANT: We fetch ALL roles for this user, then pick the highest-priority one.
-    // We can't rely on alphabetical sorting because 'user' > 'restaurant_admin' alphabetically.
     const { data: allUserRoles, error: roleError } = await supabase
       .from("user_roles")
       .select("role, restaurant_id, staff_category_id")
       .eq("user_id", session.user.id)
       .neq("role", "super_admin");
+
+    // 🔍 DEBUG: Log all roles found for this user
+    console.log("🔍 [RestaurantContext] User ID:", session.user.id);
+    console.log("🔍 [RestaurantContext] Email:", session.user.email);
+    console.log("🔍 [RestaurantContext] All user_roles returned:", JSON.stringify(allUserRoles, null, 2));
+    console.log("🔍 [RestaurantContext] Role query error:", roleError);
 
     // Pick the highest-priority role: restaurant_admin > user > anything else
     const ROLE_PRIORITY: Record<string, number> = { restaurant_admin: 0, user: 1, staff: 2 };
@@ -70,6 +75,9 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       return pa - pb;
     });
     const userRoleRow = sortedRoles.length > 0 ? sortedRoles[0] : null;
+
+    console.log("🔍 [RestaurantContext] Selected role row:", JSON.stringify(userRoleRow));
+    console.log("🔍 [RestaurantContext] isAdmin will be:", userRoleRow?.role === "restaurant_admin" || userRoleRow?.role === "super_admin");
 
     if (roleError || !userRoleRow) {
       console.warn("Access Denied: No restaurant role found for this user.");
