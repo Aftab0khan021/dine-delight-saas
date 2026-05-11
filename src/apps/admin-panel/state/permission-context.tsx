@@ -23,10 +23,14 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
     const { restaurant, role } = useRestaurantContext();
     const [permissions, setPermissions] = useState<Set<string>>(new Set());
     const [loading, setLoading] = useState(true);
+    // Independently verify admin status from the database, NOT just from
+    // restaurant-context role — this prevents misidentification bugs.
+    const [dbIsAdmin, setDbIsAdmin] = useState(false);
 
     const isAdmin = useMemo(() => {
-        return role === "restaurant_admin" || role === "super_admin";
-    }, [role]);
+        // True if EITHER the restaurant-context says admin OR the DB confirms it
+        return dbIsAdmin || role === "restaurant_admin" || role === "super_admin";
+    }, [role, dbIsAdmin]);
 
     const loadPermissions = useCallback(async () => {
         if (!restaurant?.id) {
@@ -43,22 +47,21 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
                 return;
             }
 
-            // Admins have all permissions
-            if (isAdmin) {
-                const { data: allPermissions } = await supabase
-                    .from("permissions")
-                    .select("code");
-
-                if (allPermissions) {
-                    setPermissions(new Set(allPermissions.map(p => p.code)));
-                }
-                return;
-            }
-
-            // Staff members: get permissions via RPC function
+            // ALWAYS use the RPC — it already checks for restaurant_admin internally
+            // and returns ALL permissions for admins, or category-specific ones for staff.
             const { data, error } = await supabase.rpc("get_user_permissions", {
                 p_user_id: user.id,
                 p_restaurant_id: restaurant.id,
+            });
+
+            console.log("🔍 [PermissionContext] get_user_permissions result:", {
+                userId: user.id,
+                email: user.email,
+                restaurantId: restaurant.id,
+                roleFromContext: role,
+                permissionCount: data?.length ?? 0,
+                error: error?.message,
+                permissions: data?.map((r: any) => r.permission_code),
             });
 
             if (error) {
@@ -67,8 +70,31 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
                 return;
             }
 
-            if (data) {
-                setPermissions(new Set(data.map((row: any) => row.permission_code)));
+            if (data && data.length > 0) {
+                const permSet = new Set(data.map((row: any) => row.permission_code));
+                setPermissions(permSet);
+
+                // Also independently check: if the RPC returned ALL permissions,
+                // it means the SQL function detected this user as restaurant_admin.
+                // Use this to set dbIsAdmin as a safety net.
+                const { data: allPerms } = await supabase
+                    .from("permissions")
+                    .select("code");
+                
+                if (allPerms) {
+                    const totalPermissions = allPerms.length;
+                    // If user has ALL permissions, they're admin per the SQL function
+                    if (permSet.size >= totalPermissions) {
+                        console.log("🔍 [PermissionContext] DB confirms user is ADMIN (has all permissions)");
+                        setDbIsAdmin(true);
+                    } else {
+                        console.log(`🔍 [PermissionContext] User has ${permSet.size}/${totalPermissions} permissions — STAFF`);
+                        setDbIsAdmin(false);
+                    }
+                }
+            } else {
+                setPermissions(new Set());
+                setDbIsAdmin(false);
             }
         } catch (error) {
             console.error("Error loading permissions:", error);
@@ -76,7 +102,7 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
         } finally {
             setLoading(false);
         }
-    }, [restaurant?.id, isAdmin]);
+    }, [restaurant?.id, role]);
 
     useEffect(() => {
         loadPermissions();

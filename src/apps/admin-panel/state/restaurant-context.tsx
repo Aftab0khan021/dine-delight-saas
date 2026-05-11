@@ -53,33 +53,16 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       return;
     }
 
-    // 1. Check if the user has any restaurant-level role (NOT super_admin)
-    // IMPORTANT: We fetch ALL roles for this user, then pick the highest-priority one.
+    // 1. Fetch ALL roles for this user (excluding super_admin)
     const { data: allUserRoles, error: roleError } = await supabase
       .from("user_roles")
       .select("role, restaurant_id, staff_category_id")
       .eq("user_id", session.user.id)
       .neq("role", "super_admin");
 
-    // 🔍 DEBUG: Log all roles found for this user
-    console.log("🔍 [RestaurantContext] User ID:", session.user.id);
-    console.log("🔍 [RestaurantContext] Email:", session.user.email);
-    console.log("🔍 [RestaurantContext] All user_roles returned:", JSON.stringify(allUserRoles, null, 2));
-    console.log("🔍 [RestaurantContext] Role query error:", roleError);
+    console.log("🔍 [RestaurantContext] User:", session.user.email, "| Roles:", JSON.stringify(allUserRoles));
 
-    // Pick the highest-priority role: restaurant_admin > user > anything else
-    const ROLE_PRIORITY: Record<string, number> = { restaurant_admin: 0, user: 1, staff: 2 };
-    const sortedRoles = (allUserRoles ?? []).sort((a, b) => {
-      const pa = ROLE_PRIORITY[a.role] ?? 99;
-      const pb = ROLE_PRIORITY[b.role] ?? 99;
-      return pa - pb;
-    });
-    const userRoleRow = sortedRoles.length > 0 ? sortedRoles[0] : null;
-
-    console.log("🔍 [RestaurantContext] Selected role row:", JSON.stringify(userRoleRow));
-    console.log("🔍 [RestaurantContext] isAdmin will be:", userRoleRow?.role === "restaurant_admin" || userRoleRow?.role === "super_admin");
-
-    if (roleError || !userRoleRow) {
+    if (roleError || !allUserRoles || allUserRoles.length === 0) {
       console.warn("Access Denied: No restaurant role found for this user.");
       setRestaurant(null);
       setRole(null);
@@ -89,17 +72,48 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       return;
     }
 
-    // 2. Set role
-    setRole(userRoleRow.role as StaffRole);
+    // 2. Determine effective role:
+    //    - If ANY row has role='restaurant_admin', this user IS admin
+    //    - Use the admin row for restaurant_id; ignore staff_category_id for admins
+    const adminRow = allUserRoles.find(r => r.role === "restaurant_admin");
+    const staffRow = allUserRoles.find(r => r.role === "user");
 
-    // 3. Fetch restaurant details (if they have one linked)
+    let effectiveRole: StaffRole;
+    let effectiveRestaurantId: string | null;
+    let effectiveCategoryId: string | null;
+
+    if (adminRow) {
+      // User IS an admin — always treat them as admin
+      effectiveRole = "restaurant_admin";
+      effectiveRestaurantId = adminRow.restaurant_id;
+      effectiveCategoryId = null; // Admins don't use staff categories
+      console.log("🔍 [RestaurantContext] ✅ User is ADMIN for restaurant:", effectiveRestaurantId);
+    } else if (staffRow) {
+      // User is staff only
+      effectiveRole = "user";
+      effectiveRestaurantId = staffRow.restaurant_id;
+      effectiveCategoryId = staffRow.staff_category_id;
+      console.log("🔍 [RestaurantContext] 👤 User is STAFF with category:", effectiveCategoryId);
+    } else {
+      // Fallback: pick the first available role
+      const firstRow = allUserRoles[0];
+      effectiveRole = firstRow.role as StaffRole;
+      effectiveRestaurantId = firstRow.restaurant_id;
+      effectiveCategoryId = firstRow.staff_category_id;
+      console.log("🔍 [RestaurantContext] ⚠️ Fallback role:", effectiveRole);
+    }
+
+    // 3. Set role
+    setRole(effectiveRole);
+
+    // 4. Fetch restaurant details
     let finalRestaurant: CurrentRestaurant | null = null;
 
-    if (userRoleRow.restaurant_id) {
+    if (effectiveRestaurantId) {
       const { data: restaurantRow, error: restaurantError } = await supabase
         .from("restaurants")
         .select("id, name, slug, currency_code")
-        .eq("id", userRoleRow.restaurant_id)
+        .eq("id", effectiveRestaurantId)
         .maybeSingle();
 
       finalRestaurant = restaurantRow;
@@ -108,7 +122,7 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       if (restaurantError || !finalRestaurant) {
         console.warn("Restaurant details hidden by RLS. Using fallback.");
         finalRestaurant = {
-          id: userRoleRow.restaurant_id,
+          id: effectiveRestaurantId,
           name: "My Restaurant",
           slug: "",
           currency_code: "INR",
@@ -116,14 +130,14 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       }
     }
 
-    // 4. Fetch staff category (if assigned)
+    // 5. Fetch staff category (only for non-admin users)
     let finalStaffCategory: StaffCategory | null = null;
 
-    if (userRoleRow.staff_category_id) {
+    if (effectiveCategoryId && effectiveRole !== "restaurant_admin") {
       const { data: categoryRow } = await supabase
         .from("staff_categories")
         .select("*")
-        .eq("id", userRoleRow.staff_category_id)
+        .eq("id", effectiveCategoryId)
         .maybeSingle();
 
       if (categoryRow) {
