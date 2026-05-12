@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { getCurrencySymbol } from "@/lib/currency-utils";
+import { fromCents, toCents } from "@/lib/formatting";
 
 interface Addon {
     id?: string;
@@ -178,7 +179,7 @@ export function AddonEditor({ menuItemId, restaurantId }: AddonEditorProps) {
                                             )}
                                         </div>
                                         <div className="text-xs text-muted-foreground">
-                                        +{getCurrencySymbol(currencyCode)}{(addon.price_cents / 100).toFixed(2)}
+                                        +{getCurrencySymbol(currencyCode)}{fromCents(addon.price_cents).toFixed(2)}
                                             {addon.max_quantity > 0 && ` • Max ${addon.max_quantity}`}
                                             {addon.max_quantity === 0 && ` • Unlimited`}
                                         </div>
@@ -243,9 +244,9 @@ export function AddonEditor({ menuItemId, restaurantId }: AddonEditorProps) {
                                 step="0.01"
                                 min="0"
                                 placeholder="0.00"
-                                value={newAddon.price_cents / 100}
+                                value={fromCents(newAddon.price_cents)}
                                 onChange={(e) =>
-                                    setNewAddon({ ...newAddon, price_cents: Math.round(parseFloat(e.target.value || "0") * 100) })
+                                    setNewAddon({ ...newAddon, price_cents: toCents(e.target.value || "0") })
                                 }
                             />
                         </div>

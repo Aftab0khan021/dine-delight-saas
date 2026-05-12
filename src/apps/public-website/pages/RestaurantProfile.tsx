@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { formatMoney } from "@/lib/formatting";
+import { formatMoney, fromCents } from "@/lib/formatting";
 import { Turnstile } from "@/components/security/Turnstile";
 import { usePublicFeatureAccess } from "../hooks/usePublicFeatureAccess";
 
@@ -468,7 +468,7 @@ export default function RestaurantProfile() {
                   <div className="p-5 space-y-3">
                     <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white" style={{ backgroundColor: themeColor }}>
                       <Tag className="h-3 w-3" />
-                      {coupon.discount_type === 'percentage' ? `${coupon.discount_value}% OFF` : `₹${coupon.discount_value / 100} OFF`}
+                      {coupon.discount_type === 'percentage' ? `${coupon.discount_value}% OFF` : `₹${fromCents(coupon.discount_value)} OFF`}
                     </div>
                     <h4 className="font-semibold">{coupon.description || `Special Discount`}</h4>
                     {coupon.min_order_cents > 0 && (

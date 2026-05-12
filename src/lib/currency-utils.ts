@@ -2,6 +2,7 @@
  * Shared currency utilities for the admin panel.
  * Centralizes symbol mapping and example formatting to avoid duplication.
  */
+import { fromCents } from "./formatting";
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   INR: "₹",
@@ -36,5 +37,5 @@ export function getCurrencyExample(currencyCode: string = "INR"): string {
     CNY: { amount: 1000, symbol: "¥" },
   };
   const ex = examples[currencyCode] || examples["INR"];
-  return `${ex.amount} = ${ex.symbol}${(ex.amount / 100).toFixed(2)}`;
+  return `${ex.amount} = ${ex.symbol}${fromCents(ex.amount).toFixed(2)}`;
 }

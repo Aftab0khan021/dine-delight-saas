@@ -20,7 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { formatMoney } from "@/lib/formatting";
+import { formatMoney, toCents, fromCents } from "@/lib/formatting";
 import { getCurrencySymbol } from "@/lib/currency-utils";
 import { FeatureGate } from "../components/FeatureGate";
 
@@ -137,8 +137,8 @@ function CouponsContent() {
             setLoyaltyRedeemRate(s.loyalty_config?.points_to_currency ?? 10);
             setLoyaltyMinRedeem(s.loyalty_config?.min_redeem_points ?? 100);
             setReferralEnabled(!!s.referral_config?.enabled);
-            setReferrerReward(Math.round((s.referral_config?.referrer_reward_cents ?? 5000) / 100));
-            setRefereeReward(Math.round((s.referral_config?.referee_reward_cents ?? 2500) / 100));
+            setReferrerReward(fromCents(s.referral_config?.referrer_reward_cents ?? 5000));
+            setRefereeReward(fromCents(s.referral_config?.referee_reward_cents ?? 2500));
         },
     } as any);
 
@@ -160,8 +160,8 @@ function CouponsContent() {
                         },
                         referral_config: {
                             enabled: referralEnabled,
-                            referrer_reward_cents: referrerReward * 100,
-                            referee_reward_cents: refereeReward * 100,
+                            referrer_reward_cents: toCents(referrerReward),
+                            referee_reward_cents: toCents(refereeReward),
                         },
                     },
                 } as any)
@@ -218,9 +218,9 @@ function CouponsContent() {
                 description: values.description,
                 discount_type: values.discount_type,
                 discount_value: values.discount_type === 'fixed'
-                    ? Math.round(values.discount_value * 100) // Convert major units to minor units (e.g. rupees to paise, dollars to cents)
+                    ? toCents(values.discount_value)
                     : values.discount_value, // percentage as is
-                min_order_cents: Math.round(values.min_order_value * 100),
+                min_order_cents: toCents(values.min_order_value),
                 usage_limit: values.usage_limit || null,
                 is_active: values.is_active,
             };
@@ -278,9 +278,9 @@ function CouponsContent() {
             description: coupon.description || "",
             discount_type: coupon.discount_type,
             discount_value: coupon.discount_type === 'fixed'
-                ? coupon.discount_value / 100
+                ? fromCents(coupon.discount_value)
                 : coupon.discount_value,
-            min_order_value: (coupon.min_order_cents || 0) / 100,
+            min_order_value: fromCents(coupon.min_order_cents || 0),
             usage_limit: coupon.usage_limit || undefined,
             is_active: coupon.is_active,
         });

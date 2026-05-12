@@ -17,7 +17,7 @@ import {
   Star, Menu as MenuIcon, ArrowRight, Rocket, Smartphone,
   Shield, Globe, Sparkles,
 } from "lucide-react";
-import { formatMoney } from "@/lib/formatting";
+import { formatMoney, fromCents } from "@/lib/formatting";
 
 /* ------------------------------------------------------------------ */
 /*  DATA                                                               */
@@ -199,7 +199,7 @@ export default function Home() {
 
   const restaurantCount = useCountUp(stats?.restaurants || 0, 1500, statsVisible);
   const orderCount = useCountUp(stats?.orders || 0, 1500, statsVisible);
-  const revenueCount = useCountUp(Math.round((stats?.revenue || 0) / 100), 1500, statsVisible);
+  const revenueCount = useCountUp(Math.round(fromCents(stats?.revenue || 0)), 1500, statsVisible);
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">

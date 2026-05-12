@@ -8,7 +8,7 @@ import { Loader2, Upload, Link as LinkIcon, Image as ImageIcon, X } from "lucide
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
-
+import { fromCents, toCents } from "@/lib/formatting";
 import {
   Drawer,
   DrawerContent,
@@ -83,7 +83,7 @@ export default function MenuItemEditorDrawer({
         form.reset({
           name: itemToEdit.name,
           description: itemToEdit.description || "",
-          price: itemToEdit.price_cents / 100,
+          price: fromCents(itemToEdit.price_cents),
           category_id: itemToEdit.category_id || "uncategorized",
           is_active: itemToEdit.is_active,
           image_url: itemToEdit.image_url,
@@ -154,7 +154,7 @@ export default function MenuItemEditorDrawer({
         restaurant_id: restaurant.id,
         name: values.name,
         description: values.description || null,
-        price_cents: Math.round(values.price * 100),
+        price_cents: toCents(values.price),
         category_id: values.category_id === "uncategorized" ? null : values.category_id,
         is_active: values.is_active,
         image_url: values.image_url,

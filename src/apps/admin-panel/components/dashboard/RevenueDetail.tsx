@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { subDays, subWeeks, startOfDay, startOfWeek, startOfMonth, format, eachDayOfInterval, eachHourOfInterval, addDays } from "date-fns";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
-import { formatMoney } from "@/lib/formatting";
+import { formatMoney, fromCents } from "@/lib/formatting";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -90,7 +90,7 @@ export function RevenueDetail({ restaurantId, currency, onClose }: Props) {
         return format(d, "yyyy-MM-dd") === b.key;
       });
       const rev = bucketOrders.reduce((s, o) => s + (o.total_cents ?? 0), 0);
-      return { name: b.label, revenue: rev / 100, orders: bucketOrders.length };
+      return { name: b.label, revenue: rev, orders: bucketOrders.length };
     });
 
     return { chartData: chart, totalRevenue: total, orderCount: items.length, avgOrder: avg, completedCount: completed.length };
@@ -162,10 +162,10 @@ export function RevenueDetail({ restaurantId, currency, onClose }: Props) {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" />
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} className="text-muted-foreground" />
-                <YAxis tick={{ fontSize: 11 }} className="text-muted-foreground" />
+                <YAxis tick={{ fontSize: 11 }} className="text-muted-foreground" tickFormatter={(val: number) => `${fromCents(val).toFixed(0)}`} />
                 <Tooltip
                   contentStyle={{ borderRadius: 12, fontSize: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
-                  formatter={(val: number) => [formatMoney(val * 100, currency), "Revenue"]}
+                  formatter={(val: number) => [formatMoney(val, currency), "Revenue"]}
                 />
                 <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" fill="url(#revGrad)" strokeWidth={2} />
               </AreaChart>

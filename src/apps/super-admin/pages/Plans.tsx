@@ -47,6 +47,7 @@ import {
 import { Plus, Edit, Check, X, Code, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { fromCents, toCents } from "@/lib/formatting";
 import { SubscriptionPlan, PlanFeatures } from "../types/super-admin";
 import { FEATURE_DEFINITIONS, FEATURE_CATEGORIES, getDefaultFeatures } from "../lib/features";
 
@@ -211,7 +212,7 @@ export default function Plans() {
             style: 'currency',
             currency: 'INR',
             minimumFractionDigits: 0,
-        }).format(cents / 100);
+        }).format(fromCents(cents));
     };
 
     return (
@@ -280,8 +281,8 @@ export default function Plans() {
                                     <Input
                                         id="price"
                                         type="number"
-                                        value={formData.price_cents / 100}
-                                        onChange={(e) => setFormData({ ...formData, price_cents: Math.round(parseFloat(e.target.value) * 100) })}
+                                        value={fromCents(formData.price_cents)}
+                                        onChange={(e) => setFormData({ ...formData, price_cents: toCents(e.target.value) })}
                                         placeholder="29.00"
                                         step="0.01"
                                         required
@@ -292,8 +293,8 @@ export default function Plans() {
                                     <Input
                                         id="yearly_price"
                                         type="number"
-                                        value={formData.yearly_price_cents / 100}
-                                        onChange={(e) => setFormData({ ...formData, yearly_price_cents: Math.round(parseFloat(e.target.value) * 100) })}
+                                        value={fromCents(formData.yearly_price_cents)}
+                                        onChange={(e) => setFormData({ ...formData, yearly_price_cents: toCents(e.target.value) })}
                                         placeholder="290.00"
                                         step="0.01"
                                     />

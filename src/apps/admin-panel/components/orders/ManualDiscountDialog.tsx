@@ -9,6 +9,7 @@ import { Percent, DollarSign, Tag } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
+import { toCents } from "@/lib/formatting";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -61,7 +62,7 @@ export function ManualDiscountDialog({ orderId, orderTotalCents, trigger }: Manu
             if (values.type === "percentage") {
                 discountCents = Math.round(orderTotalCents * (values.value / 100));
             } else {
-                discountCents = Math.round(values.value * 100);
+                discountCents = toCents(values.value);
             }
 
             // Prevent discount > total

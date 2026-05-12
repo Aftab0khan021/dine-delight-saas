@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { fromCents } from "@/lib/formatting";
 
 interface RevenueDataPoint {
     month: string;
@@ -36,7 +37,7 @@ export function RevenueChart({ data, isLoading }: RevenueChartProps) {
             currency: 'INR',
             minimumFractionDigits: 0,
             maximumFractionDigits: 0,
-        }).format(value / 100);
+        }).format(fromCents(value));
     };
 
     return (

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { BarChart3, TrendingUp, Clock, Users, Star, Brain, Lightbulb, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { formatMoney } from "@/lib/formatting";
+import { formatMoney, fromCents } from "@/lib/formatting";
 import { format, subDays, startOfDay, getHours, getDay } from "date-fns";
 import OrderHeatmap from "../components/OrderHeatmap";
 import { forecastDemandFree, forecastDemand, type DemandForecast } from "../lib/ai-utils";
@@ -63,7 +63,7 @@ function AnalyticsContent() {
         if (dailyMap[key] !== undefined) dailyMap[key] += (o.total_cents || 0);
       }
     });
-    return Object.entries(dailyMap).map(([date, cents]) => ({ date, revenue: Math.round(cents / 100) }));
+    return Object.entries(dailyMap).map(([date, cents]) => ({ date, revenue: Math.round(fromCents(cents)) }));
   }, [orders]);
 
   // Peak hours heatmap data (day × hour)
@@ -92,7 +92,7 @@ function AnalyticsContent() {
         if (dailyTotals[key]) { dailyTotals[key].sum += (o.total_cents || 0); dailyTotals[key].count++; }
       }
     });
-    return Object.entries(dailyTotals).map(([date, v]) => ({ date, aov: v.count > 0 ? Math.round(v.sum / v.count / 100) : 0 }));
+    return Object.entries(dailyTotals).map(([date, v]) => ({ date, aov: v.count > 0 ? Math.round(fromCents(v.sum / v.count)) : 0 }));
   }, [orders]);
 
   // Customer retention

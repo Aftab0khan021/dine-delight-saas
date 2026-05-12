@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { getCurrencySymbol } from "@/lib/currency-utils";
+import { fromCents, toCents } from "@/lib/formatting";
 
 interface Variant {
     id?: string;
@@ -187,7 +188,7 @@ export function VariantEditor({ menuItemId, restaurantId, maxVariants = 5 }: Var
                                 <div>
                                     <div className="text-sm font-medium">{variant.name}</div>
                                     <div className="text-xs text-muted-foreground">
-                                        {getCurrencySymbol(currencyCode)}{(variant.price_cents / 100).toFixed(2)}
+                                        {getCurrencySymbol(currencyCode)}{fromCents(variant.price_cents).toFixed(2)}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2 justify-end">
@@ -245,9 +246,9 @@ export function VariantEditor({ menuItemId, restaurantId, maxVariants = 5 }: Var
                                     step="0.01"
                                     min="0"
                                     placeholder="0.00"
-                                    value={newVariant.price_cents / 100}
+                                    value={fromCents(newVariant.price_cents)}
                                     onChange={(e) =>
-                                        setNewVariant({ ...newVariant, price_cents: Math.round(parseFloat(e.target.value || "0") * 100) })
+                                        setNewVariant({ ...newVariant, price_cents: toCents(e.target.value || "0") })
                                     }
                                 />
                             </div>

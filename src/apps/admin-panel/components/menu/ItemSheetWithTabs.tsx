@@ -1,4 +1,5 @@
 import { getCurrencySymbol, getCurrencyExample } from "@/lib/currency-utils";
+import { fromCents, toCents } from "@/lib/formatting";
 
 // --- Subcomponent: Item Sheet with Tabs ---
 function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave, onDelete }: any) {
@@ -58,7 +59,7 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
             form.reset({
                 name: data?.name || "",
                 description: data?.description || "",
-                price_dollars: (data?.price_cents || 0) / 100,
+                price_dollars: fromCents(data?.price_cents || 0),
                 category_id: data?.category_id || (categories.length > 0 ? categories[0].id : ""),
                 image_url: data?.image_url || "",
                 is_active: data?.is_active ?? true
@@ -67,7 +68,7 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, onSave,
     }, [open, data, categories]);
 
     const onSubmit = (values: any) => {
-        const price_cents = Math.round(parseFloat(values.price_dollars || "0") * 100);
+        const price_cents = toCents(values.price_dollars || "0");
         onSave({ ...values, price_cents });
     };
 

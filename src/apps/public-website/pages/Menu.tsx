@@ -29,7 +29,7 @@ import { TablePresence } from "../components/TablePresence";
 import { SplitBillView } from "../components/SplitBillView";
 import { Turnstile } from "@/components/security/Turnstile";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
-import { formatMoney } from "@/lib/formatting";
+import { formatMoney, toCents } from "@/lib/formatting";
 import { usePublicFeatureAccess } from "../hooks/usePublicFeatureAccess";
 import confetti from "canvas-confetti";
 
@@ -248,9 +248,9 @@ export default function PublicMenu() {
   const [tipPercent, setTipPercent] = useState<number>(0);
   const [tipAmount, setTipAmount] = useState<number>(0);
   const tipCents = tipConfig?.mode === 'amount'
-    ? tipAmount * 100
+    ? toCents(tipAmount)
     : tipConfig?.mode === 'both'
-      ? (tipPercent > 0 ? Math.round((activeCart.subtotalCents * tipPercent) / 100) : tipAmount * 100)
+      ? (tipPercent > 0 ? Math.round((activeCart.subtotalCents * tipPercent) / 100) : toCents(tipAmount))
       : Math.round((activeCart.subtotalCents * tipPercent) / 100);
 
 
@@ -274,7 +274,7 @@ export default function PublicMenu() {
       label: c.label,
       cents: c.type === 'percentage'
         ? Math.round(activeCart.subtotalCents * c.value / 100)
-        : Math.round(c.value * 100), // flat amount in rupees → cents
+        : toCents(c.value), // flat amount in rupees → cents
     }));
   }, [billCharges, activeCart.subtotalCents]);
 
@@ -1778,7 +1778,7 @@ export default function PublicMenu() {
                     </p>
                     {loyaltyPoints !== null && loyaltyPoints >= loyaltyConfig.min_redeem_points && (
                       <p className="text-[11px] text-green-600 font-medium">
-                        ✓ You can redeem {loyaltyConfig.min_redeem_points} pts for {formatMoney(Math.round((loyaltyConfig.min_redeem_points / loyaltyConfig.points_to_currency) * 100), currencyCode)} off!
+                        ✓ You can redeem {loyaltyConfig.min_redeem_points} pts for {formatMoney(toCents(loyaltyConfig.min_redeem_points / loyaltyConfig.points_to_currency), currencyCode)} off!
                       </p>
                     )}
                   </div>

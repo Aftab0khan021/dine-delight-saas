@@ -55,6 +55,7 @@ import { formatDistanceToNow, format, addMonths, addYears } from "date-fns";
 import { FeatureAccessMatrix } from "../components/FeatureAccessMatrix";
 import { FeatureLimitIndicator } from "../components/FeatureLimitIndicator";
 import { getFeatureDefinition, getLimitFeatures } from "../lib/features";
+import { fromCents } from "@/lib/formatting";
 
 export default function RestaurantDetails() {
     const { id } = useParams<{ id: string }>();
@@ -711,7 +712,7 @@ export default function RestaurantDetails() {
                                     </p>
                                     <p className="text-sm text-muted-foreground">
                                         {subscription.subscription_plans?.price_cents &&
-                                            `$${(subscription.subscription_plans.price_cents / 100).toFixed(2)}/${subscription.subscription_plans.billing_period
+                                            `$${fromCents(subscription.subscription_plans.price_cents).toFixed(2)}/${subscription.subscription_plans.billing_period
                                             }`}
                                     </p>
                                 </div>
@@ -770,7 +771,7 @@ export default function RestaurantDetails() {
                                             <SelectContent>
                                                 {availablePlans?.map((p: any) => (
                                                     <SelectItem key={p.id} value={p.id}>
-                                                        {p.name} — ₹{(p.price_cents / 100).toFixed(0)}/{p.billing_period}
+                                                        {p.name} — ₹{fromCents(p.price_cents).toFixed(0)}/{p.billing_period}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
@@ -830,7 +831,7 @@ export default function RestaurantDetails() {
                                 Total Revenue
                             </label>
                             <p className="text-2xl font-bold">
-                                ${((stats?.totalRevenue || 0) / 100).toFixed(2)}
+                                ${fromCents(stats?.totalRevenue || 0).toFixed(2)}
                             </p>
                         </div>
                         <Separator />

@@ -52,6 +52,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow, format, addMonths, addYears } from "date-fns";
+import { fromCents } from "@/lib/formatting";
 
 interface Subscription {
   id: string;
@@ -304,7 +305,7 @@ export default function Subscriptions() {
       style: 'currency',
       currency: 'INR',
       minimumFractionDigits: 0,
-    }).format(cents / 100);
+    }).format(fromCents(cents));
   };
 
   const totalPages = Math.ceil((subscriptionsData?.total || 0) / pageSize);
