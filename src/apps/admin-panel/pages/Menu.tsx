@@ -51,7 +51,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { VariantEditor } from "../components/menu/VariantEditor";
 import { AddonEditor } from "../components/menu/AddonEditor";
-import { formatMoney } from "@/lib/formatting";
+import { formatMoney, toCents, fromCents } from "@/lib/formatting";
 
 // --- Types ---
 type CategoryRow = {
@@ -82,7 +82,7 @@ type MenuItemRow = {
   translations?: Record<string, any>;
 };
 
-import { getCurrencyExample } from "@/lib/currency-utils";
+import { getCurrencySymbol, getCurrencyExample } from "@/lib/currency-utils";
 
 export default function AdminMenu() {
   const { restaurant } = useRestaurantContext();
@@ -267,7 +267,7 @@ export default function AdminMenu() {
       const payload = {
         name: values.name,
         description: values.description,
-        price_cents: Number(values.price_cents),
+        price_cents: toCents(values.price_cents),
         category_id: values.category_id === "" ? null : values.category_id,
         image_url: values.image_url || null,
         is_active: values.is_active,
@@ -276,7 +276,7 @@ export default function AdminMenu() {
         tags: values.tags || [],
         spice_level: values.spice_level != null ? Number(values.spice_level) : null,
         allergens: values.allergens || [],
-        packaging_charge_cents: Number(values.packaging_charge_cents) || 0,
+        packaging_charge_cents: toCents(values.packaging_charge_cents),
         additional_images: values.additional_images || [],
         restaurant_id: restaurant!.id
       };
@@ -841,7 +841,7 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currenc
       form.reset({
         name: data?.name || "",
         description: data?.description || "",
-        price_cents: data?.price_cents || 0,
+        price_cents: fromCents(data?.price_cents || 0),
         category_id: data?.category_id || (categories && categories.length > 0 ? categories[0].id : ""),
         image_url: data?.image_url || "",
         is_active: data?.is_active ?? true,
@@ -850,13 +850,13 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currenc
         tags: data?.tags || [],
         spice_level: data?.spice_level ?? 0,
         allergens: data?.allergens || [],
-        packaging_charge_cents: data?.packaging_charge_cents || 0,
+        packaging_charge_cents: fromCents(data?.packaging_charge_cents || 0),
         additional_images: data?.additional_images || [],
       });
     }
   }, [open, data, categories]);
 
-  const onSubmit = (values: any) => onSave({ ...values, price_cents: Number(values.price_cents), additional_images: values.additional_images || [] });
+  const onSubmit = (values: any) => onSave({ ...values, price_cents: values.price_cents, additional_images: values.additional_images || [] });
 
   // Upload handler for additional images
   const handleAdditionalImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -916,9 +916,9 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currenc
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Price (Cents)</Label>
-              <Input type="number" {...form.register("price_cents", { required: true })} />
-              <div className="text-xs text-muted-foreground">{getCurrencyExample(currencyCode)} (enter amount in paise/cents)</div>
+              <Label>Price ({getCurrencySymbol(currencyCode)})</Label>
+              <Input type="number" step="0.01" placeholder="e.g. 100 or 99.50" {...form.register("price_cents", { required: true })} />
+              <div className="text-xs text-muted-foreground">Enter price as you'd charge. E.g. 100 = {getCurrencySymbol(currencyCode)}100</div>
             </div>
             <div className="space-y-2">
               <Label>Category</Label>
@@ -1039,8 +1039,8 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currenc
 
             {/* Packaging Charge */}
             <div className="space-y-2">
-              <Label>Packaging Charge (paise)</Label>
-              <Input type="number" {...form.register('packaging_charge_cents')} placeholder="0" />
+              <Label>Packaging Charge ({getCurrencySymbol(currencyCode)})</Label>
+              <Input type="number" step="0.01" {...form.register('packaging_charge_cents')} placeholder="0" />
             </div>
           </div>
 

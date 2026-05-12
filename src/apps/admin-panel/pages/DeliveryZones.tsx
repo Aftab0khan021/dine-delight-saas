@@ -11,7 +11,8 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { MapPin, Plus, Trash2, Edit2, Save, X } from "lucide-react";
-import { formatMoney } from "@/lib/formatting";
+import { formatMoney, toCents, fromCents } from "@/lib/formatting";
+import { getCurrencySymbol } from "@/lib/currency-utils";
 
 export default function DeliveryZones() {
   return (
@@ -50,8 +51,8 @@ function DeliveryZonesContent() {
         restaurant_id: restaurant!.id,
         name: form.name.trim(),
         radius_km: parseFloat(form.radius_km) || 5,
-        delivery_charge_cents: parseInt(form.delivery_charge_cents) || 0,
-        min_order_cents: parseInt(form.min_order_cents) || 0,
+        delivery_charge_cents: toCents(form.delivery_charge_cents),
+        min_order_cents: toCents(form.min_order_cents),
         est_time_mins: parseInt(form.est_time_mins) || 30,
       };
       if (editId) {
@@ -99,8 +100,8 @@ function DeliveryZonesContent() {
     setForm({
       name: z.name,
       radius_km: String(z.radius_km),
-      delivery_charge_cents: String(z.delivery_charge_cents),
-      min_order_cents: String(z.min_order_cents),
+      delivery_charge_cents: String(fromCents(z.delivery_charge_cents)),
+      min_order_cents: String(fromCents(z.min_order_cents)),
       est_time_mins: String(z.est_time_mins),
     });
     setEditId(z.id);
@@ -124,8 +125,8 @@ function DeliveryZonesContent() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <div className="space-y-2"><Label>Zone Name</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Downtown, Suburbs" /></div>
               <div className="space-y-2"><Label>Radius (km)</Label><Input type="number" step="0.5" value={form.radius_km} onChange={e => setForm({ ...form, radius_km: e.target.value })} /></div>
-              <div className="space-y-2"><Label>Delivery Charge (paise)</Label><Input type="number" value={form.delivery_charge_cents} onChange={e => setForm({ ...form, delivery_charge_cents: e.target.value })} /></div>
-              <div className="space-y-2"><Label>Min Order (paise)</Label><Input type="number" value={form.min_order_cents} onChange={e => setForm({ ...form, min_order_cents: e.target.value })} /></div>
+              <div className="space-y-2"><Label>Delivery Charge ({getCurrencySymbol(cc)})</Label><Input type="number" step="0.01" placeholder="e.g. 50" value={form.delivery_charge_cents} onChange={e => setForm({ ...form, delivery_charge_cents: e.target.value })} /></div>
+              <div className="space-y-2"><Label>Min Order ({getCurrencySymbol(cc)})</Label><Input type="number" step="0.01" placeholder="e.g. 200" value={form.min_order_cents} onChange={e => setForm({ ...form, min_order_cents: e.target.value })} /></div>
               <div className="space-y-2"><Label>Est. Time (mins)</Label><Input type="number" value={form.est_time_mins} onChange={e => setForm({ ...form, est_time_mins: e.target.value })} /></div>
             </div>
             <div className="flex gap-2">

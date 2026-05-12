@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Plus, Package, AlertTriangle, ArrowUpDown, RefreshCw, Link2, Unlink, History } from "lucide-react";
+import { toCents } from "@/lib/formatting";
 
 const UNITS = ["pcs", "g", "kg", "ml", "L", "cups", "tbsp", "tsp", "oz", "lb"];
 
@@ -113,7 +114,7 @@ function InventoryContent() {
         restaurant_id: restaurant!.id, name: form.name.trim(), unit: form.unit,
         current_stock: parseFloat(form.current_stock) || 0,
         low_stock_threshold: parseFloat(form.low_stock_threshold) || 0,
-        cost_per_unit_cents: parseInt(form.cost_per_unit_cents) || 0,
+        cost_per_unit_cents: toCents(form.cost_per_unit_cents),
       });
       if (error) throw error;
     },
