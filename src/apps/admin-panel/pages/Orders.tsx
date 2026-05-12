@@ -544,8 +544,22 @@ export default function AdminOrders() {
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
       const matchesSearch = search
-        ? shortId(o.id).toLowerCase().includes(search.toLowerCase()) ||
-          o.table_label?.toLowerCase().includes(search.toLowerCase())
+        ? (() => {
+            const q = search.toLowerCase();
+            // Match against token number (e.g. "token 1", "#1", "1")
+            const tokenStr = o.dailyToken ? `token #${o.dailyToken}` : '';
+            if (tokenStr && tokenStr.includes(q)) return true;
+            if (o.dailyToken && String(o.dailyToken) === q.replace(/[^0-9]/g, '')) return true;
+            // Match against short order ID
+            if (shortId(o.id).toLowerCase().includes(q)) return true;
+            // Match against table label
+            if (o.table_label?.toLowerCase().includes(q)) return true;
+            // Match against items summary
+            if (o.items_summary?.toLowerCase().includes(q)) return true;
+            // Match against order type (dine_in, delivery, takeaway)
+            if (o.order_type?.toLowerCase().includes(q)) return true;
+            return false;
+          })()
         : true;
       const uiStatus = STATUS_MAP[o.status as OrderStatus];
       const matchesStatus = statusFilter === "all" ? true : uiStatus === statusFilter;
@@ -648,7 +662,7 @@ export default function AdminOrders() {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by Order ID or Table..."
+                placeholder="Search by token, table, or item..."
                 className="pl-9"
               />
             </div>

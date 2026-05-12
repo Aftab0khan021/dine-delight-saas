@@ -182,7 +182,7 @@ export default function AdminMenu() {
       result = result.filter(i => i.category_id === selectedCatId);
     }
     if (s) {
-      result = result.filter(i => i.name.toLowerCase().includes(s));
+      result = result.filter(i => i.name.toLowerCase().includes(s) || i.description?.toLowerCase().includes(s));
     }
     return result;
   }, [items, search, selectedCatId]);
