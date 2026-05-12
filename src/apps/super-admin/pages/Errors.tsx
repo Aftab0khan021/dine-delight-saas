@@ -50,7 +50,7 @@ export default function SuperAdminErrors() {
     const [statusFilter, setStatusFilter] = useState<ErrorStatus | "all">("all");
 
     // Fetch errors
-    const { data: errors, isLoading, isError, refetch } = useQuery({
+    const { data: errors, isLoading, isError, isFetching, refetch } = useQuery({
         queryKey: ["superadmin", "error-logs", errorTypeFilter, severityFilter, statusFilter],
         queryFn: async () => {
             let query = supabase
@@ -131,7 +131,7 @@ export default function SuperAdminErrors() {
                 </div>
                 <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={() => refetch()}>
-                        <RefreshCw className="h-4 w-4 mr-2" />
+                        <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
                         Refresh
                     </Button>
                     <Button variant="outline" size="sm" onClick={handleExport}>

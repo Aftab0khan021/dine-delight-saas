@@ -84,7 +84,7 @@ function ReviewsContent() {
           <p className="text-muted-foreground mt-1">Manage reviews left by customers on your restaurant profile.</p>
         </div>
         <Button variant="outline" size="icon" onClick={() => qc.invalidateQueries({ queryKey: ["admin", "reviews"] })} title="Refresh reviews">
-          <RefreshCw className="h-4 w-4" />
+          <RefreshCw className={`h-4 w-4 ${reviewsQuery.isFetching ? 'animate-spin' : ''}`} />
         </Button>
       </div>
 

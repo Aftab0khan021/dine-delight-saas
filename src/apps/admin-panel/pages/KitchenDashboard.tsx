@@ -211,7 +211,7 @@ function KitchenDashboardContent() {
             </SelectContent>
           </Select>
           <Button variant="outline" size="sm" onClick={() => qc.invalidateQueries({ queryKey: ["kitchen-orders"] })}>
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw className={`h-4 w-4 ${ordersQuery.isFetching ? 'animate-spin' : ''}`} />
           </Button>
         </div>
       </section>

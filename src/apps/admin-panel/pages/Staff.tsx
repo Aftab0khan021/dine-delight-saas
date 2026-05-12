@@ -319,7 +319,7 @@ export default function AdminStaff() {
 
         <div className="flex gap-2">
           <Button variant="outline" size="icon" onClick={() => qc.invalidateQueries({ queryKey: ["admin", "staff"] })} title="Refresh staff">
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw className={`h-4 w-4 ${staffQuery.isFetching || invitesQuery.isFetching ? 'animate-spin' : ''}`} />
           </Button>
           <Button disabled={isAtLimit} onClick={() => setInviteOpen(true)}>
             <UserPlus className="mr-2 h-4 w-4" /> Invite staff

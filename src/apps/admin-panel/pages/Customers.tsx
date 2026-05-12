@@ -26,7 +26,7 @@ function CustomersContent() {
   const [search, setSearch] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
 
-  const { data: customers = [], isLoading } = useQuery({
+  const { data: customers = [], isLoading, isFetching } = useQuery({
     queryKey: ["admin-customers", restaurant?.id],
     enabled: !!restaurant?.id,
     queryFn: async () => {
@@ -109,7 +109,7 @@ function CustomersContent() {
           <p className="text-sm text-muted-foreground">View all customers, lifetime value, and order history</p>
         </div>
         <Button variant="outline" size="icon" onClick={() => qc.invalidateQueries({ queryKey: ["admin-customers"] })} title="Refresh customers">
-          <RefreshCw className="h-4 w-4" />
+          <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
         </Button>
       </header>
 

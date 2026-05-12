@@ -134,7 +134,7 @@ export default function Users() {
     const pageSize = 50;
 
     // Fetch all users with their roles
-    const { data: users, isLoading } = useQuery({
+    const { data: users, isLoading, isFetching } = useQuery({
         queryKey: ["super-admin", "users", page],
         queryFn: async () => {
             // Get all profiles with user roles
@@ -377,7 +377,7 @@ export default function Users() {
                 </div>
                 <div className="flex gap-2">
                     <Button variant="outline" size="icon" onClick={() => queryClient.invalidateQueries({ queryKey: ["super-admin", "users"] })} title="Refresh users">
-                        <RefreshCw className="h-4 w-4" />
+                        <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
                     </Button>
                     <Button variant="outline" size="icon" onClick={() => {
                         if (!filteredUsers.length) return;

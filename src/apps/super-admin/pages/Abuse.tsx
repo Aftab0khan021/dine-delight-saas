@@ -85,7 +85,7 @@ export default function SuperAdminAbuse() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Fetch abuse detections
-  const { data, isLoading, isError, error, refetch } = useQuery({
+  const { data, isLoading, isError, error, isFetching, refetch } = useQuery({
     queryKey: ["superadmin", "abuse-detections", severityFilter, patternFilter, statusFilter],
     queryFn: async () => {
       let query = supabase
@@ -375,7 +375,7 @@ export default function SuperAdminAbuse() {
             onClick={() => refetch()}
             disabled={isLoading}
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
             Refresh
           </Button>
           <Button

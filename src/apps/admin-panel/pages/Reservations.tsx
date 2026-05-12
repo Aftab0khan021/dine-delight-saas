@@ -43,7 +43,7 @@ function ReservationsContent() {
   const [page, setPage] = useState(0);
   const ITEMS_PER_PAGE = 20;
 
-  const { data: reservations, isLoading } = useQuery({
+  const { data: reservations, isLoading, isFetching } = useQuery({
     queryKey: ["admin", "reservations", restaurant?.id, dateFilter],
     enabled: !!restaurant?.id,
     queryFn: async () => {
@@ -119,7 +119,7 @@ function ReservationsContent() {
           <p className="text-sm text-muted-foreground">Manage table bookings from your customers</p>
         </div>
         <Button variant="outline" size="icon" onClick={() => qc.invalidateQueries({ queryKey: ["admin", "reservations"] })} title="Refresh reservations">
-          <RefreshCw className="h-4 w-4" />
+          <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
         </Button>
       </div>
 

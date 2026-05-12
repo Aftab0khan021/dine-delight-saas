@@ -133,7 +133,7 @@ export default function AIProvidersPage() {
                     </p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => { setLoading(true); fetchProviders(); }}>
-                    <RefreshCw className="w-4 h-4 mr-2" /> Refresh
+                    <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Refresh
                 </Button>
             </div>
 

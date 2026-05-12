@@ -409,8 +409,8 @@ export default function AdminMenu() {
         </div>
         <div className="flex flex-wrap gap-2">
           {/* Add Refresh Button for troubleshooting */}
-          <Button variant="outline" size="icon" onClick={() => qc.invalidateQueries({ queryKey: ["admin", "menu"] })}>
-            <RefreshCw className="h-4 w-4" />
+          <Button variant="outline" size="icon" onClick={() => qc.invalidateQueries({ queryKey: ["admin", "menu"] })} title="Refresh menu">
+            <RefreshCw className={`h-4 w-4 ${categoriesQuery.isFetching || itemsQuery.isFetching ? 'animate-spin' : ''}`} />
           </Button>
           <Button variant="secondary" onClick={() => { setEditCat(null); setCatSheetOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" /> Add Category

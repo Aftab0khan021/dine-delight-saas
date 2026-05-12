@@ -158,8 +158,8 @@ export default function AdminDashboard() {
           <p className="mt-1 text-sm text-muted-foreground">A clear snapshot of today.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="icon" onClick={() => { qc.invalidateQueries({ queryKey: ["admin", "dashboard"] }); qc.invalidateQueries({ queryKey: ["admin", "orders"] }); }} title="Refresh dashboard">
-            <RefreshCw className="h-4 w-4" />
+          <Button variant="outline" size="icon" onClick={() => { qc.invalidateQueries({ queryKey: ["dashboard"] }); }} title="Refresh dashboard">
+            <RefreshCw className={`h-4 w-4 ${todayOrdersQ.isFetching || latestOrdersQ.isFetching ? 'animate-spin' : ''}`} />
           </Button>
           {canViewOrders && (
             <Button variant="secondary" asChild><Link to="/admin/orders">View orders <ArrowUpRight className="ml-2 h-4 w-4" /></Link></Button>

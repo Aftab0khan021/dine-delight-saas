@@ -610,7 +610,7 @@ export default function AdminOrders() {
             </Button>
 
             <Button variant="outline" size="icon" onClick={() => qc.invalidateQueries({ queryKey: ["admin", "orders"] })} title="Refresh orders">
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className={`h-4 w-4 ${ordersQuery.isFetching ? 'animate-spin' : ''}`} />
             </Button>
           </div>
         </div>
