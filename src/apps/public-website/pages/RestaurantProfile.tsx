@@ -700,7 +700,7 @@ export default function RestaurantProfile() {
             maxLength={1000}
           />
           <div className="flex justify-center">
-            <Turnstile onVerify={setReviewTurnstileToken} />
+            <Turnstile onSuccess={setReviewTurnstileToken} />
           </div>
           <Button className="w-full" disabled={!reviewName.trim() || reviewRating < 1 || reviewSubmitting || !reviewTurnstileToken} onClick={submitReview}>
             {reviewSubmitting ? "Submitting..." : "Submit Review"}

@@ -665,18 +665,28 @@ export default function AdminBranding() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Primary Color</Label>
-                  <div className="flex gap-2">
-                    <div className="h-9 w-9 rounded border shadow-sm shrink-0" style={{ backgroundColor: w.primary_color || "#000000" }} />
-                    <Input {...form.register("primary_color")} placeholder="#000000" />
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="color"
+                      value={w.primary_color || "#000000"}
+                      onChange={e => form.setValue("primary_color", e.target.value, { shouldDirty: true })}
+                      className="h-9 w-9 rounded border shadow-sm shrink-0 cursor-pointer p-0.5"
+                    />
+                    <Input {...form.register("primary_color")} placeholder="#000000" className="font-mono" />
                   </div>
                   {form.formState.errors.primary_color && <p className="text-xs text-destructive">{form.formState.errors.primary_color.message}</p>}
                 </div>
 
                 <div className="space-y-2">
                   <Label>Accent Color</Label>
-                  <div className="flex gap-2">
-                    <div className="h-9 w-9 rounded border shadow-sm shrink-0" style={{ backgroundColor: w.accent_color || "#ffffff" }} />
-                    <Input {...form.register("accent_color")} placeholder="#ffffff" />
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="color"
+                      value={w.accent_color || "#ffffff"}
+                      onChange={e => form.setValue("accent_color", e.target.value, { shouldDirty: true })}
+                      className="h-9 w-9 rounded border shadow-sm shrink-0 cursor-pointer p-0.5"
+                    />
+                    <Input {...form.register("accent_color")} placeholder="#ffffff" className="font-mono" />
                   </div>
                   {form.formState.errors.accent_color && <p className="text-xs text-destructive">{form.formState.errors.accent_color.message}</p>}
                 </div>
