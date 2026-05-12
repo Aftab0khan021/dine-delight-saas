@@ -36,14 +36,18 @@ export default defineConfig(({ mode }) => ({
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
+        // CRITICAL: Do NOT include 'html' here — index.html must always
+        // be fetched from the network so users get the latest app version.
+        // Only cache static assets (JS/CSS/images) for performance.
+        globPatterns: ["**/*.{js,css,ico,png,svg}"],
         // Raise limit to 3 MB to accommodate code-split chunks
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
-        // Force new SW to take over immediately — no more stale cached pages
+        // Force new SW to take over immediately
         skipWaiting: true,
         clientsClaim: true,
-        // Ensure navigation requests always go to network first
-        navigateFallbackDenylist: [/^\/api/],
+        // Disable navigation fallback — let browser fetch index.html from network
+        navigateFallback: null,
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
             // Supabase / API calls — always network-first

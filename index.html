@@ -28,38 +28,67 @@
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
   <script>
-    // PWA Service Worker — update-aware registration
-    // Forces new SW to activate immediately so users always get the latest build.
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', async () => {
-        try {
-          const reg = await navigator.serviceWorker.register('/sw.js');
+    // PWA Cache Management — ensures users always get the latest version.
+    //
+    // HOW IT WORKS:
+    // 1. On page load, check a version key in localStorage
+    // 2. If version doesn't match, unregister ALL service workers,
+    //    clear ALL caches, and reload — this breaks the stale cache cycle
+    // 3. After cleanup, register the new SW normally
+    //
+    // BUMP this version string any time you need to force a cache reset:
+    var APP_CACHE_VERSION = 'v3';
 
-          // When a new SW is found waiting, tell it to skip waiting
-          reg.addEventListener('updatefound', () => {
-            const newSW = reg.installing;
+    (function() {
+      if (!('serviceWorker' in navigator)) return;
+
+      var currentVersion = localStorage.getItem('app-cache-version');
+
+      if (currentVersion !== APP_CACHE_VERSION) {
+        // Version mismatch — nuke all caches and service workers
+        Promise.all([
+          // Unregister all service workers
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            return Promise.all(regs.map(function(r) { return r.unregister(); }));
+          }),
+          // Clear all caches
+          caches.keys().then(function(keys) {
+            return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+          })
+        ]).then(function() {
+          localStorage.setItem('app-cache-version', APP_CACHE_VERSION);
+          // Only reload if there was an old SW controlling this page
+          if (currentVersion) {
+            window.location.reload();
+          }
+        }).catch(function() {
+          localStorage.setItem('app-cache-version', APP_CACHE_VERSION);
+        });
+      }
+
+      // Normal SW registration (runs after cache is clean)
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js').then(function(reg) {
+          reg.addEventListener('updatefound', function() {
+            var newSW = reg.installing;
             if (!newSW) return;
-            newSW.addEventListener('statechange', () => {
+            newSW.addEventListener('statechange', function() {
               if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
-                // New content available — force activate
                 newSW.postMessage({ type: 'SKIP_WAITING' });
               }
             });
           });
+        });
 
-          // When the controlling SW changes, reload to get fresh assets
-          let refreshing = false;
-          navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (!refreshing) {
-              refreshing = true;
-              window.location.reload();
-            }
-          });
-        } catch (err) {
-          console.warn('SW registration failed:', err);
-        }
+        var refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function() {
+          if (!refreshing) {
+            refreshing = true;
+            window.location.reload();
+          }
+        });
       });
-    }
+    })();
   </script>
 </body>
 
