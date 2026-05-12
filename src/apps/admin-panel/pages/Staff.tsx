@@ -105,23 +105,25 @@ export default function AdminStaff() {
   const [editingCategory, setEditingCategory] = useState<StaffCategory | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  // --- 1. Data Queries (From Repo B) ---
+  // --- 1. Data Queries ---
   const staffQuery = useQuery({
     queryKey: ["admin", "staff", restaurant?.id, "roles"],
     enabled: !!restaurant?.id,
     queryFn: async () => {
-      console.log("🔍 Staff query for restaurant:", restaurant!.id);
-      const { data, error } = await supabase.rpc("get_restaurant_staff", {
-        p_restaurant_id: restaurant!.id,
-      });
-      console.log("🔍 Staff query result:", { data, error, count: data?.length });
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("user_id, role, staff_category_id, profiles(full_name, email), staff_categories(id, name, color)")
+        .eq("restaurant_id", restaurant!.id)
+        .in("role", ["restaurant_admin", "user"])
+        .order("role", { ascending: true });
+
       if (error) throw error;
       return (data ?? []).map((row: any) => ({
         user_id: row.user_id,
         role: row.role,
         staff_category_id: row.staff_category_id,
-        profiles: { full_name: row.full_name, email: row.email },
-        staff_categories: row.category_name ? { id: row.staff_category_id, name: row.category_name, color: row.category_color } : null,
+        profiles: { full_name: row.profiles?.full_name || "", email: row.profiles?.email || "" },
+        staff_categories: row.staff_categories ? { id: row.staff_categories.id, name: row.staff_categories.name, color: row.staff_categories.color } : null,
       }));
     },
   });
