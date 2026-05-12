@@ -30,7 +30,7 @@ function DeliveryZonesContent() {
 
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", radius_km: "5", delivery_charge_cents: "0", min_order_cents: "0", est_time_mins: "30" });
+  const [form, setForm] = useState({ name: "", radius_km: "5", delivery_charge_cents: "0", min_order_cents: "0", est_time_mins: "30", pincodes: "" });
 
   const { data: zones = [], isLoading } = useQuery({
     queryKey: ["delivery-zones", restaurant?.id],
@@ -47,13 +47,14 @@ function DeliveryZonesContent() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const payload = {
+      const payload: any = {
         restaurant_id: restaurant!.id,
         name: form.name.trim(),
         radius_km: parseFloat(form.radius_km) || 5,
         delivery_charge_cents: toCents(form.delivery_charge_cents),
         min_order_cents: toCents(form.min_order_cents),
         est_time_mins: parseInt(form.est_time_mins) || 30,
+        pincodes: form.pincodes.trim() ? form.pincodes.split(",").map(p => p.trim()).filter(Boolean) : [],
       };
       if (editId) {
         const { error } = await supabase.from("delivery_zones").update(payload).eq("id", editId);
@@ -91,7 +92,7 @@ function DeliveryZonesContent() {
   });
 
   const resetForm = () => {
-    setForm({ name: "", radius_km: "5", delivery_charge_cents: "0", min_order_cents: "0", est_time_mins: "30" });
+    setForm({ name: "", radius_km: "5", delivery_charge_cents: "0", min_order_cents: "0", est_time_mins: "30", pincodes: "" });
     setShowForm(false);
     setEditId(null);
   };
@@ -103,6 +104,7 @@ function DeliveryZonesContent() {
       delivery_charge_cents: String(fromCents(z.delivery_charge_cents)),
       min_order_cents: String(fromCents(z.min_order_cents)),
       est_time_mins: String(z.est_time_mins),
+      pincodes: (z.pincodes || []).join(", "),
     });
     setEditId(z.id);
     setShowForm(true);
@@ -128,6 +130,7 @@ function DeliveryZonesContent() {
               <div className="space-y-2"><Label>Delivery Charge ({getCurrencySymbol(cc)})</Label><Input type="number" step="0.01" placeholder="e.g. 50" value={form.delivery_charge_cents} onChange={e => setForm({ ...form, delivery_charge_cents: e.target.value })} /></div>
               <div className="space-y-2"><Label>Min Order ({getCurrencySymbol(cc)})</Label><Input type="number" step="0.01" placeholder="e.g. 200" value={form.min_order_cents} onChange={e => setForm({ ...form, min_order_cents: e.target.value })} /></div>
               <div className="space-y-2"><Label>Est. Time (mins)</Label><Input type="number" value={form.est_time_mins} onChange={e => setForm({ ...form, est_time_mins: e.target.value })} /></div>
+              <div className="space-y-2 sm:col-span-2 lg:col-span-3"><Label>Pincodes <span className="text-muted-foreground font-normal">(comma separated)</span></Label><Input value={form.pincodes} onChange={e => setForm({ ...form, pincodes: e.target.value })} placeholder="e.g. 400001, 400002, 400003" /></div>
             </div>
             <div className="flex gap-2">
               <Button onClick={() => saveMutation.mutate()} disabled={!form.name.trim() || saveMutation.isPending}><Save className="h-4 w-4 mr-2" /> {saveMutation.isPending ? "Saving..." : "Save"}</Button>
@@ -154,6 +157,9 @@ function DeliveryZonesContent() {
                   <Badge variant="outline">Charge: {formatMoney(z.delivery_charge_cents, cc)}</Badge>
                   <Badge variant="outline">Min: {formatMoney(z.min_order_cents, cc)}</Badge>
                   <Badge variant="outline">~{z.est_time_mins} min</Badge>
+                  {z.pincodes && z.pincodes.length > 0 && (
+                    <Badge variant="outline" className="max-w-[200px] truncate">📍 {z.pincodes.join(", ")}</Badge>
+                  )}
                   <Switch checked={z.is_active} onCheckedChange={v => toggleMutation.mutate({ id: z.id, is_active: v })} />
                   <Button variant="ghost" size="icon" onClick={() => startEdit(z)}><Edit2 className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(z.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>

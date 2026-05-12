@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { TrendingUp, BarChart3, Clock, Star } from "lucide-react";
+import { TrendingUp, BarChart3, Clock, Star, Calendar } from "lucide-react";
 import { formatMoney } from "@/lib/formatting";
 
 type PopularItem = {
@@ -29,20 +29,55 @@ export default function MenuInsights() {
 function MenuInsightsContent() {
   const { restaurant } = useRestaurantContext();
   const [view, setView] = useState<"popularity" | "pairs">("popularity");
+  const [period, setPeriod] = useState<"7d" | "30d" | "90d" | "365d">("7d");
+
+  const periodLabel: Record<string, string> = { "7d": "Last 7 Days", "30d": "Last 30 Days", "90d": "Last Quarter", "365d": "Last Year" };
+
+  const getStartDate = () => {
+    const d = new Date();
+    const days = { "7d": 7, "30d": 30, "90d": 90, "365d": 365 }[period];
+    d.setDate(d.getDate() - days);
+    return d.toISOString();
+  };
 
   const popularQuery = useQuery({
-    queryKey: ["menu-insights", "popular", restaurant?.id],
+    queryKey: ["menu-insights", "popular", restaurant?.id, period],
     enabled: !!restaurant?.id,
     retry: false,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("menu_item_popularity")
-        .select("*")
-        .eq("restaurant_id", restaurant!.id)
-        .order("order_count_7d", { ascending: false })
-        .limit(20);
-      if (error) return []; // view may not exist yet
-      return data ?? [];
+      // Try the materialized view first (only works for 7d)
+      if (period === "7d") {
+        const { data, error } = await supabase
+          .from("menu_item_popularity")
+          .select("*")
+          .eq("restaurant_id", restaurant!.id)
+          .order("order_count_7d", { ascending: false })
+          .limit(20);
+        if (!error && data && data.length > 0) return data;
+      }
+
+      // Fallback: query order_items directly with date filter
+      const startDate = getStartDate();
+      const { data: orderItems, error } = await supabase
+        .from("order_items")
+        .select("menu_item_id, quantity, unit_price_cents, orders!inner(created_at, restaurant_id)")
+        .eq("orders.restaurant_id", restaurant!.id)
+        .gte("orders.created_at", startDate);
+
+      if (error || !orderItems) return [];
+
+      // Aggregate by menu_item_id
+      const agg: Record<string, { menu_item_id: string; order_count_7d: number; total_qty_7d: number; revenue_cents_7d: number; last_ordered_at: string }> = {};
+      for (const oi of orderItems as any[]) {
+        const id = oi.menu_item_id;
+        if (!agg[id]) agg[id] = { menu_item_id: id, order_count_7d: 0, total_qty_7d: 0, revenue_cents_7d: 0, last_ordered_at: oi.orders?.created_at || "" };
+        agg[id].order_count_7d += 1;
+        agg[id].total_qty_7d += oi.quantity || 1;
+        agg[id].revenue_cents_7d += (oi.unit_price_cents || 0) * (oi.quantity || 1);
+        if (oi.orders?.created_at > agg[id].last_ordered_at) agg[id].last_ordered_at = oi.orders.created_at;
+      }
+
+      return Object.values(agg).sort((a, b) => b.order_count_7d - a.order_count_7d).slice(0, 20);
     },
   });
 
@@ -92,31 +127,44 @@ function MenuInsightsContent() {
             <BarChart3 className="h-6 w-6 text-blue-500" /> Menu Insights
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            AI-powered popularity data from the last 7 days
+            AI-powered popularity data — {periodLabel[period]}
           </p>
         </div>
-        <Select value={view} onValueChange={(v: any) => setView(v)}>
-          <SelectTrigger className="w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="popularity">Item Popularity</SelectItem>
-            <SelectItem value="pairs">Frequently Ordered Together</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex gap-2">
+          <Select value={period} onValueChange={(v: any) => setPeriod(v)}>
+            <SelectTrigger className="w-40">
+              <Calendar className="h-4 w-4 mr-1" /><SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7d">Weekly</SelectItem>
+              <SelectItem value="30d">Monthly</SelectItem>
+              <SelectItem value="90d">Quarterly</SelectItem>
+              <SelectItem value="365d">Yearly</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={view} onValueChange={(v: any) => setView(v)}>
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="popularity">Item Popularity</SelectItem>
+              <SelectItem value="pairs">Frequently Ordered Together</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </section>
 
       {/* Stats row */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">7-day Revenue</p>
+            <p className="text-xs text-muted-foreground">{periodLabel[period]} Revenue</p>
             <p className="text-2xl font-bold">{formatMoney(totalRevenue, currency)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">7-day Orders</p>
+            <p className="text-xs text-muted-foreground">{periodLabel[period]} Orders</p>
             <p className="text-2xl font-bold">{totalOrders}</p>
           </CardContent>
         </Card>
@@ -131,7 +179,7 @@ function MenuInsightsContent() {
       {view === "popularity" && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2"><TrendingUp className="h-4 w-4" /> Top Items — Last 7 Days</CardTitle>
+            <CardTitle className="text-base flex items-center gap-2"><TrendingUp className="h-4 w-4" /> Top Items — {periodLabel[period]}</CardTitle>
             <CardDescription>Ranked by order frequency. Used by AI Smart Menu ranking.</CardDescription>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
