@@ -112,7 +112,7 @@ const FEATURE_CATALOG: FeatureMeta[] = [
     name: "Staff Categories",
     description: "Create custom staff roles with granular permissions to control access.",
     icon: Settings,
-    route: "/admin/staff-categories",
+    route: "/admin/staff",
     tier: "core",
     adminOnly: true,
   },

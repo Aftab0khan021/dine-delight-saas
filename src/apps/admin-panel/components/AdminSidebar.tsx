@@ -51,7 +51,6 @@ const coreNavItems: NavItem[] = [
   { to: "/admin/menu",             label: "Menu",             icon: Salad,          permission: PERMISSIONS.VIEW_MENU },
   { to: "/admin/qr",               label: "QR Menu",          icon: QrCode,         permission: PERMISSIONS.VIEW_QR },
   { to: "/admin/staff",            label: "Staff",            icon: Users,          permission: PERMISSIONS.VIEW_STAFF },
-  { to: "/admin/staff-categories", label: "Staff Categories", icon: Settings,       permission: PERMISSIONS.MANAGE_CATEGORIES_STAFF, adminOnly: true },
   { to: "/admin/branding",         label: "Branding",         icon: Palette,        permission: PERMISSIONS.MANAGE_SETTINGS },
   { to: "/admin/billing",          label: "Billing",          icon: CreditCard,     adminOnly: true },
   { to: "/admin/coupons",          label: "Rewards & Offers", icon: Ticket,         permission: PERMISSIONS.VIEW_COUPONS, featureKey: "coupons" },

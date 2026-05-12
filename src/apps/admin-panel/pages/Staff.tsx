@@ -3,13 +3,27 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { MoreHorizontal, RefreshCw, Shield, UserPlus, UserX, AlertCircle } from "lucide-react";
+import { MoreHorizontal, RefreshCw, Shield, UserPlus, UserX, AlertCircle, XCircle, RotateCcw, Settings, Plus, Loader2, Users } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
-import { type StaffRole } from "../components/staff/staff-utils";
+import { type StaffRole, type StaffCategory, type Permission } from "../components/staff/staff-utils";
 import { InviteStaffDialog } from "../components/staff/InviteStaffDialog";
+import { CategoryDialog } from "../components/staff/CategoryDialog";
+import { CategoryCard } from "../components/staff/CategoryCard";
+import { FeatureGate } from "../components/FeatureGate";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // UI Components
 import { Badge } from "@/components/ui/badge";
@@ -70,6 +84,7 @@ const roleBadgeVariant = (role: string) => {
 
 const statusBadgeVariant = (status: string) => {
   if (status === "Active") return "default";
+  if (status === "Revoked") return "destructive";
   return "secondary";
 };
 
@@ -83,6 +98,12 @@ export default function AdminStaff() {
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [roleTarget, setRoleTarget] = useState<{ id: string; name: string; role: string } | null>(null);
   const [newRole, setNewRole] = useState<StaffRole>("user");
+  const [activeTab, setActiveTab] = useState("team");
+
+  // Categories tab state
+  const [catDialogOpen, setCatDialogOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<StaffCategory | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   // --- 1. Data Queries (From Repo B) ---
   const staffQuery = useQuery({
@@ -113,7 +134,7 @@ export default function AdminStaff() {
         .from("staff_invites")
         .select("id, email, role, status, updated_at, staff_category_id, staff_categories(id, name, color)")
         .eq("restaurant_id", restaurant!.id)
-        .eq("status", "pending")
+        .in("status", ["pending", "revoked"])
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
@@ -136,6 +157,51 @@ export default function AdminStaff() {
     },
     enabled: !!restaurant?.id,
   });
+
+  // Permissions for categories tab
+  const permissionsQuery = useQuery({
+    queryKey: ["permissions"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("permissions").select("*").order("category", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as Permission[];
+    },
+  });
+
+  const categoryPermissionsQuery = useQuery({
+    queryKey: ["category-permissions", restaurant?.id],
+    queryFn: async () => {
+      if (!restaurant?.id) return [];
+      const { data, error } = await supabase
+        .from("category_permissions")
+        .select("category_id, permission_id, staff_categories!inner(restaurant_id)")
+        .eq("staff_categories.restaurant_id", restaurant.id);
+      if (error) throw error;
+      return (data ?? []).map(({ category_id, permission_id }: any) => ({ category_id, permission_id }));
+    },
+    enabled: !!restaurant?.id,
+  });
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: async (categoryId: string) => {
+      const { error } = await supabase.from("staff_categories").delete().eq("id", categoryId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Category deleted", description: "Staff category has been removed." });
+      qc.invalidateQueries({ queryKey: ["staff-categories"] });
+      qc.invalidateQueries({ queryKey: ["category-permissions"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to delete", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Category helpers
+  const getCategoryPermissions = (categoryId: string): string[] =>
+    categoryPermissionsQuery.data?.filter((cp: any) => cp.category_id === categoryId).map((cp: any) => cp.permission_id) || [];
+  const getPermissionDetails = (permissionIds: string[]): Permission[] =>
+    permissionsQuery.data?.filter((p) => permissionIds.includes(p.id)) || [];
 
   const activityQuery = useQuery({
     queryKey: ["admin", "staff", restaurant?.id, "activity"],
@@ -274,6 +340,46 @@ export default function AdminStaff() {
     }
   });
 
+  // Revoke an invite — sets status to 'revoked'
+  const revokeInviteMutation = useMutation({
+    mutationFn: async (inviteId: string) => {
+      if (!restaurant?.id) throw new Error("Missing restaurant");
+      const { error } = await supabase
+        .from("staff_invites")
+        .update({ status: "revoked" as any })
+        .eq("id", inviteId)
+        .eq("restaurant_id", restaurant.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Invite revoked", description: "The staff member can no longer accept this invitation." });
+      qc.invalidateQueries({ queryKey: ["admin", "staff"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to revoke", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Re-invite a revoked invite — sets status back to 'pending'
+  const reinviteMutation = useMutation({
+    mutationFn: async (inviteId: string) => {
+      if (!restaurant?.id) throw new Error("Missing restaurant");
+      const { error } = await supabase
+        .from("staff_invites")
+        .update({ status: "pending" as any })
+        .eq("id", inviteId)
+        .eq("restaurant_id", restaurant.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Invite restored", description: "The invitation is active again." });
+      qc.invalidateQueries({ queryKey: ["admin", "staff"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to restore", description: error.message, variant: "destructive" });
+    },
+  });
+
   // --- 3. Merging Data for the UI ---
   const tableData = useMemo(() => {
     const active = (staffQuery.data || []).map(s => ({
@@ -283,18 +389,18 @@ export default function AdminStaff() {
       role: s.role,
       category: s.staff_categories?.name || null,
       categoryColor: s.staff_categories?.color || null,
-      status: "Active",
+      status: "Active" as const,
       type: "active" as const
     }));
 
     const invited = (invitesQuery.data || []).map((i: any) => ({
       id: i.id,
-      name: "Pending Accept",
+      name: i.status === "revoked" ? "Revoked" : "Pending Accept",
       contact: i.email,
       role: i.role,
       category: i.staff_categories?.name || null,
       categoryColor: i.staff_categories?.color || null,
-      status: "Invited",
+      status: i.status === "revoked" ? "Revoked" as const : "Invited" as const,
       type: "invited" as const
     }));
 
@@ -307,7 +413,7 @@ export default function AdminStaff() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Staff Management</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Invite staff, change roles, and review recent activity.
+            Invite staff, manage roles, categories, and review activity.
           </p>
           {staffLimit !== undefined && (
             <p className="mt-2 text-sm font-medium">
@@ -318,18 +424,22 @@ export default function AdminStaff() {
         </div>
 
         <div className="flex gap-2">
-          <Button variant="outline" size="icon" onClick={() => qc.invalidateQueries({ queryKey: ["admin", "staff"] })} title="Refresh staff">
+          <Button variant="outline" size="icon" onClick={() => { qc.invalidateQueries({ queryKey: ["admin", "staff"] }); qc.invalidateQueries({ queryKey: ["staff-categories"] }); }} title="Refresh">
             <RefreshCw className={`h-4 w-4 ${staffQuery.isFetching || invitesQuery.isFetching ? 'animate-spin' : ''}`} />
           </Button>
-          <Button disabled={isAtLimit} onClick={() => setInviteOpen(true)}>
-            <UserPlus className="mr-2 h-4 w-4" /> Invite staff
-          </Button>
+          {activeTab === "team" && (
+            <Button disabled={isAtLimit} onClick={() => setInviteOpen(true)}>
+              <UserPlus className="mr-2 h-4 w-4" /> Invite staff
+            </Button>
+          )}
+          {activeTab === "categories" && (
+            <Button onClick={() => { setEditingCategory(null); setCatDialogOpen(true); }}>
+              <Plus className="mr-2 h-4 w-4" /> Create Category
+            </Button>
+          )}
         </div>
 
-        <InviteStaffDialog
-          open={inviteOpen}
-          onOpenChange={setInviteOpen}
-        />
+        <InviteStaffDialog open={inviteOpen} onOpenChange={setInviteOpen} />
       </header>
 
       {/* Staff Limit Warning */}
@@ -344,6 +454,15 @@ export default function AdminStaff() {
         </Alert>
       )}
 
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="team"><Users className="mr-1.5 h-4 w-4" /> Team</TabsTrigger>
+          <TabsTrigger value="categories"><Settings className="mr-1.5 h-4 w-4" /> Categories</TabsTrigger>
+        </TabsList>
+
+        {/* ── TEAM TAB ── */}
+        <TabsContent value="team" className="mt-4">
       <section className="grid gap-3 lg:grid-cols-3">
         {/* Staff List */}
         <Card className="shadow-soft lg:col-span-2">
@@ -424,9 +543,21 @@ export default function AdminStaff() {
                               )}
 
                               {/* Actions for INVITED users */}
-                              {s.type === 'invited' && (
-                                <DropdownMenuItem onClick={() => resendInviteMutation.mutate({ id: s.id, email: s.contact })}>
-                                  <RefreshCw className="mr-2 h-4 w-4" /> Resend invite
+                              {s.type === 'invited' && s.status === 'Invited' && (
+                                <>
+                                  <DropdownMenuItem onClick={() => resendInviteMutation.mutate({ id: s.id, email: s.contact })}>
+                                    <RefreshCw className="mr-2 h-4 w-4" /> Resend invite
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="text-destructive" onClick={() => revokeInviteMutation.mutate(s.id)}>
+                                    <XCircle className="mr-2 h-4 w-4" /> Revoke invite
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+
+                              {/* Actions for REVOKED invites */}
+                              {s.type === 'invited' && s.status === 'Revoked' && (
+                                <DropdownMenuItem onClick={() => reinviteMutation.mutate(s.id)}>
+                                  <RotateCcw className="mr-2 h-4 w-4" /> Re-invite
                                 </DropdownMenuItem>
                               )}
                             </DropdownMenuContent>
@@ -457,6 +588,46 @@ export default function AdminStaff() {
           </CardContent>
         </Card>
       </section>
+        </TabsContent>
+
+        {/* ── CATEGORIES TAB ── */}
+        <TabsContent value="categories" className="mt-4">
+          {categoriesQuery.isLoading || permissionsQuery.isLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : categoriesQuery.data && categoriesQuery.data.length > 0 ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {categoriesQuery.data.map((category: any) => {
+                const pIds = getCategoryPermissions(category.id);
+                const perms = getPermissionDetails(pIds);
+                return (
+                  <CategoryCard
+                    key={category.id}
+                    category={category}
+                    permissions={perms}
+                    onEdit={(cat) => { setEditingCategory(cat); setCatDialogOpen(true); }}
+                    onDelete={(id) => setDeleteId(id)}
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center h-64 text-center">
+                <Users className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No staff categories yet</h3>
+                <p className="text-sm text-muted-foreground mb-4 max-w-sm">
+                  Create your first staff category to start managing permissions for your team members.
+                </p>
+                <Button onClick={() => { setEditingCategory(null); setCatDialogOpen(true); }}>
+                  <Plus className="mr-2 h-4 w-4" /> Create First Category
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* Change Role Dialog */}
       <Dialog open={roleDialogOpen} onOpenChange={setRoleDialogOpen}>
@@ -504,6 +675,38 @@ export default function AdminStaff() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Category Dialog */}
+      {restaurant && (
+        <CategoryDialog
+          open={catDialogOpen}
+          onOpenChange={(open) => { setCatDialogOpen(open); if (!open) setEditingCategory(null); }}
+          category={editingCategory}
+          permissions={permissionsQuery.data || []}
+          restaurantId={restaurant.id}
+        />
+      )}
+
+      {/* Delete Category Confirmation */}
+      <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Category</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure? Staff assigned to this category will lose it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (deleteId) { deleteCategoryMutation.mutate(deleteId); setDeleteId(null); } }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

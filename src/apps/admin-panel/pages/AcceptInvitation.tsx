@@ -78,6 +78,25 @@ export default function AcceptInvitation() {
                 return;
             }
 
+            // ── Check if the invite was revoked by the admin ──
+            // The invitation_token links to staff_invites via email + restaurant_id
+            if (data.email && data.restaurant_id) {
+                const { data: invite } = await supabase
+                    .from("staff_invites")
+                    .select("status")
+                    .eq("email", data.email)
+                    .eq("restaurant_id", data.restaurant_id)
+                    .order("created_at", { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                if (invite?.status === "revoked") {
+                    setError("This invitation has been revoked by the admin. Please contact your restaurant administrator for a new invitation.");
+                    setLoading(false);
+                    return;
+                }
+            }
+
             setInvitationData(data);
             setLoading(false);
         } catch (err: any) {

@@ -190,7 +190,7 @@ const App = () => (
             {/* Backwards compatible */}
             <Route path="qr-menu" element={<Navigate to="/admin/qr" replace />} />
             <Route path="staff" element={<ProtectedRoute permission="view_staff"><AdminStaff /></ProtectedRoute>} />
-            <Route path="staff-categories" element={<ProtectedRoute adminOnly><AdminStaffCategories /></ProtectedRoute>} />
+            <Route path="staff-categories" element={<Navigate to="/admin/staff" replace />} />
             <Route path="branding" element={<ProtectedRoute permission="manage_settings"><AdminBranding /></ProtectedRoute>} />
             <Route path="billing" element={<ProtectedRoute adminOnly><AdminBilling /></ProtectedRoute>} />
             <Route path="coupons" element={<ProtectedRoute permission="view_coupons"><AdminCoupons /></ProtectedRoute>} />
