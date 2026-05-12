@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PhoneInput } from "@/components/ui/phone-input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -324,10 +325,9 @@ export default function TableReservation() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" /> Select Date *</Label>
-                      <Input
-                        type="date"
+                      <DateInput
                         value={resDate}
-                        onChange={e => setResDate(e.target.value)}
+                        onChange={setResDate}
                         min={new Date().toISOString().split("T")[0]}
                         required
                         className="h-11"

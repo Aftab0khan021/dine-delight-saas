@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -144,7 +145,7 @@ function ReservationsContent() {
         <TabsContent value="list" className="space-y-4 mt-4">
           {/* Filters */}
           <div className="flex flex-wrap gap-3 items-center">
-            <Input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="w-auto" />
+            <DateInput value={dateFilter} onChange={setDateFilter} className="w-44" />
             <div className="flex gap-1 flex-wrap">
               <Button size="sm" variant={statusFilter === "all" ? "default" : "outline"} onClick={() => { setStatusFilter("all"); setPage(0); }}>All</Button>
               {STATUSES.map(s => (
