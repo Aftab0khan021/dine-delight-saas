@@ -196,7 +196,7 @@ export default function TableReservation() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden">
       {/* Dark mode toggle */}
       <button
         onClick={() => setDarkMode(!darkMode)}
@@ -427,18 +427,20 @@ export default function TableReservation() {
             <h2 className="text-xl font-bold tracking-tight">Check Reservation Status</h2>
             <p className="text-sm text-muted-foreground">Enter your phone number to view your bookings</p>
           </div>
-          <div className="flex gap-2 max-w-md mx-auto">
-            <PhoneInput
-              value={trackPhone}
-              onChange={setTrackPhone}
-              heightClass="h-11"
-              placeholder="Enter 10-digit number"
-            />
+          <div className="flex flex-col sm:flex-row gap-2 max-w-md mx-auto">
+            <div className="flex-1">
+              <PhoneInput
+                value={trackPhone}
+                onChange={setTrackPhone}
+                heightClass="h-11"
+                placeholder="Enter 10-digit number"
+              />
+            </div>
             <Button
               onClick={handleTrackReservation}
-              disabled={trackLoading || trackPhone.length < 10}
+              disabled={trackLoading || trackPhone.replace(/\D/g, '').length < 10}
               style={{ backgroundColor: themeColor }}
-              className="shrink-0 px-6"
+              className="shrink-0 px-6 h-11 w-full sm:w-auto"
             >
               {trackLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Search className="h-4 w-4 mr-1" /> Check</>}
             </Button>

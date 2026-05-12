@@ -294,7 +294,7 @@ export default function RestaurantProfile() {
   const currencyCode = restaurant?.currency_code || "INR";
 
   return (
-    <div className="min-h-screen w-full bg-background flex flex-col">
+    <div className="min-h-screen w-full bg-background flex flex-col overflow-x-hidden">
 
       {/* R1: Sticky Navbar — transparent at top, solid on scroll */}
       <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
@@ -328,13 +328,13 @@ export default function RestaurantProfile() {
       </header>
 
       {/* HERO */}
-      <div className="relative h-[60vh] w-full bg-muted overflow-hidden">
+      <div className="relative min-h-[50vh] sm:min-h-[55vh] md:h-[60vh] w-full bg-muted overflow-hidden">
         {settings.cover_image_url ? (
           <img src={settings.cover_image_url} alt="Cover" className="h-full w-full object-cover opacity-60" />
         ) : (
           <div className="h-full w-full bg-gradient-to-br from-slate-800 to-slate-900" />
         )}
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 space-y-3 bg-black/35 pt-14">
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4 sm:px-6 py-6 space-y-3 bg-black/35 pt-16">
           <div className="h-28 w-28 md:h-32 md:w-32 rounded-full border-4 border-background bg-background shadow-xl overflow-hidden shrink-0">
             {restaurant.logo_url ? (
               <img src={restaurant.logo_url} alt="Logo" className="h-full w-full object-cover" />
@@ -343,7 +343,7 @@ export default function RestaurantProfile() {
             )}
           </div>
           <div className="space-y-1.5 max-w-2xl text-white drop-shadow-md">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight">{restaurant.name}</h1>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-tight">{restaurant.name}</h1>
             {/* R6: Real avg rating */}
             {ratingData && (
               <div className="flex items-center justify-center gap-1.5">
@@ -407,7 +407,7 @@ export default function RestaurantProfile() {
       })()}
 
       {/* DETAILS */}
-      <div className="flex-1 w-full max-w-5xl mx-auto p-4 sm:p-6 md:p-12 space-y-12">
+      <div className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 md:px-12 py-8 sm:py-10 md:py-12 space-y-10 sm:space-y-12">
 
         {/* About — R10: animated entrance */}
         <AnimatedSection>
@@ -570,7 +570,7 @@ export default function RestaurantProfile() {
 
         {/* Info Grid — R10 animated */}
         <AnimatedSection delay={30}>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
             <div className="p-6 bg-card border rounded-2xl flex flex-col items-center text-center gap-3 shadow-sm">
               <Clock className="h-8 w-8 text-primary/60" />
               <h3 className="font-semibold">Opening Hours</h3>
@@ -635,9 +635,12 @@ export default function RestaurantProfile() {
         )}
       </div>
 
+      {/* Spacer for sticky bottom bar */}
+      <div className="h-20" />
+
       {/* ───── Customer Reviews & Ratings ── gated by reviews feature flag ── */}
       {reviewsFF && (
-      <AnimatedSection className="max-w-5xl mx-auto px-4 py-12">
+      <AnimatedSection className="max-w-5xl mx-auto px-4 py-10 sm:py-12 pb-24">
         <div className="text-center mb-8">
           <h2 className="text-2xl font-bold tracking-tight">Customer Reviews</h2>
           {(customerAvgRating || ratingData) && (
@@ -672,14 +675,13 @@ export default function RestaurantProfile() {
         {/* Submit Review Form */}
         <div className="max-w-lg mx-auto rounded-xl border bg-card p-6 space-y-4">
           <h3 className="font-semibold text-lg text-center">Leave a Review</h3>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
             <div className="space-y-1">
               <Label htmlFor="rev-name" className="text-xs">Your Name *</Label>
               <Input id="rev-name" placeholder="Your name" maxLength={100} value={reviewName} onChange={e => setReviewName(e.target.value)} />
             </div>
             <div className="space-y-1">
               <Label htmlFor="rev-phone" className="text-xs">Phone (optional)</Label>
-              <Input id="rev-phone" type="hidden" value={reviewPhone} />
               <PhoneInput value={reviewPhone} onChange={setReviewPhone} showCounter={false} />
             </div>
           </div>
@@ -738,34 +740,34 @@ export default function RestaurantProfile() {
 
       {/* WhatsApp Floating Button — gated by whatsapp_crm feature flag */}
       {whatsappFF && whatsappNumber && (
-        <a href={`https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi! I'd like to know more about ${restaurant.name}`)}`} target="_blank" rel="noopener noreferrer" className="fixed bottom-20 right-4 z-40 h-14 w-14 rounded-full bg-green-500 text-white shadow-lg flex items-center justify-center hover:bg-green-600 hover:scale-110 transition-all" aria-label="Chat on WhatsApp">
+        <a href={`https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi! I'd like to know more about ${restaurant.name}`)}`} target="_blank" rel="noopener noreferrer" className="fixed bottom-[4.5rem] right-4 z-40 h-12 w-12 sm:h-14 sm:w-14 rounded-full bg-green-500 text-white shadow-lg flex items-center justify-center hover:bg-green-600 hover:scale-110 transition-all" aria-label="Chat on WhatsApp">
           <MessageCircle className="h-7 w-7" />
         </a>
       )}
 
       {/* Sticky Order Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-card/95 backdrop-blur border-t shadow-lg p-3">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            {restaurant.logo_url && <img src={restaurant.logo_url} alt="" className="h-8 w-8 rounded-full border shrink-0" />}
-            <span className="font-semibold text-sm truncate">{restaurant.name}</span>
-            <span className={`hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${openStatus.open ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'}`}>
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-card/95 backdrop-blur border-t shadow-lg px-3 py-2 sm:p-3 safe-area-bottom">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            {restaurant.logo_url && <img src={restaurant.logo_url} alt="" className="h-7 w-7 sm:h-8 sm:w-8 rounded-full border shrink-0" />}
+            <span className="font-semibold text-xs sm:text-sm truncate max-w-[100px] sm:max-w-none">{restaurant.name}</span>
+            <span className={`hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${openStatus.open ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${openStatus.open ? 'bg-green-500' : 'bg-red-500'}`} />{openStatus.label}
             </span>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* R7: Share button */}
-            <Button size="sm" variant="ghost" className="rounded-full px-3" onClick={handleShare} title="Share">
+            <Button size="sm" variant="ghost" className="rounded-full px-2 sm:px-3 h-8 sm:h-9" onClick={handleShare} title="Share">
               <Share2 className="h-4 w-4" />
               <span className="hidden sm:inline ml-1">Share</span>
             </Button>
             {reservationsFF && reservationEnabled && (
-              <Button size="sm" variant="outline" className="rounded-full px-4 font-bold" asChild>
-                <Link to={`/r/${slug}/reserve`}><CalendarDays className="mr-1 h-4 w-4" />Book Table</Link>
+              <Button size="sm" variant="outline" className="rounded-full px-3 sm:px-4 font-bold h-8 sm:h-9 text-xs sm:text-sm" asChild>
+                <Link to={`/r/${slug}/reserve`}><CalendarDays className="mr-1 h-3.5 w-3.5 sm:h-4 sm:w-4" />Book</Link>
               </Button>
             )}
-            <Button size="sm" className="rounded-full px-6 font-bold" style={{ backgroundColor: themeColor }} asChild>
-              <Link to={`/r/${slug}/menu`}>Order Now <ArrowRight className="ml-1 h-4 w-4" /></Link>
+            <Button size="sm" className="rounded-full px-4 sm:px-6 font-bold h-8 sm:h-9 text-xs sm:text-sm" style={{ backgroundColor: themeColor }} asChild>
+              <Link to={`/r/${slug}/menu`}>Order <ArrowRight className="ml-1 h-3.5 w-3.5 sm:h-4 sm:w-4" /></Link>
             </Button>
           </div>
         </div>

@@ -202,7 +202,7 @@ export default function Home() {
   const revenueCount = useCountUp(Math.round(fromCents(stats?.revenue || 0)), 1500, statsVisible);
 
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground">
+    <div className="min-h-screen flex flex-col bg-background text-foreground overflow-x-hidden">
 
       {/* ═══════════════ SECTION 1: STICKY NAV ═══════════════ */}
       <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-lg">
@@ -246,7 +246,7 @@ export default function Home() {
             ))}
           </div>
           <div className="container mx-auto px-4 py-20 md:py-32 text-center relative z-10">
-            <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold text-white mb-6 leading-tight" style={{ animation: "fadeInUp 0.8s ease-out" }}>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-7xl font-extrabold text-white mb-6 leading-tight" style={{ animation: "fadeInUp 0.8s ease-out" }}>
               Your Restaurant,<br />
               <span className="bg-gradient-to-r from-violet-400 to-pink-400 bg-clip-text text-transparent">Your Rules.</span>
             </h1>

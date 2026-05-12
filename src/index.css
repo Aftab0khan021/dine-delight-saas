@@ -140,3 +140,13 @@ All colors MUST be HSL.
     opacity: 0;
   }
 }
+
+/* Safe area padding for iOS notch / home indicator */
+.safe-area-bottom {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+/* Smooth scroll for the entire page */
+html {
+  scroll-behavior: smooth;
+}

@@ -300,7 +300,7 @@ export default function CustomerDashboard() {
   const themeColor = (restaurant.settings as any)?.theme?.primary_color || "hsl(var(--primary))";
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-screen bg-muted/30 overflow-x-hidden">
       {/* Header */}
       <header className="border-b bg-background sticky top-0 z-10">
         <div className="w-full max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">

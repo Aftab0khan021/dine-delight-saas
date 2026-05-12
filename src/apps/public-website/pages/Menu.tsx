@@ -821,7 +821,7 @@ export default function PublicMenu() {
   }, [categoriesWithItems]);
 
   return (
-    <main className="min-h-screen w-full bg-background">
+    <main className="min-h-screen w-full bg-background overflow-x-hidden">
       <PWAInstallPrompt />
 
       {/* M3: Fly-to-cart overlay */}
