@@ -711,6 +711,7 @@ export default function RestaurantProfile() {
             disabled={!reviewName.trim() || reviewRating < 1 || reviewSubmitting}
             onClick={() => {
               if (!reviewTurnstileToken) {
+                toast({ title: "Please wait", description: "Security verification is still loading. Try again in a moment.", variant: "destructive" });
                 return;
               }
               submitReview();

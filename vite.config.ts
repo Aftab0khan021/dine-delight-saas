@@ -39,6 +39,22 @@ export default defineConfig(({ mode }) => ({
         globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
         // Raise limit to 3 MB to accommodate code-split chunks
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+        // Force new SW to take over immediately — no more stale cached pages
+        skipWaiting: true,
+        clientsClaim: true,
+        // Ensure navigation requests always go to network first
+        navigateFallbackDenylist: [/^\/api/],
+        runtimeCaching: [
+          {
+            // Supabase / API calls — always network-first
+            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "supabase-api",
+              expiration: { maxEntries: 50, maxAgeSeconds: 300 },
+            },
+          },
+        ],
       },
     }),
   ].filter(Boolean),
