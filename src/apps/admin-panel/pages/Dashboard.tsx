@@ -1,66 +1,28 @@
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { addDays, startOfDay, subHours } from "date-fns";
-import { ArrowUpRight, Plus, QrCode, ReceiptText, Sparkles, Lock, TrendingUp } from "lucide-react";
+import { addDays, startOfDay, subHours, eachHourOfInterval, format } from "date-fns";
+import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { Link } from "react-router-dom";
+import {
+  ArrowUpRight, Plus, QrCode, ReceiptText, Sparkles, Lock,
+  TrendingUp, CheckCircle2, Circle, Palette, Users, ChefHat,
+  CalendarDays, Package, Ticket, Star, MapPin, Shield, Settings,
+} from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { usePermissionContext } from "../state/permission-context";
-import { cn } from "@/lib/utils";
 import { useFeatureAccess } from "../hooks/useFeatureAccess";
 import { formatMoney, shortId } from "@/lib/formatting";
+import { RevenueDetail } from "../components/dashboard/RevenueDetail";
+import { cn } from "@/lib/utils";
 
-// UI Components
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Link } from "react-router-dom";
 
-// --- Visual Component: Sparkline ---
-function Sparkline({ values, className }: { values: number[]; className?: string }) {
-  if (!values || values.length < 2) {
-    return <div className={cn("w-24 h-8", className)} aria-hidden />;
-  }
-
-  const w = 96;
-  const h = 32;
-  const pad = 2;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = Math.max(1, max - min);
-
-  const points = values
-    .map((v, i) => {
-      const x = (i / (values.length - 1)) * (w - pad * 2) + pad;
-      const y = h - pad - ((v - min) / range) * (h - pad * 2);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-
-  const last = values[values.length - 1];
-  const first = values[0];
-  const up = last >= first;
-
-  return (
-    <div className={cn("w-24", className)} aria-hidden>
-      <svg viewBox={`0 0 ${w} ${h}`} className="h-8 w-full">
-        <polyline
-          points={points}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={cn(up ? "text-primary" : "text-muted-foreground")}
-        />
-      </svg>
-    </div>
-  );
-}
-
-const statusVariant = (status: string) => {
-  switch (status) {
+const statusVariant = (s: string) => {
+  switch (s) {
     case "pending": return "default";
     case "in_progress": return "secondary";
     case "ready": return "outline";
@@ -71,208 +33,196 @@ const statusVariant = (status: string) => {
 export default function AdminDashboard() {
   const { restaurant } = useRestaurantContext();
   const { hasPermission, isAdmin } = usePermissionContext();
-
-  // Check if analytics feature is enabled
   const { isFeatureEnabled } = useFeatureAccess(restaurant?.id);
-  const analyticsEnabled = isFeatureEnabled('analytics');
+  const [showRevenue, setShowRevenue] = useState(false);
 
-  // Permission checks for each dashboard section
   const canViewOrders = isAdmin || hasPermission("view_orders" as any);
   const canViewMenu = isAdmin || hasPermission("view_menu" as any);
   const canViewQr = isAdmin || hasPermission("view_qr" as any);
-  const canViewAnalytics = isAdmin || hasPermission("view_analytics" as any);
 
-  // --- 1. Data Fetching ---
   const todayKey = new Date().toDateString();
-
   const { startISO, endISO } = useMemo(() => {
-    const start = startOfDay(new Date());
-    const end = addDays(start, 1);
-    return { startISO: start.toISOString(), endISO: end.toISOString() };
+    const s = startOfDay(new Date());
+    return { startISO: s.toISOString(), endISO: addDays(s, 1).toISOString() };
   }, [todayKey]);
 
-  // Fetch Today's Orders for KPIs — only if user can view orders
-  const todayOrdersQuery = useQuery({
-    queryKey: ["admin", "dashboard", restaurant?.id, "todayOrders", todayKey],
+  const todayOrdersQ = useQuery({
+    queryKey: ["dashboard", restaurant?.id, "today", todayKey],
     enabled: !!restaurant?.id && canViewOrders,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
         .select("id, placed_at, completed_at, total_cents, currency_code")
         .eq("restaurant_id", restaurant!.id)
-        .gte("placed_at", startISO)
-        .lt("placed_at", endISO);
+        .gte("placed_at", startISO).lt("placed_at", endISO);
       if (error) throw error;
-      return data;
+      return data ?? [];
     },
   });
 
-  // Fetch Latest 5 Orders — only if user can view orders
-  const last24hStart = useMemo(() => subHours(new Date(), 24).toISOString(), [todayKey]);
-
-  const latestOrdersQuery = useQuery({
-    queryKey: ["admin", "dashboard", restaurant?.id, "latestOrders"],
+  const latestOrdersQ = useQuery({
+    queryKey: ["dashboard", restaurant?.id, "latest"],
     enabled: !!restaurant?.id && canViewOrders,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
         .select("id, status, placed_at, total_cents, table_label")
         .eq("restaurant_id", restaurant!.id)
-        .gte("placed_at", last24hStart)
-        .order("placed_at", { ascending: false })
-        .limit(5);
+        .gte("placed_at", subHours(new Date(), 24).toISOString())
+        .order("placed_at", { ascending: false }).limit(5);
       if (error) throw error;
-      return data;
+      return data ?? [];
     },
   });
 
-  // Fetch Setup Status — only if admin
-  const setupQuery = useQuery({
-    queryKey: ["admin", "dashboard", restaurant?.id, "setupChecklist"],
-    enabled: !!restaurant?.id && isAdmin,
+  const setupQ = useQuery({
+    queryKey: ["dashboard", restaurant?.id, "setup"],
+    enabled: !!restaurant?.id,
     queryFn: async () => {
-      const [{ data: restaurantRow }, menuCount, qrCount] = await Promise.all([
+      const [{ data: r }, menu, qr, staff, { data: sub }] = await Promise.all([
         supabase.from("restaurants").select("logo_url, currency_code").eq("id", restaurant!.id).maybeSingle(),
         supabase.from("menu_items").select("id", { count: "exact", head: true }).eq("restaurant_id", restaurant!.id),
         supabase.from("qr_codes").select("id", { count: "exact", head: true }).eq("restaurant_id", restaurant!.id),
+        supabase.from("user_roles").select("id", { count: "exact", head: true }).eq("restaurant_id", restaurant!.id).eq("role", "user"),
+        supabase.from("subscriptions").select("id").eq("restaurant_id", restaurant!.id).eq("status", "active").maybeSingle(),
       ]);
       return {
-        logoUrl: restaurantRow?.logo_url ?? null,
-        currencyCode: restaurantRow?.currency_code ?? "INR",
-        menuItemsCount: menuCount.count ?? 0,
-        qrCodesCount: qrCount.count ?? 0,
+        currency: r?.currency_code ?? "INR",
+        hasLogo: !!r?.logo_url,
+        menuCount: menu.count ?? 0,
+        qrCount: qr.count ?? 0,
+        staffCount: staff.count ?? 0,
+        hasSubscription: !!sub,
       };
     },
   });
 
-  // --- 2. KPI Calculation ---
-  const kpis = useMemo(() => {
-    const todayOrders = todayOrdersQuery.data ?? [];
-    const count = todayOrders.length;
-    const revenue = todayOrders.reduce((sum, o) => sum + (o.total_cents ?? 0), 0);
-    const currency = setupQuery.data?.currencyCode ?? todayOrders[0]?.currency_code ?? "INR";
+  const currency = setupQ.data?.currency ?? "INR";
+  const todayOrders = todayOrdersQ.data ?? [];
+  const orderCount = todayOrders.length;
+  const revenue = todayOrders.reduce((s, o) => s + (o.total_cents ?? 0), 0);
+  const completed = todayOrders.filter(o => o.completed_at);
+  const avgPrep = completed.length
+    ? Math.round(completed.reduce((a, o) => a + (new Date(o.completed_at!).getTime() - new Date(o.placed_at).getTime()), 0) / completed.length / 60000)
+    : 0;
 
-    const completed = todayOrders.filter((o) => o.completed_at).map((o) =>
-      new Date(o.completed_at!).getTime() - new Date(o.placed_at).getTime()
-    );
-    const avgPrep = completed.length ? Math.round(completed.reduce((a, b) => a + b, 0) / completed.length / 1000 / 60) : 0;
+  // Mini chart data (hourly today)
+  const miniChart = useMemo(() => {
+    const now = new Date();
+    const hours = eachHourOfInterval({ start: startOfDay(now), end: now });
+    return hours.map(h => {
+      const key = format(h, "yyyy-MM-dd-HH");
+      const rev = todayOrders
+        .filter(o => format(new Date(o.placed_at), "yyyy-MM-dd-HH") === key)
+        .reduce((s, o) => s + (o.total_cents ?? 0), 0);
+      return { name: format(h, "ha"), rev: rev / 100 };
+    });
+  }, [todayOrders]);
 
-    return [
-      {
-        label: "Today's Orders",
-        value: count.toString(),
-        delta: "Since midnight",
-        trend: todayOrders.map((_, i) => i + 1),
-      },
-      {
-        label: "Revenue",
-        value: formatMoney(revenue, currency),
-        delta: "Gross total",
-        trend: todayOrders.map(o => o.total_cents ?? 0),
-      },
-      {
-        label: "Avg Prep Time",
-        value: avgPrep > 0 ? `${avgPrep}m` : "—",
-        delta: "Completed orders",
-        trend: completed.map(ms => Math.round(ms / 60000)),
-      },
-      {
-        label: "Active Tables",
-        value: "—",
-        delta: "Currently seated",
-        trend: [0],
-      }
-    ];
-  }, [todayOrdersQuery.data, setupQuery.data]);
+  // Unified checklist items
+  const checklistItems = [
+    { label: "Set up branding", detail: "Upload logo & cover", done: !!setupQ.data?.hasLogo, route: "/admin/branding", icon: Palette, perm: "manage_settings" },
+    { label: "Add menu items", detail: "Create your first dish", done: (setupQ.data?.menuCount ?? 0) > 0, route: "/admin/menu", icon: Salad, perm: "view_menu" },
+    { label: "Generate QR code", detail: "Print & place on tables", done: (setupQ.data?.qrCount ?? 0) > 0, route: "/admin/qr", icon: QrCode, perm: "view_qr" },
+    ...(isAdmin ? [
+      { label: "Invite staff", detail: "Add your team members", done: (setupQ.data?.staffCount ?? 0) > 0, route: "/admin/staff", icon: Users, perm: null },
+      { label: "Activate subscription", detail: "Unlock premium features", done: !!setupQ.data?.hasSubscription, route: "/admin/billing", icon: Settings, perm: null },
+    ] : []),
+  ].filter(item => !item.perm || isAdmin || hasPermission(item.perm as any));
 
-  const setupChecklist = [
-    { label: "Branding", detail: "Logo + cover", status: setupQuery.data?.logoUrl ? "Done" : "Pending" },
-    { label: "First Menu Item", detail: "Create at least 1 item", status: (setupQuery.data?.menuItemsCount ?? 0) > 0 ? "Done" : "Pending" },
-    { label: "QR Published", detail: "Generate & print", status: (setupQuery.data?.qrCodesCount ?? 0) > 0 ? "Done" : "Pending" },
+  const doneCount = checklistItems.filter(i => i.done).length;
+  const progress = checklistItems.length > 0 ? Math.round((doneCount / checklistItems.length) * 100) : 0;
+
+  // Quick action buttons
+  const actions = [
+    canViewMenu && { to: "/admin/menu", label: "Add Item", icon: Plus },
+    canViewQr && { to: "/admin/qr", label: "Print QR", icon: QrCode },
+    canViewOrders && { to: "/admin/orders", label: "View Orders", icon: ReceiptText },
+  ].filter(Boolean) as { to: string; label: string; icon: any }[];
+
+  // KPI cards config
+  const kpis = [
+    { label: "Today's Orders", value: orderCount.toString(), sub: "Since midnight", clickable: false },
+    { label: "Revenue", value: formatMoney(revenue, currency), sub: "Click for details", clickable: true },
+    { label: "Avg Prep", value: avgPrep > 0 ? `${avgPrep}m` : "—", sub: "Completed orders", clickable: false },
+    { label: "Completed", value: completed.length.toString(), sub: `of ${orderCount} orders`, clickable: false },
   ];
 
-  // Build quick actions based on permissions
-  const quickActions = [];
-  if (canViewMenu) {
-    quickActions.push({ to: "/admin/menu", label: "Add Item", icon: Plus });
-  }
-  if (canViewQr) {
-    quickActions.push({ to: "/admin/qr", label: "Print QR", icon: QrCode });
-  }
-  if (canViewOrders) {
-    quickActions.push({ to: "/admin/orders", label: "View Orders", icon: ReceiptText });
-  }
-
-  // --- 3. Render ---
   return (
     <div className="flex flex-col gap-4 w-full">
+      {/* Header */}
       <section className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between w-full">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            A clear snapshot of today—built for busy service.
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">A clear snapshot of today.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {canViewOrders && (
-            <Button variant="secondary" asChild>
-              <Link to="/admin/orders">View orders <ArrowUpRight className="ml-2 h-4 w-4" /></Link>
-            </Button>
+            <Button variant="secondary" asChild><Link to="/admin/orders">View orders <ArrowUpRight className="ml-2 h-4 w-4" /></Link></Button>
           )}
           {canViewMenu && (
-            <Button asChild>
-              <Link to="/admin/menu">Add menu item <Plus className="ml-2 h-4 w-4" /></Link>
-            </Button>
+            <Button asChild><Link to="/admin/menu">Add item <Plus className="ml-2 h-4 w-4" /></Link></Button>
           )}
         </div>
       </section>
 
-      {/* KPI Cards — only shown if user can view orders */}
+      {/* KPI Cards */}
       {canViewOrders && (
-        <section className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-          {analyticsEnabled || canViewAnalytics ? (
-            kpis.map((k) => (
-              <Card key={k.label} className="shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">{k.label}</CardTitle>
-                </CardHeader>
-                <CardContent className="flex items-end justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-2xl font-semibold tracking-tight">{k.value}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">{k.delta}</div>
+        <section className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+          {kpis.map(k => (
+            <Card
+              key={k.label}
+              className={cn(
+                "shadow-sm transition-all",
+                k.clickable && "cursor-pointer hover:border-primary/40 hover:shadow-md group"
+              )}
+              onClick={k.clickable ? () => setShowRevenue(!showRevenue) : undefined}
+            >
+              <CardHeader className="pb-1">
+                <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                  {k.label}
+                  {k.clickable && <TrendingUp className="h-3 w-3 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold tracking-tight">{k.value}</div>
+                <div className={cn("text-[11px] mt-0.5", k.clickable ? "text-primary/70" : "text-muted-foreground")}>{k.sub}</div>
+                {/* Mini sparkline for revenue */}
+                {k.clickable && miniChart.length > 1 && (
+                  <div className="mt-2 h-8">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={miniChart} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="miniGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.25} />
+                            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <Area type="monotone" dataKey="rev" stroke="hsl(var(--primary))" fill="url(#miniGrad)" strokeWidth={1.5} dot={false} />
+                      </AreaChart>
+                    </ResponsiveContainer>
                   </div>
-                  <div className="flex items-end gap-3 pb-1">
-                    <Sparkline values={k.trend} />
-                  </div>
-                </CardContent>
-              </Card>
-            ))
-          ) : (
-            <Card className="shadow-sm sm:col-span-2 lg:col-span-4">
-              <CardContent className="p-6">
-                <Alert>
-                  <Lock className="h-4 w-4" />
-                  <AlertTitle>Analytics Feature Locked</AlertTitle>
-                  <AlertDescription>
-                    Upgrade your plan to unlock detailed analytics, revenue tracking, and performance insights.
-                  </AlertDescription>
-                </Alert>
+                )}
               </CardContent>
             </Card>
-          )}
+          ))}
         </section>
       )}
 
-      {/* Main Content Grid */}
-      <section className="grid gap-3 lg:grid-cols-3">
+      {/* Revenue Detail Panel */}
+      {showRevenue && canViewOrders && restaurant && (
+        <RevenueDetail restaurantId={restaurant.id} currency={currency} onClose={() => setShowRevenue(false)} />
+      )}
 
-        {/* LEFT: Live Orders — only shown if user can view orders */}
+      {/* Main Content */}
+      <section className="grid gap-3 lg:grid-cols-3">
+        {/* Live Orders */}
         {canViewOrders && (
           <Card className="shadow-sm lg:col-span-2">
             <CardHeader className="flex flex-row items-center justify-between gap-4">
               <div>
                 <CardTitle className="text-base">Live orders</CardTitle>
-                <div className="mt-1 text-xs text-muted-foreground">Latest 5 orders.</div>
+                <div className="mt-1 text-xs text-muted-foreground">Latest 5 orders</div>
               </div>
               <div className="flex items-center gap-2">
                 <span className="relative inline-flex h-2 w-2">
@@ -284,70 +234,93 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {(latestOrdersQuery.data ?? []).map((o) => (
-                  <div key={o.id} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background p-3">
+                {(latestOrdersQ.data ?? []).map(o => (
+                  <div key={o.id} className="flex items-center justify-between gap-3 rounded-xl border bg-background p-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">#{shortId(o.id)}</span>
+                        <span className="text-sm font-medium">{shortId(o.id)}</span>
                         <span className="text-xs text-muted-foreground">{o.table_label || "No Table"}</span>
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {new Date(o.placed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(o.placed_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </div>
                     </div>
-                    <Badge variant={statusVariant(o.status)} className="shrink-0 capitalize">
-                      {o.status.replace('_', ' ')}
-                    </Badge>
+                    <Badge variant={statusVariant(o.status)} className="shrink-0 capitalize">{o.status.replace("_", " ")}</Badge>
                   </div>
                 ))}
-                {(latestOrdersQuery.data?.length === 0) && (
-                  <div className="text-center py-8 text-sm text-muted-foreground border-dashed border rounded-xl">
-                    No orders today yet.
-                  </div>
+                {latestOrdersQ.data?.length === 0 && (
+                  <div className="text-center py-8 text-sm text-muted-foreground border-dashed border rounded-xl">No orders today yet.</div>
                 )}
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* RIGHT: Checklist & Quick Actions */}
+        {/* Unified: Setup Progress + Quick Actions */}
         <div className={cn("space-y-3", !canViewOrders && "lg:col-span-3")}>
-
-          {/* Setup Checklist — admin only */}
-          {isAdmin && (
-            <Card className="shadow-sm">
-              <CardHeader><CardTitle className="text-base">Setup checklist</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                <div className="rounded-xl border border-border bg-background p-3">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-primary" />
-                    <div className="text-sm font-medium">Ready in 3 steps</div>
+          <Card className="shadow-sm">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" /> Getting Started
+                </CardTitle>
+                <Badge variant={progress === 100 ? "default" : "secondary"} className="text-xs">
+                  {doneCount}/{checklistItems.length} done
+                </Badge>
+              </div>
+              {/* Progress bar */}
+              <div className="mt-2 h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary transition-all duration-500"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-1.5">
+              {checklistItems.map(item => (
+                <Link
+                  key={item.label}
+                  to={item.done ? "#" : item.route}
+                  className={cn(
+                    "flex items-center justify-between gap-3 rounded-lg p-2.5 transition-colors",
+                    item.done
+                      ? "opacity-60"
+                      : "hover:bg-accent cursor-pointer group"
+                  )}
+                  onClick={item.done ? (e) => e.preventDefault() : undefined}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {item.done ? (
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                    ) : (
+                      <Circle className="h-4 w-4 text-muted-foreground/50 shrink-0 group-hover:text-primary transition-colors" />
+                    )}
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">{item.label}</div>
+                      <div className="text-xs text-muted-foreground">{item.detail}</div>
+                    </div>
                   </div>
-                  <ul className="mt-3 space-y-2 text-sm">
-                    {setupChecklist.map((i) => (
-                      <li key={i.label} className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium">{i.label}</div>
-                          <div className="text-xs text-muted-foreground">{i.detail}</div>
-                        </div>
-                        <Badge variant={i.status === "Done" ? "default" : "secondary"} className="shrink-0">{i.status}</Badge>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                  <div className="shrink-0">
+                    {item.done ? (
+                      <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-200">Done</Badge>
+                    ) : (
+                      <ArrowUpRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
 
-          {/* Quick Actions — only show actions user has permission for */}
-          {quickActions.length > 0 && (
+          {/* Quick Actions */}
+          {actions.length > 0 && (
             <Card className="shadow-sm">
-              <CardHeader><CardTitle className="text-base">Quick actions</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-base">Quick actions</CardTitle></CardHeader>
               <CardContent className="grid gap-2">
-                {quickActions.map(action => (
-                  <Button key={action.to} className="w-full justify-between" variant="secondary" asChild>
-                    <Link to={action.to}>
-                      <span className="flex items-center gap-2"><action.icon className="h-4 w-4" /> {action.label}</span>
+                {actions.map(a => (
+                  <Button key={a.to} className="w-full justify-between" variant="secondary" asChild>
+                    <Link to={a.to}>
+                      <span className="flex items-center gap-2"><a.icon className="h-4 w-4" /> {a.label}</span>
                       <ArrowUpRight className="h-4 w-4" />
                     </Link>
                   </Button>
@@ -360,3 +333,8 @@ export default function AdminDashboard() {
     </div>
   );
 }
+
+// Re-export for Menu icon (used in checklist but imported from lucide above)
+const Salad = (props: any) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M7 21h10"/><path d="M12 21a9 9 0 0 0 9-9H3a9 9 0 0 0 9 9Z"/><path d="M11.38 12a2.4 2.4 0 0 1-.4-4.77 2.4 2.4 0 0 1 3.2-2.77 2.4 2.4 0 0 1 3.47-.63 2.4 2.4 0 0 1 3.13 1.33l-12.56 4.4"/><path d="M13 12a2.4 2.4 0 0 0 .4-4.77 2.4 2.4 0 0 0-3.2-2.77 2.4 2.4 0 0 0-3.47-.63 2.4 2.4 0 0 0-3.13 1.33L16.16 9.6"/></svg>
+);
