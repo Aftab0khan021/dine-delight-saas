@@ -105,7 +105,7 @@ export default function RestaurantProfile() {
     queryKey: ["public", "restaurant-profile", slug],
     enabled: !!slug,
     queryFn: async () => {
-      const { data, error } = await supabase.from("restaurants").select("id, name, slug, logo_url, description, settings, is_holiday_mode, holiday_mode_message, operating_hours, currency_code").eq("slug", slug).maybeSingle();
+      const { data, error } = await supabase.from("restaurants").select("id, name, slug, logo_url, description, settings, is_holiday_mode, holiday_mode_message, operating_hours, currency_code, cuisine_types").eq("slug", slug).maybeSingle();
       if (error) throw error;
       if (!data) throw new Error("Restaurant not found");
       return data;
@@ -718,7 +718,7 @@ export default function RestaurantProfile() {
         ...(settings?.address ? { "address": { "@type": "PostalAddress", "streetAddress": settings.address } } : {}),
         ...(contactPhone ? { "telephone": contactPhone } : {}),
         ...(contactEmail ? { "email": contactEmail } : {}),
-        "servesCuisine": Array.isArray((settings as any)?.cuisine_types) ? (settings as any).cuisine_types : [],
+        "servesCuisine": Array.isArray((restaurant as any)?.cuisine_types) ? (restaurant as any).cuisine_types : [],
       }) }} />
 
       {/* Gallery Lightbox */}

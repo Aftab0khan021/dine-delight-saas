@@ -160,7 +160,7 @@ export default function AdminBranding() {
       }
       setIsHolidayMode(restaurantData.is_holiday_mode || false);
       setHolidayMessage(restaurantData.holiday_mode_message || "");
-      setMaxVariants(restaurantData.max_variants_per_item || 5);
+
 
       // Sync enhancement settings
       setSocialLinks(s.social_links || { instagram: "", facebook: "", twitter: "", youtube: "" });
@@ -260,7 +260,6 @@ export default function AdminBranding() {
         operating_hours: operatingHours,
         is_holiday_mode: isHolidayMode,
         holiday_mode_message: holidayMessage || null,
-        max_variants_per_item: maxVariants,
 
       } as any).eq("id", restaurant!.id);
 
