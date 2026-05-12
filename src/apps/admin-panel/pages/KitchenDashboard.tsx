@@ -115,10 +115,18 @@ function KitchenDashboardContent() {
       const { data, error } = await q;
       if (error) throw error;
 
-      // Assign daily token numbers
+      // Assign daily token numbers — only for accepted orders (not cancelled/pending)
       const items = data ?? [];
       const sorted = [...items].sort((a, b) => new Date(a.placed_at).getTime() - new Date(b.placed_at).getTime());
-      sorted.forEach((o: any, idx: number) => { o.dailyToken = idx + 1; });
+      let tokenCounter = 0;
+      sorted.forEach((o: any) => {
+        if (o.status !== 'cancelled' && o.status !== 'pending') {
+          tokenCounter++;
+          o.dailyToken = tokenCounter;
+        } else {
+          o.dailyToken = null;
+        }
+      });
       return items;
     },
   });
@@ -323,7 +331,9 @@ function OrderKOTCard({ order, brandMap, currency, qc }: {
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold text-sm">Token #{(order as any).dailyToken ?? shortId(order.id)}</span>
+            <span className="font-bold text-sm">
+              {(order as any).dailyToken ? `Token #${(order as any).dailyToken}` : order.status === 'pending' ? 'NEW' : `#${shortId(order.id)}`}
+            </span>
             {brand && (
               <span
                 className="text-xs px-1.5 py-0.5 rounded font-medium text-white"

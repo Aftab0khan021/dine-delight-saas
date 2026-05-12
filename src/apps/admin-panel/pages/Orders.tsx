@@ -105,7 +105,9 @@ function OrderCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <div className="text-sm font-semibold">Token #{order.dailyToken ?? shortId(order.id)}</div>
+            <div className="text-sm font-semibold">
+              {order.dailyToken ? `Token #${order.dailyToken}` : order.status === 'pending' ? 'NEW' : shortId(order.id)}
+            </div>
             <Badge variant={statusVariant(uiStatus)}>{uiStatus}</Badge>
             {order.payment_status === 'paid' ? (
               <Badge variant="default" className="bg-green-600 text-white text-[10px] px-1.5">Paid</Badge>
@@ -430,10 +432,16 @@ export default function AdminOrders() {
         .in("order_id", orderIds);
 
       // Combine them + compute daily token numbers
-      // Sort by placed_at ascending to assign tokens in order
+      // Tokens are ONLY for accepted orders (not cancelled/pending)
       const sorted = [...orders].sort((a, b) => new Date(a.placed_at).getTime() - new Date(b.placed_at).getTime());
       const tokenMap = new Map<string, number>();
-      sorted.forEach((o, idx) => tokenMap.set(o.id, idx + 1));
+      let tokenCounter = 0;
+      sorted.forEach(o => {
+        if (o.status !== 'cancelled' && o.status !== 'pending') {
+          tokenCounter++;
+          tokenMap.set(o.id, tokenCounter);
+        }
+      });
 
       const ordersWithSummary = orders.map(o => {
         const myItems = (items?.filter(i => i.order_id === o.id) || []).map((i: any) => ({
