@@ -115,14 +115,16 @@ function KitchenDashboardContent() {
       const { data, error } = await q;
       if (error) throw error;
 
-      // Assign daily token numbers — only for accepted orders (not cancelled/pending)
+      // Assign daily token numbers — only for accepted orders, reset per day
       const items = data ?? [];
       const sorted = [...items].sort((a, b) => new Date(a.placed_at).getTime() - new Date(b.placed_at).getTime());
-      let tokenCounter = 0;
+      const dailyCounters = new Map<string, number>();
       sorted.forEach((o: any) => {
         if (o.status !== 'cancelled' && o.status !== 'pending') {
-          tokenCounter++;
-          o.dailyToken = tokenCounter;
+          const dateKey = new Date(o.placed_at).toISOString().slice(0, 10);
+          const current = (dailyCounters.get(dateKey) ?? 0) + 1;
+          dailyCounters.set(dateKey, current);
+          o.dailyToken = current;
         } else {
           o.dailyToken = null;
         }

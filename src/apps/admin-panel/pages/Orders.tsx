@@ -84,11 +84,13 @@ function OrderCard({
   onAdvance,
   loadingId,
   currencyCode,
+  restaurantName,
 }: {
   order: OrderData;
   onAdvance: (id: string, currentStatus: OrderStatus) => void;
   loadingId: string | null;
   currencyCode: string;
+  restaurantName: string;
 }) {
   const uiStatus = STATUS_MAP[order.status as OrderStatus];
   const isLoading = loadingId === order.id;
@@ -143,26 +145,18 @@ function OrderCard({
           className="h-8 w-8 text-muted-foreground"
           title="Print KOT"
           onClick={() => {
-            const html = generateKOTHtml(order, restaurant?.name || 'Restaurant');
-            // Use iframe to avoid popup-blocker white screen
-            const iframe = document.createElement('iframe');
-            iframe.style.position = 'fixed';
-            iframe.style.right = '0';
-            iframe.style.bottom = '0';
-            iframe.style.width = '0';
-            iframe.style.height = '0';
-            iframe.style.border = 'none';
-            document.body.appendChild(iframe);
-            const doc = iframe.contentDocument || iframe.contentWindow?.document;
-            if (doc) {
-              doc.open();
-              doc.write(html);
-              doc.close();
-              iframe.contentWindow?.focus();
-              setTimeout(() => {
-                iframe.contentWindow?.print();
-                setTimeout(() => document.body.removeChild(iframe), 1000);
-              }, 300);
+            const html = generateKOTHtml(order, restaurantName);
+            const w = window.open('', '_blank', 'width=420,height=650,scrollbars=yes');
+            if (w) {
+              w.document.open();
+              w.document.write(html);
+              w.document.close();
+            } else {
+              // Fallback if popup blocked
+              const blob = new Blob([html], { type: 'text/html' });
+              const url = URL.createObjectURL(blob);
+              window.open(url, '_blank');
+              setTimeout(() => URL.revokeObjectURL(url), 5000);
             }
           }}
         >
@@ -433,13 +427,16 @@ export default function AdminOrders() {
 
       // Combine them + compute daily token numbers
       // Tokens are ONLY for accepted orders (not cancelled/pending)
+      // Tokens reset per day — group by date
       const sorted = [...orders].sort((a, b) => new Date(a.placed_at).getTime() - new Date(b.placed_at).getTime());
       const tokenMap = new Map<string, number>();
-      let tokenCounter = 0;
+      const dailyCounters = new Map<string, number>(); // key: YYYY-MM-DD
       sorted.forEach(o => {
         if (o.status !== 'cancelled' && o.status !== 'pending') {
-          tokenCounter++;
-          tokenMap.set(o.id, tokenCounter);
+          const dateKey = new Date(o.placed_at).toISOString().slice(0, 10);
+          const current = (dailyCounters.get(dateKey) ?? 0) + 1;
+          dailyCounters.set(dateKey, current);
+          tokenMap.set(o.id, current);
         }
       });
 
@@ -690,6 +687,7 @@ export default function AdminOrders() {
                     onAdvance={(id, status) => advanceMutation.mutate({ id, currentStatus: status })}
                     loadingId={advancingId}
                     currencyCode={restaurant?.currency_code || "INR"}
+                    restaurantName={restaurant?.name || "Restaurant"}
                   />
                 ))}
 
