@@ -328,21 +328,23 @@ export default function RestaurantProfile() {
       </header>
 
       {/* HERO */}
-      <div className="relative min-h-[50vh] sm:min-h-[55vh] md:h-[60vh] w-full bg-muted overflow-hidden">
+      <div className="relative w-full bg-muted">
+        {/* Background image — absolutely positioned, fills container */}
         {settings.cover_image_url ? (
-          <img src={settings.cover_image_url} alt="Cover" className="h-full w-full object-cover opacity-60" />
+          <img src={settings.cover_image_url} alt="Cover" className="absolute inset-0 h-full w-full object-cover opacity-60" />
         ) : (
-          <div className="h-full w-full bg-gradient-to-br from-slate-800 to-slate-900" />
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900" />
         )}
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4 sm:px-6 py-6 space-y-3 bg-black/35 pt-16">
-          <div className="h-28 w-28 md:h-32 md:w-32 rounded-full border-4 border-background bg-background shadow-xl overflow-hidden shrink-0">
+        {/* Content overlay — naturally sizes to content */}
+        <div className="relative flex flex-col items-center justify-center text-center px-4 sm:px-6 py-12 sm:py-16 md:py-20 space-y-3 bg-black/35 min-h-[50vh] sm:min-h-[55vh]" style={{ paddingTop: 'max(4rem, env(safe-area-inset-top, 1rem))' }}>
+          <div className="h-24 w-24 sm:h-28 sm:w-28 md:h-32 md:w-32 rounded-full border-4 border-background bg-background shadow-xl overflow-hidden shrink-0">
             {restaurant.logo_url ? (
               <img src={restaurant.logo_url} alt="Logo" className="h-full w-full object-cover" />
             ) : (
               <div className="h-full w-full flex items-center justify-center bg-muted text-muted-foreground font-bold text-3xl">{restaurant.name.substring(0, 2).toUpperCase()}</div>
             )}
           </div>
-          <div className="space-y-1.5 max-w-2xl text-white drop-shadow-md">
+          <div className="space-y-2 max-w-2xl text-white drop-shadow-md">
             <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-tight">{restaurant.name}</h1>
             {/* R6: Real avg rating */}
             {ratingData && (
@@ -358,13 +360,13 @@ export default function RestaurantProfile() {
             )}
             {/* Cuisine Badges */}
             {Array.isArray((restaurant as any)?.cuisine_types) && (restaurant as any).cuisine_types.length > 0 && (
-              <div className="flex flex-wrap justify-center gap-1.5">
+              <div className="flex flex-wrap justify-center gap-1.5 pt-1">
                 {(restaurant as any).cuisine_types.map((c: string) => (
                   <Badge key={c} variant="secondary" className="bg-white/20 text-white border-white/30 text-xs backdrop-blur-sm">{c}</Badge>
                 ))}
               </div>
             )}
-            <p className="text-base sm:text-lg opacity-90 font-light">{restaurant.description || "Welcome to our restaurant — explore our menu and order online."}</p>
+            <p className="text-sm sm:text-base md:text-lg opacity-90 font-light leading-relaxed">{restaurant.description || "Welcome to our restaurant — explore our menu and order online."}</p>
           </div>
           {/* Open/Closed Badge */}
           <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
@@ -704,8 +706,17 @@ export default function RestaurantProfile() {
           <div className="flex justify-center">
             <Turnstile onSuccess={setReviewTurnstileToken} />
           </div>
-          <Button className="w-full" disabled={!reviewName.trim() || reviewRating < 1 || reviewSubmitting || !reviewTurnstileToken} onClick={submitReview}>
-            {reviewSubmitting ? "Submitting..." : "Submit Review"}
+          <Button
+            className="w-full"
+            disabled={!reviewName.trim() || reviewRating < 1 || reviewSubmitting}
+            onClick={() => {
+              if (!reviewTurnstileToken) {
+                return;
+              }
+              submitReview();
+            }}
+          >
+            {reviewSubmitting ? "Submitting..." : !reviewName.trim() ? "Enter your name" : reviewRating < 1 ? "Select a rating" : "Submit Review"}
           </Button>
         </div>
       </AnimatedSection>
