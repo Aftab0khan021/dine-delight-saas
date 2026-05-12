@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Clock, Users, Check, X, Phone, ChevronDown, List, Grid3X3 } from "lucide-react";
+import { CalendarDays, Clock, Users, Check, X, Phone, ChevronDown, List, Grid3X3, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
@@ -113,9 +113,14 @@ function ReservationsContent() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Reservations</h1>
-        <p className="text-sm text-muted-foreground">Manage table bookings from your customers</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Reservations</h1>
+          <p className="text-sm text-muted-foreground">Manage table bookings from your customers</p>
+        </div>
+        <Button variant="outline" size="icon" onClick={() => qc.invalidateQueries({ queryKey: ["admin", "reservations"] })} title="Refresh reservations">
+          <RefreshCw className="h-4 w-4" />
+        </Button>
       </div>
 
       {/* Reservation Settings */}

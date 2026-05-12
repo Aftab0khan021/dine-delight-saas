@@ -317,9 +317,14 @@ export default function AdminStaff() {
           )}
         </div>
 
-        <Button disabled={isAtLimit} onClick={() => setInviteOpen(true)}>
-          <UserPlus className="mr-2 h-4 w-4" /> Invite staff
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="icon" onClick={() => qc.invalidateQueries({ queryKey: ["admin", "staff"] })} title="Refresh staff">
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+          <Button disabled={isAtLimit} onClick={() => setInviteOpen(true)}>
+            <UserPlus className="mr-2 h-4 w-4" /> Invite staff
+          </Button>
+        </div>
 
         <InviteStaffDialog
           open={inviteOpen}

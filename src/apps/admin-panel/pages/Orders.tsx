@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addDays, startOfDay, subHours, subDays, subMonths, subQuarters, subYears } from "date-fns";
-import { Search, Lock, Bell, BellOff, Printer, ChevronLeft, ChevronRight, Store, Truck, ShoppingBag, Star } from "lucide-react";
+import { Search, Lock, Bell, BellOff, Printer, ChevronLeft, ChevronRight, Store, Truck, ShoppingBag, Star, RefreshCw } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
@@ -607,6 +607,10 @@ export default function AdminOrders() {
                   Alerts Off
                 </>
               )}
+            </Button>
+
+            <Button variant="outline" size="icon" onClick={() => qc.invalidateQueries({ queryKey: ["admin", "orders"] })} title="Refresh orders">
+              <RefreshCw className="h-4 w-4" />
             </Button>
           </div>
         </div>

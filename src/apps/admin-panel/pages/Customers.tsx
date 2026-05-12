@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { FeatureGate } from "../components/FeatureGate";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Search, Users, Crown, Star, User, ShoppingBag, TrendingUp, Phone, Clock } from "lucide-react";
+import { Search, Users, Crown, Star, User, ShoppingBag, TrendingUp, Phone, Clock, RefreshCw } from "lucide-react";
 import { formatMoney } from "@/lib/formatting";
 import { format, formatDistanceToNow } from "date-fns";
 
@@ -22,6 +22,7 @@ export default function Customers() {
 
 function CustomersContent() {
   const { restaurant } = useRestaurantContext();
+  const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
 
@@ -102,9 +103,14 @@ function CustomersContent() {
 
   return (
     <section className="flex flex-col gap-6 w-full">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2"><Users className="h-6 w-6" /> Customer CRM</h1>
-        <p className="text-sm text-muted-foreground">View all customers, lifetime value, and order history</p>
+      <header className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2"><Users className="h-6 w-6" /> Customer CRM</h1>
+          <p className="text-sm text-muted-foreground">View all customers, lifetime value, and order history</p>
+        </div>
+        <Button variant="outline" size="icon" onClick={() => qc.invalidateQueries({ queryKey: ["admin-customers"] })} title="Refresh customers">
+          <RefreshCw className="h-4 w-4" />
+        </Button>
       </header>
 
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">

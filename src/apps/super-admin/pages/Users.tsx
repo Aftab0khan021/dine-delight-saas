@@ -376,6 +376,9 @@ export default function Users() {
                     </p>
                 </div>
                 <div className="flex gap-2">
+                    <Button variant="outline" size="icon" onClick={() => queryClient.invalidateQueries({ queryKey: ["super-admin", "users"] })} title="Refresh users">
+                        <RefreshCw className="h-4 w-4" />
+                    </Button>
                     <Button variant="outline" size="icon" onClick={() => {
                         if (!filteredUsers.length) return;
                         const escapeCSV = (val: string) => `"${val.replace(/"/g, '""')}"`;

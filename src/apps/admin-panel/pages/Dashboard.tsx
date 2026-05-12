@@ -1,12 +1,12 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { addDays, startOfDay, subHours, eachHourOfInterval, format } from "date-fns";
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Link } from "react-router-dom";
 import {
   ArrowUpRight, Plus, QrCode, ReceiptText, Sparkles, Lock,
   TrendingUp, CheckCircle2, Circle, Palette, Users, ChefHat,
-  CalendarDays, Package, Ticket, Star, MapPin, Shield, Settings,
+  CalendarDays, Package, Ticket, Star, MapPin, Shield, Settings, RefreshCw,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -32,6 +32,7 @@ const statusVariant = (s: string) => {
 
 export default function AdminDashboard() {
   const { restaurant } = useRestaurantContext();
+  const qc = useQueryClient();
   const { hasPermission, isAdmin } = usePermissionContext();
   const { isFeatureEnabled } = useFeatureAccess(restaurant?.id);
   const [showRevenue, setShowRevenue] = useState(false);
@@ -157,6 +158,9 @@ export default function AdminDashboard() {
           <p className="mt-1 text-sm text-muted-foreground">A clear snapshot of today.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="icon" onClick={() => { qc.invalidateQueries({ queryKey: ["admin", "dashboard"] }); qc.invalidateQueries({ queryKey: ["admin", "orders"] }); }} title="Refresh dashboard">
+            <RefreshCw className="h-4 w-4" />
+          </Button>
           {canViewOrders && (
             <Button variant="secondary" asChild><Link to="/admin/orders">View orders <ArrowUpRight className="ml-2 h-4 w-4" /></Link></Button>
           )}

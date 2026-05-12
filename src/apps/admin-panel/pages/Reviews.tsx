@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Star, Eye, EyeOff, Trash2, RotateCcw } from "lucide-react";
+import { Star, Eye, EyeOff, Trash2, RotateCcw, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { analyzeSentimentFree, type SentimentResult } from "../lib/ai-utils";
 import { useAITier } from "../hooks/useAITier";
@@ -78,9 +78,14 @@ function ReviewsContent() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Customer Reviews</h1>
-        <p className="text-muted-foreground mt-1">Manage reviews left by customers on your restaurant profile.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Customer Reviews</h1>
+          <p className="text-muted-foreground mt-1">Manage reviews left by customers on your restaurant profile.</p>
+        </div>
+        <Button variant="outline" size="icon" onClick={() => qc.invalidateQueries({ queryKey: ["admin", "reviews"] })} title="Refresh reviews">
+          <RefreshCw className="h-4 w-4" />
+        </Button>
       </div>
 
       {/* Stats */}
