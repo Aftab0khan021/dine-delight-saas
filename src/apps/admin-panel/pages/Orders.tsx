@@ -93,12 +93,19 @@ function OrderCard({
   const uiStatus = STATUS_MAP[order.status as OrderStatus];
   const isLoading = loadingId === order.id;
 
+  // Order type display label
+  const orderTypeLabel = order.order_type === 'dine_in'
+    ? (order.table_label ? `Table ${order.table_label}` : 'Dine-In')
+    : order.order_type === 'pickup' ? 'Pickup'
+    : order.order_type === 'delivery' ? 'Delivery'
+    : (order.table_label || 'Walk-in');
+
   return (
     <div className="rounded-xl border border-border bg-background p-3 shadow-sm transition-all hover:shadow-md">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <div className="text-sm font-semibold">{shortId(order.id)}</div>
+            <div className="text-sm font-semibold">Token #{order.dailyToken ?? shortId(order.id)}</div>
             <Badge variant={statusVariant(uiStatus)}>{uiStatus}</Badge>
             {order.payment_status === 'paid' ? (
               <Badge variant="default" className="bg-green-600 text-white text-[10px] px-1.5">Paid</Badge>
@@ -109,7 +116,7 @@ function OrderCard({
             )}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
-            {formatTime(order.placed_at)} • {order.table_label || "Takeaway"}
+            {formatTime(order.placed_at)} • {orderTypeLabel}
           </div>
           {/* Order Type Badge */}
           <div className="mt-1 flex items-center gap-1.5 flex-wrap">
@@ -134,10 +141,26 @@ function OrderCard({
           className="h-8 w-8 text-muted-foreground"
           title="Print KOT"
           onClick={() => {
-            const popup = window.open('', '_blank', 'width=400,height=600');
-            if (popup) {
-              popup.document.write(generateKOTHtml(order, restaurant?.name || 'Restaurant'));
-              popup.document.close();
+            const html = generateKOTHtml(order, restaurant?.name || 'Restaurant');
+            // Use iframe to avoid popup-blocker white screen
+            const iframe = document.createElement('iframe');
+            iframe.style.position = 'fixed';
+            iframe.style.right = '0';
+            iframe.style.bottom = '0';
+            iframe.style.width = '0';
+            iframe.style.height = '0';
+            iframe.style.border = 'none';
+            document.body.appendChild(iframe);
+            const doc = iframe.contentDocument || iframe.contentWindow?.document;
+            if (doc) {
+              doc.open();
+              doc.write(html);
+              doc.close();
+              iframe.contentWindow?.focus();
+              setTimeout(() => {
+                iframe.contentWindow?.print();
+                setTimeout(() => document.body.removeChild(iframe), 1000);
+              }, 300);
             }
           }}
         >
@@ -406,15 +429,18 @@ export default function AdminOrders() {
         `)
         .in("order_id", orderIds);
 
-      // Combine them
+      // Combine them + compute daily token numbers
+      // Sort by placed_at ascending to assign tokens in order
+      const sorted = [...orders].sort((a, b) => new Date(a.placed_at).getTime() - new Date(b.placed_at).getTime());
+      const tokenMap = new Map<string, number>();
+      sorted.forEach((o, idx) => tokenMap.set(o.id, idx + 1));
+
       const ordersWithSummary = orders.map(o => {
-        // Flatten variant name for consistency (KOT template expects variant_name)
         const myItems = (items?.filter(i => i.order_id === o.id) || []).map((i: any) => ({
           ...i,
           variant_name: i.variant?.name || i.variant_name
         }));
 
-        // Helper for concise summary
         const summary = myItems.map(i => {
           let text = `${i.quantity}x ${i.name_snapshot}`;
           if (i.variant_name) text += ` (${i.variant_name})`;
@@ -424,7 +450,7 @@ export default function AdminOrders() {
           if (i.notes) text += ` [Note: ${i.notes}]`;
           return text;
         }).join(", ");
-        return { ...o, items_summary: summary, item_details: myItems };
+        return { ...o, items_summary: summary, item_details: myItems, dailyToken: tokenMap.get(o.id) ?? 0 };
       });
 
       return { orders: ordersWithSummary, totalCount: count || 0 };
@@ -531,6 +557,12 @@ export default function AdminOrders() {
     return map;
   }, [filteredOrders]);
 
+  // When a specific status is selected, show only that column
+  const visibleColumns = useMemo(() => {
+    if (statusFilter === "all") return UI_COLUMNS;
+    return UI_COLUMNS.filter(col => col === statusFilter);
+  }, [statusFilter]);
+
   // --- 5. Render (Repo A Design) ---
   return (
     <div className="flex flex-col gap-4 w-full">
@@ -626,10 +658,15 @@ export default function AdminOrders() {
         </Alert>
       )}
 
-      {/* Kanban Board — fills full width on desktop, scrolls horizontally on mobile */}
+      {/* Kanban Board — shows only selected column when filtered, all columns when "all" */}
       <div className="overflow-x-auto w-full">
-        <section className="grid gap-3 w-full grid-cols-2 lg:grid-cols-4 items-start" style={{minWidth: '520px'}}>
-          {UI_COLUMNS.map((col) => (
+        <section className={cn(
+          "grid gap-3 w-full items-start",
+          statusFilter === "all"
+            ? "grid-cols-2 lg:grid-cols-4"
+            : "grid-cols-1 max-w-2xl"
+        )} style={{minWidth: statusFilter === "all" ? '520px' : undefined}}>
+          {visibleColumns.map((col) => (
             <Card key={col} className="shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center justify-between text-sm">

@@ -19,7 +19,7 @@ const STATUS_LABELS: Record<string, string> = {
   accepted: "Accepted",
   in_progress: "Cooking",
   ready: "Ready",
-  completed: "Done",
+  completed: "Served",
   cancelled: "Cancelled",
 };
 
@@ -45,6 +45,7 @@ function KitchenDashboardContent() {
   const qc = useQueryClient();
   const [brandFilter, setBrandFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("active");
+  const [timeFilter, setTimeFilter] = useState<string>("daily");
 
   // Get child brands if this is a cloud kitchen.
   // Uses parent_kitchen_id from 20260424_cloud_kitchen.sql migration.
@@ -74,13 +75,25 @@ function KitchenDashboardContent() {
   ].filter(Boolean) as string[];
 
   const ordersQuery = useQuery({
-    queryKey: ["kitchen-orders", restaurant?.id, brandFilter, statusFilter],
+    queryKey: ["kitchen-orders", restaurant?.id, brandFilter, statusFilter, timeFilter],
     enabled: !!restaurant?.id && allRestaurantIds.length > 0,
     refetchInterval: 15_000,
     queryFn: async () => {
       const ids = brandFilter === "all" ? allRestaurantIds : [brandFilter];
-      // Guard: never call .in() with empty array — PostgREST throws
       if (ids.length === 0) return [];
+
+      // Time range based on filter
+      const now = new Date();
+      let timeStart: Date;
+      if (timeFilter === "weekly") {
+        timeStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      } else if (timeFilter === "monthly") {
+        timeStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else {
+        // daily — start of today
+        timeStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      }
+
       let q = supabase
         .from("orders")
         .select(`
@@ -89,8 +102,9 @@ function KitchenDashboardContent() {
           order_items(name_snapshot, quantity)
         `)
         .in("restaurant_id", ids)
+        .gte("placed_at", timeStart.toISOString())
         .order("placed_at", { ascending: false })
-        .limit(80);
+        .limit(200);
 
       if (statusFilter === "active") {
         q = q.in("status", ["pending", "accepted", "in_progress", "ready"]);
@@ -100,7 +114,12 @@ function KitchenDashboardContent() {
 
       const { data, error } = await q;
       if (error) throw error;
-      return data ?? [];
+
+      // Assign daily token numbers
+      const items = data ?? [];
+      const sorted = [...items].sort((a, b) => new Date(a.placed_at).getTime() - new Date(b.placed_at).getTime());
+      sorted.forEach((o: any, idx: number) => { o.dailyToken = idx + 1; });
+      return items;
     },
   });
 
@@ -169,6 +188,16 @@ function KitchenDashboardContent() {
               {Object.entries(STATUS_LABELS).map(([k, v]) => (
                 <SelectItem key={k} value={k}>{v}</SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+          <Select value={timeFilter} onValueChange={setTimeFilter}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="daily">Today</SelectItem>
+              <SelectItem value="weekly">This Week</SelectItem>
+              <SelectItem value="monthly">This Month</SelectItem>
             </SelectContent>
           </Select>
           <Button variant="outline" size="sm" onClick={() => qc.invalidateQueries({ queryKey: ["kitchen-orders"] })}>
@@ -294,7 +323,7 @@ function OrderKOTCard({ order, brandMap, currency, qc }: {
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold text-sm">#{shortId(order.id)}</span>
+            <span className="font-bold text-sm">Token #{(order as any).dailyToken ?? shortId(order.id)}</span>
             {brand && (
               <span
                 className="text-xs px-1.5 py-0.5 rounded font-medium text-white"
