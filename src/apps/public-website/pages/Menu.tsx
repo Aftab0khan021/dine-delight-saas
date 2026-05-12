@@ -1316,6 +1316,7 @@ export default function PublicMenu() {
                                       {(item.allergens as string[]).slice(0, 4).map((a: string) => <span key={a} className="text-[9px] bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded-full px-1.5 py-0.5">🛡️ {a}</span>)}
                                     </div>
                                   )}
+                                </div>
                                 <div className="text-right shrink-0">
                                   <p className="font-medium tabular-nums whitespace-nowrap">{formatMoney(item.price_cents, currencyCode)}</p>
                                   {/* M16: Share */}
