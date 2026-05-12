@@ -42,10 +42,11 @@ export function generateKOTHtml(order: any, restaurantName: string = "Restaurant
     <div class="divider">- - - - - - - - - - - - - - - - - - - - -</div>
   `).join("") || "<div style='text-align:center'>No items</div>";
 
+  const tokenLabel = order.dailyToken ? `Token #${order.dailyToken}` : `#${(order.id?.slice(0, 4) ?? '')}`;
   return `<!DOCTYPE html>
 <html>
 <head>
-  <title>KOT #${escHtml(order.id?.slice(0, 4) ?? "")}</title>
+  <title>KOT ${escHtml(tokenLabel)}</title>
   <meta charset="utf-8">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -72,6 +73,7 @@ export function generateKOTHtml(order: any, restaurantName: string = "Restaurant
       margin-bottom: 10px;
     }
     .title { font-size: 15px; font-weight: bold; letter-spacing: 1px; margin-bottom: 6px; }
+    .token-number { font-size: 22px; font-weight: bold; margin: 6px 0; letter-spacing: 2px; }
     .meta { font-size: 12px; line-height: 1.7; }
     .order-type {
       display: inline-block;
@@ -116,14 +118,14 @@ export function generateKOTHtml(order: any, restaurantName: string = "Restaurant
 <body>
   <div class="top-bar">
     <span>${escHtml(placedAt)}</span>
-    <span>KOT #${escHtml(order.id?.slice(0, 4) ?? "")}</span>
+    <span>${escHtml(tokenLabel)}</span>
   </div>
 
   <div class="header">
     <div class="title">KITCHEN ORDER TICKET</div>
+    <div class="token-number">${escHtml(tokenLabel)}</div>
     <div class="meta">
       <strong>${escHtml(restaurantName)}</strong><br>
-      Order #${escHtml(order.id?.slice(0, 8).toUpperCase() ?? "")}<br>
       ${escHtml(placedAt)}<br>
       <span class="order-type">${escHtml(orderTypeLabel)}</span>
       ${order.order_type === "delivery" && order.delivery_address
