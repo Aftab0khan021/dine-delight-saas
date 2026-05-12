@@ -199,13 +199,14 @@ export default function PublicMenu() {
     queryFn: async () => {
       const { data } = await supabase
         .from("coupons")
-        .select("id, code, description, discount_type, discount_value, min_order_cents, max_discount_cents, expires_at")
+        .select("id, code, description, discount_type, discount_value, min_order_cents, max_discount_cents, expires_at, usage_count, usage_limit")
         .eq("restaurant_id", restaurantQuery.data!.id)
         .eq("is_active", true)
         .or(`expires_at.is.null,expires_at.gte.${new Date().toISOString()}`)
         .order("discount_value", { ascending: false })
         .limit(6);
-      return data || [];
+      // Filter out coupons that have reached their usage limit
+      return (data || []).filter((c: any) => !c.usage_limit || c.usage_count < c.usage_limit);
     },
   });
   const [copiedOffer, setCopiedOffer] = useState<string | null>(null);

@@ -370,9 +370,14 @@ function CouponsContent() {
                                                 {coupon.usage_limit ? ` / ${coupon.usage_limit}` : " used"}
                                             </TableCell>
                                             <TableCell>
-                                                <Badge variant={coupon.is_active ? "default" : "secondary"}>
-                                                    {coupon.is_active ? "Active" : "Inactive"}
-                                                </Badge>
+                                                {(() => {
+                                                    const exhausted = coupon.usage_limit && coupon.usage_count >= coupon.usage_limit;
+                                                    return (
+                                                        <Badge variant={exhausted ? "destructive" : coupon.is_active ? "default" : "secondary"}>
+                                                            {exhausted ? "Limit Reached" : coupon.is_active ? "Active" : "Inactive"}
+                                                        </Badge>
+                                                    );
+                                                })()}
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <DropdownMenu>
@@ -487,7 +492,11 @@ function CouponsContent() {
                                 id="code"
                                 placeholder="SUMMER2024"
                                 className="font-mono uppercase"
-                                {...form.register("code")}
+                                {...form.register("code", {
+                                  onChange: (e: any) => {
+                                    e.target.value = e.target.value.toUpperCase();
+                                  }
+                                })}
                             />
                             {form.formState.errors.code && (
                                 <p className="text-xs text-destructive">{form.formState.errors.code.message}</p>
