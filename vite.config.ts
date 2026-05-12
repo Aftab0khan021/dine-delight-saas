@@ -17,7 +17,8 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === "development" && componentTagger(),
     VitePWA({
-      registerType: "autoUpdate",
+      // We handle SW registration manually in index.html — do NOT auto-inject registerSW.js
+      injectRegister: false,
       manifest: {
         name: "Restaurant Ordering",
         short_name: "Orders",
