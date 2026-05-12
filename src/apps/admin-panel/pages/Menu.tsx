@@ -97,6 +97,7 @@ export default function AdminMenu() {
   // --- State ---
   const [search, setSearch] = useState("");
   const [draggedCatId, setDraggedCatId] = useState<string | null>(null);
+  const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
 
   // Sheet States
   const [catSheetOpen, setCatSheetOpen] = useState(false);
@@ -176,8 +177,15 @@ export default function AdminMenu() {
 
   const filteredItems = useMemo(() => {
     const s = search.toLowerCase().trim();
-    return items.filter(i => i.name.toLowerCase().includes(s));
-  }, [items, search]);
+    let result = items;
+    if (selectedCatId) {
+      result = result.filter(i => i.category_id === selectedCatId);
+    }
+    if (s) {
+      result = result.filter(i => i.name.toLowerCase().includes(s));
+    }
+    return result;
+  }, [items, search, selectedCatId]);
 
   // --- Drag & Drop Logic ---
   const reorderMutation = useMutation({
@@ -432,6 +440,21 @@ export default function AdminMenu() {
             <CardTitle className="text-base">Categories</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
+            {/* All categories button */}
+            <button
+              type="button"
+              onClick={() => setSelectedCatId(null)}
+              className={cn(
+                "w-full text-left rounded-xl border p-3 text-sm font-medium transition-all duration-200",
+                !selectedCatId
+                  ? "border-primary bg-primary/5 text-primary shadow-sm"
+                  : "border-border text-muted-foreground hover:border-primary/20 hover:shadow-sm"
+              )}
+            >
+              All Categories
+              <span className="ml-2 text-xs font-normal text-muted-foreground">({items.length} items)</span>
+            </button>
+
             {categories.map((cat) => (
               <div
                 key={cat.id}
@@ -439,20 +462,23 @@ export default function AdminMenu() {
                 onDragStart={(e) => handleDragStart(e, cat.id)}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, cat.id)}
+                onClick={() => setSelectedCatId(prev => prev === cat.id ? null : cat.id)}
                 className={cn(
                   "group flex items-center justify-between gap-3 rounded-xl border bg-background p-3 transition-all duration-200",
-                  "cursor-grab",
-                  draggedCatId !== cat.id && "border-border shadow-sm hover:border-primary/20 hover:shadow-md",
-                  draggedCatId === cat.id && "border-2 border-primary shadow-xl scale-[1.02] z-10 relative bg-background"
+                  "cursor-pointer",
+                  draggedCatId === cat.id && "border-2 border-primary shadow-xl scale-[1.02] z-10 relative bg-background cursor-grab",
+                  draggedCatId !== cat.id && selectedCatId === cat.id && "border-primary bg-primary/5 shadow-sm",
+                  draggedCatId !== cat.id && selectedCatId !== cat.id && "border-border shadow-sm hover:border-primary/20 hover:shadow-md"
                 )}
               >
-                <div className="flex items-center gap-3 min-w-0 pointer-events-none">
+                <div className="flex items-center gap-3 min-w-0">
                   <Grip className={cn(
-                    "h-4 w-4 text-muted-foreground transition-colors",
-                    draggedCatId === cat.id && "text-primary"
+                    "h-4 w-4 text-muted-foreground transition-colors cursor-grab shrink-0",
+                    draggedCatId === cat.id && "text-primary",
+                    selectedCatId === cat.id && "text-primary/60"
                   )} />
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">{cat.name}</div>
+                    <div className={cn("truncate text-sm font-medium", selectedCatId === cat.id && "text-primary")}>{cat.name}</div>
                     <div className="text-xs text-muted-foreground">{itemCountByCat.get(cat.id) || 0} items</div>
                   </div>
                 </div>
@@ -469,7 +495,9 @@ export default function AdminMenu() {
         <Card className="shadow-sm lg:col-span-2">
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between space-y-0">
             <div>
-              <CardTitle className="text-base">Menu Items</CardTitle>
+              <CardTitle className="text-base">
+                {selectedCatId ? `${categories.find(c => c.id === selectedCatId)?.name || 'Category'} Items` : 'Menu Items'}
+              </CardTitle>
               {menuItemsLimit !== undefined && !isUnlimited && (
                 <CardDescription>
                   {currentMenuItems} of {menuItemsLimit} menu items used
