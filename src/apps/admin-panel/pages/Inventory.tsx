@@ -15,7 +15,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Plus, Package, AlertTriangle, ArrowUpDown, RefreshCw, Link2, Unlink, History } from "lucide-react";
+import { Plus, Package, AlertTriangle, ArrowUpDown, RefreshCw, Link2, Unlink, History, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toCents } from "@/lib/formatting";
 
 const UNITS = ["pcs", "g", "kg", "ml", "L", "cups", "tbsp", "tsp", "oz", "lb"];
@@ -51,6 +53,8 @@ function InventoryContent() {
   const qc = useQueryClient();
 
   const [addOpen, setAddOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [restockOpen, setRestockOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -183,6 +187,39 @@ function InventoryContent() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ingredients"] }),
   });
 
+  const editMutation = useMutation({
+    mutationFn: async () => {
+      if (!selected) throw new Error("No ingredient selected");
+      const { error } = await supabase.from("ingredients").update({
+        name: form.name.trim(),
+        unit: form.unit,
+        current_stock: parseFloat(form.current_stock) || 0,
+        low_stock_threshold: parseFloat(form.low_stock_threshold) || 0,
+        cost_per_unit_cents: toCents(form.cost_per_unit_cents),
+      }).eq("id", selected.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ingredients"] });
+      setEditOpen(false);
+      toast({ title: "Ingredient updated" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("ingredients").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ingredients"] });
+      setDeleteId(null);
+      toast({ title: "Ingredient deleted" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   const ingredients = ingredientsQuery.data || [];
   const filtered = ingredients.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
   const lowStockItems = ingredients.filter(i => i.is_tracked && i.current_stock <= i.low_stock_threshold && i.current_stock > 0);
@@ -267,16 +304,42 @@ function InventoryContent() {
                     <TableCell>
                       <Switch checked={ing.is_tracked} onCheckedChange={v => toggleTrack.mutate({ id: ing.id, tracked: v })} />
                     </TableCell>
-                    <TableCell className="text-right space-x-1">
-                      <Button size="sm" variant="outline" onClick={() => { setSelected(ing); setRestockOpen(true); }}>
-                        <ArrowUpDown className="h-3 w-3 mr-1" /> Restock
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => { setSelected(ing); setLinkOpen(true); }}>
-                        <Link2 className="h-3 w-3 mr-1" /> Links
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => { setSelected(ing); setHistoryOpen(true); }}>
-                        <History className="h-3 w-3" />
-                      </Button>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button size="sm" variant="outline" onClick={() => { setSelected(ing); setRestockOpen(true); }}>
+                          <ArrowUpDown className="h-3 w-3 mr-1" /> Restock
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => { setSelected(ing); setLinkOpen(true); }}>
+                          <Link2 className="h-3 w-3 mr-1" /> Links
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" variant="ghost"><MoreHorizontal className="h-4 w-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => { setSelected(ing); setHistoryOpen(true); }}>
+                              <History className="h-4 w-4 mr-2" /> History
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                              setSelected(ing);
+                              setForm({
+                                name: ing.name,
+                                unit: ing.unit,
+                                current_stock: String(ing.current_stock),
+                                low_stock_threshold: String(ing.low_stock_threshold),
+                                cost_per_unit_cents: String(ing.cost_per_unit_cents / 100),
+                              });
+                              setEditOpen(true);
+                            }}>
+                              <Pencil className="h-4 w-4 mr-2" /> Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(ing.id)}>
+                              <Trash2 className="h-4 w-4 mr-2" /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -405,6 +468,53 @@ function InventoryContent() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Ingredient Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Ingredient</DialogTitle><DialogDescription>Update ingredient details.</DialogDescription></DialogHeader>
+          <div className="space-y-4">
+            <div><Label>Name</Label><Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} /></div>
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>Unit</Label>
+                <Select value={form.unit} onValueChange={v => setForm(p => ({ ...p, unit: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div><Label>Current Stock</Label><Input type="number" value={form.current_stock} onChange={e => setForm(p => ({ ...p, current_stock: e.target.value }))} /></div>
+            </div>
+            <div><Label>Low Stock Threshold</Label><Input type="number" value={form.low_stock_threshold} onChange={e => setForm(p => ({ ...p, low_stock_threshold: e.target.value }))} /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+            <Button onClick={() => editMutation.mutate()} disabled={!form.name.trim() || editMutation.isPending}>
+              {editMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Ingredient Confirmation */}
+      <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Ingredient</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this ingredient, all its menu item links, and stock history. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (deleteId) deleteMutation.mutate(deleteId); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
