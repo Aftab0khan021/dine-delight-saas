@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Label } from "@/components/ui/label";
 import {
   Drawer,
@@ -978,14 +979,15 @@ export default function PublicMenu() {
           </summary>
           <div className="mt-2 space-y-2 pb-2">
             <div className="flex gap-2">
-              <input
-                type="tel"
-                placeholder="Enter your phone number"
-                value={reorderPhone}
-                onChange={e => setReorderPhone(e.target.value)}
-                className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm"
-              />
-              <button onClick={fetchReorderHistory} disabled={reorderLoading || reorderPhone.length < 10}
+              <div className="flex-1">
+                <PhoneInput
+                  value={reorderPhone}
+                  onChange={setReorderPhone}
+                  heightClass="h-9"
+                  showCounter={false}
+                />
+              </div>
+              <button onClick={fetchReorderHistory} disabled={reorderLoading || reorderPhone.replace(/\D/g, '').length < 10}
                 className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium disabled:opacity-50">
                 {reorderLoading ? '...' : 'Find'}
               </button>
@@ -1753,12 +1755,11 @@ export default function PublicMenu() {
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">Phone {paymentMethod === 'upi' && <span className="text-destructive">*</span>}</Label>
-                      <Input
-                        placeholder="+91 98765 43210"
+                      <PhoneInput
                         value={customerPhone}
-                        onChange={e => setCustomerPhone(e.target.value)}
-                        type="tel"
-                        className={`h-8 text-sm ${paymentMethod === 'upi' && (!customerPhone.trim() || customerPhone.replace(/\D/g, '').length < 10) ? 'border-destructive' : ''}`}
+                        onChange={setCustomerPhone}
+                        heightClass="h-8"
+                        showCounter={false}
                       />
                     </div>
                   </div>

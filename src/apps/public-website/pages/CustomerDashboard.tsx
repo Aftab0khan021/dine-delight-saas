@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { MapPin, Phone, Star, Package, LogOut, ArrowLeft, Loader2, ArrowRight, Edit2, Plus, Trash2, Truck, Store, UtensilsCrossed, RefreshCw } from "lucide-react";
@@ -335,13 +336,11 @@ export default function CustomerDashboard() {
                   <form onSubmit={handleSendOTP} className="space-y-4">
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Phone Number</label>
-                      <Input
-                        type="tel"
-                        placeholder="e.g. +91 9876543210"
+                      <PhoneInput
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
+                        onChange={setPhone}
                         required
-                        className="h-12"
+                        heightClass="h-12"
                       />
                     </div>
                     {/* Security Challenge (Uncomment to enforce turnstile) 

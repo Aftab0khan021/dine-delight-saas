@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FeatureGate } from "../components/FeatureGate";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -275,13 +276,14 @@ function OTPSettingsContent() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex gap-2">
-                <Input
-                  value={testPhone}
-                  onChange={(e) => setTestPhone(e.target.value)}
-                  placeholder="+91 98765 43210"
-                  type="tel"
-                />
-                <Button onClick={handleTestOtp} disabled={!testPhone} variant="outline">
+                <div className="flex-1">
+                  <PhoneInput
+                    value={testPhone}
+                    onChange={setTestPhone}
+                    showCounter={false}
+                  />
+                </div>
+                <Button onClick={handleTestOtp} disabled={!testPhone || testPhone.replace(/\D/g, '').length < 10} variant="outline">
                   Send Test
                 </Button>
               </div>

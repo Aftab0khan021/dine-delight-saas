@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -305,13 +306,11 @@ export default function TableReservation() {
                     </div>
                     <div className="space-y-2">
                       <Label className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" /> Phone Number *</Label>
-                      <Input
+                      <PhoneInput
                         value={resPhone}
-                        onChange={e => setResPhone(e.target.value)}
-                        placeholder="+91 98765 43210"
-                        type="tel"
+                        onChange={setResPhone}
                         required
-                        className="h-11"
+                        heightClass="h-11"
                       />
                     </div>
                   </div>
@@ -429,12 +428,11 @@ export default function TableReservation() {
             <p className="text-sm text-muted-foreground">Enter your phone number to view your bookings</p>
           </div>
           <div className="flex gap-2 max-w-md mx-auto">
-            <Input
-              type="tel"
-              placeholder="Enter your phone number"
+            <PhoneInput
               value={trackPhone}
-              onChange={e => setTrackPhone(e.target.value)}
-              className="h-11"
+              onChange={setTrackPhone}
+              heightClass="h-11"
+              placeholder="Enter 10-digit number"
             />
             <Button
               onClick={handleTrackReservation}

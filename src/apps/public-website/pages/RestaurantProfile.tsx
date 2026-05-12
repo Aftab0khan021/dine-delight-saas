@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { formatMoney, fromCents } from "@/lib/formatting";
@@ -678,7 +679,8 @@ export default function RestaurantProfile() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="rev-phone" className="text-xs">Phone (optional)</Label>
-              <Input id="rev-phone" type="tel" placeholder="Phone number" value={reviewPhone} onChange={e => setReviewPhone(e.target.value)} />
+              <Input id="rev-phone" type="hidden" value={reviewPhone} />
+              <PhoneInput value={reviewPhone} onChange={setReviewPhone} showCounter={false} />
             </div>
           </div>
           {/* Star picker */}

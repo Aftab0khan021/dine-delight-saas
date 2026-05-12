@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
@@ -448,7 +449,10 @@ export default function AdminBranding() {
 
                 <div className="space-y-2">
                   <Label>Contact Phone</Label>
-                  <Input {...form.register("contact_phone")} placeholder="+1 (555) 000-0000" />
+                  <PhoneInput
+                    value={form.watch("contact_phone") || ""}
+                    onChange={(v) => form.setValue("contact_phone", v, { shouldDirty: true })}
+                  />
                 </div>
               </div>
 
