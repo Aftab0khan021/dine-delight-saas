@@ -28,7 +28,7 @@ BEGIN
         ur.restaurant_id = p_restaurant_id 
         AND ur.role = 'user' 
         AND EXISTS (
-          SELECT 1 FROM public.staff_category_permissions scp
+          SELECT 1 FROM public.category_permissions scp
           JOIN public.permissions perm ON perm.id = scp.permission_id
           WHERE scp.category_id = ur.staff_category_id
           AND perm.code = 'view_staff'

@@ -110,6 +110,22 @@ export default function AdminStaff() {
     queryKey: ["admin", "staff", restaurant?.id, "roles"],
     enabled: !!restaurant?.id,
     queryFn: async () => {
+      // Strategy 1: Use SECURITY DEFINER RPC (bypasses RLS, most reliable)
+      const { data: rpcData, error: rpcError } = await supabase.rpc("get_restaurant_staff", {
+        p_restaurant_id: restaurant!.id,
+      });
+
+      if (!rpcError && rpcData && rpcData.length > 0) {
+        return rpcData.map((row: any) => ({
+          user_id: row.user_id,
+          role: row.role,
+          staff_category_id: row.staff_category_id,
+          profiles: { full_name: row.full_name || "", email: row.email || "" },
+          staff_categories: row.category_name ? { id: row.staff_category_id, name: row.category_name, color: row.category_color } : null,
+        }));
+      }
+
+      // Strategy 2: Direct query (works when RLS policies allow admin access)
       const { data, error } = await supabase
         .from("user_roles")
         .select("user_id, role, staff_category_id, profiles(full_name, email), staff_categories(id, name, color)")
