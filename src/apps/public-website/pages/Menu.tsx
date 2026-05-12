@@ -154,9 +154,15 @@ export default function PublicMenu() {
   // Dietary filter state
   const [dietaryFilter, setDietaryFilter] = useState<'all' | 'veg' | 'nonveg'>('all');
 
-  // Allergen exclusion filter
+  // Allergen exclusion filter — load custom list from restaurant settings
+  const ALLERGEN_OPTIONS = useMemo(() => {
+    const s = restaurantQuery.data?.settings as any;
+    if (s && typeof s === 'object' && Array.isArray(s.custom_allergens) && s.custom_allergens.length > 0) {
+      return s.custom_allergens as string[];
+    }
+    return ['Gluten', 'Dairy', 'Nuts', 'Shellfish', 'Soy', 'Egg', 'Fish', 'Sesame'];
+  }, [restaurantQuery.data?.settings]);
   const [excludeAllergens, setExcludeAllergens] = useState<string[]>([]);
-  const ALLERGEN_OPTIONS = ['Gluten', 'Dairy', 'Nuts', 'Shellfish', 'Soy', 'Egg'];
 
   // SEO
   useSEO({
@@ -1089,41 +1095,34 @@ export default function PublicMenu() {
           <Card className="p-6"><p className="text-sm text-muted-foreground">No active menu items yet.</p></Card>
         ) : (
           <div className="space-y-6">
-            {/* Dietary Filters */}
-            {(() => {
-              const s = restaurantQuery.data?.settings as any;
-              const enabled = s && typeof s === 'object' && s.dietary_filters_enabled;
-              if (!enabled) return null;
-              return (
-                <div className="space-y-2">
-                  <div className="flex gap-2 flex-wrap">
-                    <Button size="sm" variant={dietaryFilter === 'all' ? 'default' : 'outline'} className="rounded-full" onClick={() => setDietaryFilter('all')}>All</Button>
-                    <Button size="sm" variant={dietaryFilter === 'veg' ? 'default' : 'outline'} className="rounded-full text-green-600 border-green-200" onClick={() => setDietaryFilter('veg')}><Leaf className="mr-1 h-3.5 w-3.5" />Veg</Button>
-                    <Button size="sm" variant={dietaryFilter === 'nonveg' ? 'default' : 'outline'} className="rounded-full text-red-600 border-red-200" onClick={() => setDietaryFilter('nonveg')}><Drumstick className="mr-1 h-3.5 w-3.5" />Non-Veg</Button>
-                  </div>
-                  {/* Allergen Exclusion Filter */}
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-xs text-muted-foreground flex items-center gap-1"><ShieldAlert className="h-3 w-3" />Exclude:</span>
-                    {ALLERGEN_OPTIONS.map(a => {
-                      const active = excludeAllergens.includes(a);
-                      return (
-                        <button
-                          key={a}
-                          onClick={() => setExcludeAllergens(prev => active ? prev.filter(x => x !== a) : [...prev, a])}
-                          className={`rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                            active
-                              ? 'bg-destructive/10 border-destructive/30 text-destructive'
-                              : 'border-muted text-muted-foreground hover:border-border'
-                          }`}
-                        >
-                          {active ? '✕ ' : ''}{a}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })()}
+            {/* Dietary Filters — always visible */}
+            <div className="space-y-2">
+              <div className="flex gap-2 flex-wrap">
+                <Button size="sm" variant={dietaryFilter === 'all' ? 'default' : 'outline'} className="rounded-full" onClick={() => setDietaryFilter('all')}>All</Button>
+                <Button size="sm" variant={dietaryFilter === 'veg' ? 'default' : 'outline'} className="rounded-full text-green-600 border-green-200" onClick={() => setDietaryFilter('veg')}><Leaf className="mr-1 h-3.5 w-3.5" />Veg</Button>
+                <Button size="sm" variant={dietaryFilter === 'nonveg' ? 'default' : 'outline'} className="rounded-full text-red-600 border-red-200" onClick={() => setDietaryFilter('nonveg')}><Drumstick className="mr-1 h-3.5 w-3.5" />Non-Veg</Button>
+              </div>
+              {/* Allergen Exclusion Filter */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs text-muted-foreground flex items-center gap-1"><ShieldAlert className="h-3 w-3" />Exclude:</span>
+                {ALLERGEN_OPTIONS.map(a => {
+                  const active = excludeAllergens.includes(a);
+                  return (
+                    <button
+                      key={a}
+                      onClick={() => setExcludeAllergens(prev => active ? prev.filter(x => x !== a) : [...prev, a])}
+                      className={`rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                        active
+                          ? 'bg-destructive/10 border-destructive/30 text-destructive'
+                          : 'border-muted text-muted-foreground hover:border-border'
+                      }`}
+                    >
+                      {active ? '✕ ' : ''}{a}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             {categoriesWithItems.map((category) => {
               // M9: Fuzzy search filter
@@ -1241,7 +1240,19 @@ export default function PublicMenu() {
                                 <span className={`h-2 w-2 rounded-sm shrink-0 ${item.food_type === 'nonveg' ? 'bg-red-500' : item.food_type === 'egg' ? 'bg-yellow-500' : 'bg-green-500'}`} />
                                 <p className="text-sm font-semibold truncate flex-1">{item.name}</p>
                               </div>
-                              {item.description && <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{item.description}</p>}
+                              {item.description && <p className="text-xs text-muted-foreground line-clamp-2 mb-1">{item.description}</p>}
+                              {/* Tags */}
+                              {item.tags && (item.tags as string[]).length > 0 && (
+                                <div className="flex gap-1 flex-wrap mb-1">
+                                  {(item.tags as string[]).slice(0, 2).map((t: string) => <span key={t} className="text-[9px] bg-muted text-muted-foreground rounded-full px-1.5 py-0.5">{t}</span>)}
+                                </div>
+                              )}
+                              {/* Allergen chips */}
+                              {item.allergens && (item.allergens as string[]).length > 0 && (
+                                <div className="flex gap-1 flex-wrap mb-1">
+                                  {(item.allergens as string[]).slice(0, 3).map((a: string) => <span key={a} className="text-[8px] bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded-full px-1 py-0.5">🛡️ {a}</span>)}
+                                </div>
+                              )}
                               <div className="mt-auto flex items-center justify-between gap-2">
                                 <p className="text-sm font-bold">{formatMoney(item.price_cents, currencyCode)}</p>
                                 {inCart ? (
@@ -1299,7 +1310,12 @@ export default function PublicMenu() {
                                       {item.tags.slice(0, 3).map((t: string) => <span key={t} className="text-[10px] bg-muted text-muted-foreground rounded-full px-1.5 py-0.5">{t}</span>)}
                                     </div>
                                   )}
-                                </div>
+                                  {/* Allergen info chips */}
+                                  {item.allergens && (item.allergens as string[]).length > 0 && (
+                                    <div className="mt-1 flex gap-1 flex-wrap">
+                                      {(item.allergens as string[]).slice(0, 4).map((a: string) => <span key={a} className="text-[9px] bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded-full px-1.5 py-0.5">🛡️ {a}</span>)}
+                                    </div>
+                                  )}
                                 <div className="text-right shrink-0">
                                   <p className="font-medium tabular-nums whitespace-nowrap">{formatMoney(item.price_cents, currencyCode)}</p>
                                   {/* M16: Share */}

@@ -356,9 +356,9 @@ export default function RestaurantProfile() {
               </div>
             )}
             {/* Cuisine Badges */}
-            {Array.isArray((settings as any)?.cuisine_types) && (settings as any).cuisine_types.length > 0 && (
+            {Array.isArray((restaurant as any)?.cuisine_types) && (restaurant as any).cuisine_types.length > 0 && (
               <div className="flex flex-wrap justify-center gap-1.5">
-                {(settings as any).cuisine_types.map((c: string) => (
+                {(restaurant as any).cuisine_types.map((c: string) => (
                   <Badge key={c} variant="secondary" className="bg-white/20 text-white border-white/30 text-xs backdrop-blur-sm">{c}</Badge>
                 ))}
               </div>

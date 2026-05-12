@@ -89,7 +89,7 @@ export default function AdminBranding() {
   const [holidayMessage, setHolidayMessage] = useState("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
-  const [maxVariants, setMaxVariants] = useState(5);
+
 
   // --- NEW: Enhancement settings (stored in settings JSONB) ---
   const [socialLinks, setSocialLinks] = useState({ instagram: "", facebook: "", twitter: "", youtube: "" });
@@ -725,8 +725,6 @@ export default function AdminBranding() {
               <OperatingHoursEditor
                 value={operatingHours}
                 onChange={setOperatingHours}
-                maxVariantsPerItem={maxVariants}
-                onMaxVariantsChange={setMaxVariants}
               />
             </CardContent>
           </Card>

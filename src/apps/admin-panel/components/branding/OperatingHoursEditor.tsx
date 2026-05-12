@@ -47,15 +47,11 @@ const DAY_LABELS: Record<typeof DAYS[number], string> = {
 interface OperatingHoursEditorProps {
     value: WeeklyHours;
     onChange: (hours: WeeklyHours) => void;
-    maxVariantsPerItem?: number;
-    onMaxVariantsChange?: (max: number) => void;
 }
 
 export function OperatingHoursEditor({
     value,
     onChange,
-    maxVariantsPerItem = 5,
-    onMaxVariantsChange,
 }: OperatingHoursEditorProps) {
     const [selectedDay, setSelectedDay] = useState<typeof DAYS[number]>("monday");
 
@@ -118,37 +114,6 @@ export function OperatingHoursEditor({
 
     return (
         <div className="space-y-6">
-            {/* Variant Limit Setting */}
-            {onMaxVariantsChange && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Menu Configuration</CardTitle>
-                        <CardDescription>
-                            Set limits for menu item customization
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex items-center gap-4">
-                            <Label htmlFor="max-variants" className="min-w-[200px]">
-                                Max Variants Per Item
-                            </Label>
-                            <Input
-                                id="max-variants"
-                                type="number"
-                                min="1"
-                                max="20"
-                                value={maxVariantsPerItem}
-                                onChange={(e) => onMaxVariantsChange(parseInt(e.target.value) || 5)}
-                                className="w-24"
-                            />
-                            <span className="text-sm text-muted-foreground">
-                                (e.g., Small, Medium, Large)
-                            </span>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
-
             {/* Operating Hours */}
             <Card>
                 <CardHeader>

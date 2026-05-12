@@ -580,6 +580,7 @@ export default function AdminMenu() {
         categories={categories}
         restaurantId={restaurant?.id || ""}
         currencyCode={currencyCode}
+        restaurantSettings={restaurant?.settings}
         onSave={(vals: any) => saveItem.mutate(vals)}
         onDelete={(id: string) => deleteItem.mutate(id)}
         aiTier={tier("menu_description")}
@@ -593,13 +594,23 @@ export default function AdminMenu() {
   );
 }
 
-// --- Subcomponent: Menu Settings (Dietary Filters + Cuisine Types) ---
+// --- Subcomponent: Menu Settings (Tags, Allergens, Cuisines, Menu Config) ---
 function MenuSettingsSection({ restaurantId }: { restaurantId?: string }) {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const [dietaryFiltersEnabled, setDietaryFiltersEnabled] = useState(false);
   const [cuisineTypes, setCuisineTypes] = useState<string[]>([]);
+  const [customTags, setCustomTags] = useState<string[]>([]);
+  const [customAllergens, setCustomAllergens] = useState<string[]>([]);
+  const [maxVariants, setMaxVariants] = useState(5);
+  const [maxAddons, setMaxAddons] = useState(10);
   const [saving, setSaving] = useState(false);
+  const [newTag, setNewTag] = useState("");
+  const [newAllergen, setNewAllergen] = useState("");
+  const [newCuisine, setNewCuisine] = useState("");
+
+  const DEFAULT_TAGS = ['Indian', 'Chinese', 'Italian', 'Continental', 'South Indian', 'Mughlai', 'Thai', 'Spicy', "Chef's Special", 'New', 'Bestseller', 'Healthy', 'Jain'];
+  const DEFAULT_ALLERGENS = ['Gluten', 'Dairy', 'Nuts', 'Peanuts', 'Shellfish', 'Soy', 'Egg', 'Fish', 'Sesame'];
+  const DEFAULT_CUISINES = ['North Indian', 'South Indian', 'Chinese', 'Italian', 'Continental', 'Mughlai', 'Thai', 'Mexican', 'Japanese', 'Korean', 'Mediterranean', 'Street Food', 'Fast Food', 'Desserts', 'Bakery', 'Beverages', 'Biryani', 'Seafood', 'Healthy', 'Vegan'];
 
   const { data: restaurantData } = useQuery({
     queryKey: ["admin", "restaurant", restaurantId, "menu-settings"],
@@ -607,7 +618,7 @@ function MenuSettingsSection({ restaurantId }: { restaurantId?: string }) {
     queryFn: async () => {
       const { data } = await supabase
         .from("restaurants")
-        .select("settings, cuisine_types")
+        .select("settings, cuisine_types, max_variants_per_item")
         .eq("id", restaurantId!)
         .single();
       return data;
@@ -617,8 +628,11 @@ function MenuSettingsSection({ restaurantId }: { restaurantId?: string }) {
   useEffect(() => {
     if (restaurantData) {
       const s = restaurantData.settings && typeof restaurantData.settings === "object" ? restaurantData.settings as any : {};
-      setDietaryFiltersEnabled(!!s.dietary_filters_enabled);
       setCuisineTypes(Array.isArray((restaurantData as any).cuisine_types) ? (restaurantData as any).cuisine_types : []);
+      setCustomTags(Array.isArray(s.custom_tags) ? s.custom_tags : DEFAULT_TAGS);
+      setCustomAllergens(Array.isArray(s.custom_allergens) ? s.custom_allergens : DEFAULT_ALLERGENS);
+      setMaxVariants((restaurantData as any).max_variants_per_item ?? 5);
+      setMaxAddons(typeof s.max_addons_per_item === 'number' ? s.max_addons_per_item : 10);
     }
   }, [restaurantData]);
 
@@ -628,8 +642,14 @@ function MenuSettingsSection({ restaurantId }: { restaurantId?: string }) {
     try {
       const currentSettings = restaurantData?.settings && typeof restaurantData.settings === "object" ? restaurantData.settings as any : {};
       const { error } = await supabase.from("restaurants").update({
-        settings: { ...currentSettings, dietary_filters_enabled: dietaryFiltersEnabled },
+        settings: {
+          ...currentSettings,
+          custom_tags: customTags,
+          custom_allergens: customAllergens,
+          max_addons_per_item: maxAddons,
+        },
         cuisine_types: cuisineTypes,
+        max_variants_per_item: maxVariants,
       } as any).eq("id", restaurantId);
       if (error) throw error;
       toast({ title: "Saved", description: "Menu settings updated." });
@@ -641,11 +661,16 @@ function MenuSettingsSection({ restaurantId }: { restaurantId?: string }) {
     }
   };
 
-  const CUISINE_OPTIONS = [
-    'North Indian', 'South Indian', 'Chinese', 'Italian', 'Continental', 'Mughlai',
-    'Thai', 'Mexican', 'Japanese', 'Korean', 'Mediterranean', 'Street Food',
-    'Fast Food', 'Desserts', 'Bakery', 'Beverages', 'Biryani', 'Seafood', 'Healthy', 'Vegan'
-  ];
+  const addItem = (list: string[], setList: (v: string[]) => void, value: string, clearInput: () => void) => {
+    const trimmed = value.trim();
+    if (!trimmed || list.includes(trimmed)) return;
+    setList([...list, trimmed]);
+    clearInput();
+  };
+
+  const removeItem = (list: string[], setList: (v: string[]) => void, value: string) => {
+    setList(list.filter(i => i !== value));
+  };
 
   return (
     <Card className="shadow-sm">
@@ -654,40 +679,96 @@ function MenuSettingsSection({ restaurantId }: { restaurantId?: string }) {
           <Sparkles className="h-4 w-4 text-muted-foreground" />
           Menu Settings
         </CardTitle>
-        <CardDescription>Configure dietary options and cuisine types for your menu.</CardDescription>
+        <CardDescription>Manage tags, allergens, cuisine types, and menu limits.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Dietary Filters */}
-        <div className="flex items-center justify-between p-4 border rounded-lg">
-          <div className="space-y-0.5">
-            <Label className="text-base">Dietary Filters</Label>
-            <p className="text-sm text-muted-foreground">Show Veg/Non-Veg/Spicy filter buttons on your public menu</p>
+
+        {/* Menu Configuration */}
+        <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+          <Label className="text-base">📋 Menu Configuration</Label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="max-variants" className="text-sm text-muted-foreground">Max Variants Per Item</Label>
+              <Input id="max-variants" type="number" min="1" max="20" value={maxVariants} onChange={(e) => setMaxVariants(parseInt(e.target.value) || 5)} className="w-full" />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="max-addons" className="text-sm text-muted-foreground">Max Add-ons Per Item</Label>
+              <Input id="max-addons" type="number" min="1" max="30" value={maxAddons} onChange={(e) => setMaxAddons(parseInt(e.target.value) || 10)} className="w-full" />
+            </div>
           </div>
-          <Switch checked={dietaryFiltersEnabled} onCheckedChange={setDietaryFiltersEnabled} />
         </div>
 
-        {/* Cuisine Types */}
+        {/* Tags (CRUD) */}
+        <div className="space-y-3">
+          <Label className="text-base">🏷️ Tags</Label>
+          <p className="text-sm text-muted-foreground">Manage tags available when adding menu items. These also appear on your public menu.</p>
+          <div className="flex flex-wrap gap-1.5">
+            {customTags.map(tag => (
+              <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary">
+                {tag}
+                <button type="button" onClick={() => removeItem(customTags, setCustomTags, tag)} className="ml-0.5 text-primary/50 hover:text-destructive transition-colors" title={`Remove ${tag}`}>✕</button>
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <Input placeholder="Add new tag..." value={newTag} onChange={e => setNewTag(e.target.value)} className="flex-1" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addItem(customTags, setCustomTags, newTag, () => setNewTag("")); } }} />
+            <Button type="button" variant="outline" size="sm" onClick={() => addItem(customTags, setCustomTags, newTag, () => setNewTag(""))}>
+              <Plus className="h-3.5 w-3.5 mr-1" />Add
+            </Button>
+          </div>
+        </div>
+
+        {/* Allergens (CRUD) */}
+        <div className="space-y-3">
+          <Label className="text-base">🛡️ Allergens</Label>
+          <p className="text-sm text-muted-foreground">Manage allergens available when adding menu items. Customers can filter by these.</p>
+          <div className="flex flex-wrap gap-1.5">
+            {customAllergens.map(allergen => (
+              <span key={allergen} className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-50 dark:bg-amber-950/20 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                {allergen}
+                <button type="button" onClick={() => removeItem(customAllergens, setCustomAllergens, allergen)} className="ml-0.5 text-amber-400/60 hover:text-destructive transition-colors" title={`Remove ${allergen}`}>✕</button>
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <Input placeholder="Add new allergen..." value={newAllergen} onChange={e => setNewAllergen(e.target.value)} className="flex-1" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addItem(customAllergens, setCustomAllergens, newAllergen, () => setNewAllergen("")); } }} />
+            <Button type="button" variant="outline" size="sm" onClick={() => addItem(customAllergens, setCustomAllergens, newAllergen, () => setNewAllergen(""))}>
+              <Plus className="h-3.5 w-3.5 mr-1" />Add
+            </Button>
+          </div>
+        </div>
+
+        {/* Cuisine Types (CRUD) */}
         <div className="space-y-3">
           <Label className="text-base">🍽️ Cuisine Types</Label>
-          <p className="text-sm text-muted-foreground">Select the cuisine types your restaurant specializes in</p>
+          <p className="text-sm text-muted-foreground">Select or add cuisine types your restaurant specializes in. Shown on your public profile.</p>
           <div className="flex flex-wrap gap-1.5">
-            {CUISINE_OPTIONS.map(cuisine => {
-              const selected = cuisineTypes.includes(cuisine);
-              return (
-                <button
-                  key={cuisine}
-                  type="button"
-                  onClick={() => setCuisineTypes(prev => selected ? prev.filter(c => c !== cuisine) : [...prev, cuisine])}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                    selected
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-muted text-muted-foreground hover:border-border'
-                  }`}
-                >
-                  {selected ? '✓ ' : ''}{cuisine}
-                </button>
-              );
-            })}
+            {/* Default options as toggleable chips */}
+            {DEFAULT_CUISINES.filter(c => !cuisineTypes.includes(c)).map(cuisine => (
+              <button key={cuisine} type="button" onClick={() => setCuisineTypes(prev => [...prev, cuisine])}
+                className="rounded-full border border-muted px-2.5 py-1 text-xs font-medium text-muted-foreground hover:border-border transition-colors">
+                {cuisine}
+              </button>
+            ))}
+          </div>
+          {cuisineTypes.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground font-medium">Selected:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {cuisineTypes.map(cuisine => (
+                  <span key={cuisine} className="inline-flex items-center gap-1 rounded-full border border-primary bg-primary text-primary-foreground px-2.5 py-1 text-xs font-medium">
+                    ✓ {cuisine}
+                    <button type="button" onClick={() => setCuisineTypes(prev => prev.filter(c => c !== cuisine))} className="ml-0.5 opacity-70 hover:opacity-100 transition-opacity" title={`Remove ${cuisine}`}>✕</button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex gap-2">
+            <Input placeholder="Add custom cuisine..." value={newCuisine} onChange={e => setNewCuisine(e.target.value)} className="flex-1" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addItem(cuisineTypes, setCuisineTypes, newCuisine, () => setNewCuisine("")); } }} />
+            <Button type="button" variant="outline" size="sm" onClick={() => addItem(cuisineTypes, setCuisineTypes, newCuisine, () => setNewCuisine(""))}>
+              <Plus className="h-3.5 w-3.5 mr-1" />Add
+            </Button>
           </div>
         </div>
 
@@ -792,7 +873,10 @@ function CategorySheet({ open, onOpenChange, data, onSave, onDelete, categories 
 }
 
 // --- Subcomponent: Item Sheet ---
-function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currencyCode, onSave, onDelete, aiTier, isPaidAI, getAccessToken }: any) {
+function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currencyCode, restaurantSettings, onSave, onDelete, aiTier, isPaidAI, getAccessToken }: any) {
+  const rs = restaurantSettings && typeof restaurantSettings === 'object' ? restaurantSettings as any : {};
+  const TAG_OPTIONS: string[] = Array.isArray(rs.custom_tags) ? rs.custom_tags : ['Indian', 'Chinese', 'Italian', 'Continental', 'South Indian', 'Mughlai', 'Thai', 'Spicy', "Chef's Special", 'New', 'Bestseller', 'Healthy', 'Jain'];
+  const ALLERGEN_OPTIONS: string[] = Array.isArray(rs.custom_allergens) ? rs.custom_allergens : ['Gluten', 'Dairy', 'Nuts', 'Peanuts', 'Shellfish', 'Soy', 'Egg', 'Fish', 'Sesame'];
   const form = useForm();
   const [uploading, setUploading] = useState(false);
   const [uploadingAdditional, setUploadingAdditional] = useState(false);
@@ -1048,7 +1132,7 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currenc
           <div className="space-y-2">
             <Label>Tags</Label>
             <div className="flex flex-wrap gap-1.5">
-              {['Indian', 'Chinese', 'Italian', 'Continental', 'South Indian', 'Mughlai', 'Thai', 'Spicy', "Chef's Special", 'New', 'Bestseller', 'Healthy', 'Jain'].map(tag => {
+              {TAG_OPTIONS.map(tag => {
                 const selected = (form.watch('tags') || []).includes(tag);
                 return (
                   <button
@@ -1076,7 +1160,7 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currenc
           <div className="space-y-2">
             <Label>Allergens</Label>
             <div className="flex flex-wrap gap-1.5">
-              {['Gluten', 'Dairy', 'Nuts', 'Peanuts', 'Shellfish', 'Soy', 'Egg', 'Fish', 'Sesame'].map(allergen => {
+              {ALLERGEN_OPTIONS.map(allergen => {
                 const selected = (form.watch('allergens') || []).includes(allergen);
                 return (
                   <button
