@@ -45,11 +45,21 @@ function ReservationsContent() {
   const ITEMS_PER_PAGE = 20;
 
   const { data: reservations, isLoading, isFetching } = useQuery({
-    queryKey: ["admin", "reservations", restaurant?.id, dateFilter],
+    queryKey: ["admin", "reservations", restaurant?.id, dateFilter, statusFilter],
     enabled: !!restaurant?.id,
     queryFn: async () => {
-      let q = supabase.from("reservations").select("*", { count: "exact" }).eq("restaurant_id", restaurant!.id).order("reservation_time", { ascending: true });
-      if (dateFilter) q = q.eq("reservation_date", dateFilter);
+      let q = supabase.from("reservations").select("*", { count: "exact" }).eq("restaurant_id", restaurant!.id).order("reservation_date", { ascending: false }).order("reservation_time", { ascending: true });
+
+      if (statusFilter === "all") {
+        // Show 1 month of reservations centered on the selected date
+        const startDate = new Date(dateFilter);
+        startDate.setMonth(startDate.getMonth() - 1);
+        q = q.gte("reservation_date", startDate.toISOString().split("T")[0]);
+      } else {
+        // When filtering by a specific status, still scope to the selected date
+        q = q.eq("reservation_date", dateFilter);
+      }
+
       const { data, error, count } = await q;
       if (error) throw error;
       return { items: data || [], totalCount: count || 0 };
@@ -129,7 +139,7 @@ function ReservationsContent() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="shadow-sm"><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{stats.total}</p><p className="text-xs text-muted-foreground">Total Today</p></CardContent></Card>
+        <Card className="shadow-sm"><CardContent className="p-4 text-center"><p className="text-2xl font-bold">{stats.total}</p><p className="text-xs text-muted-foreground">{statusFilter === "all" ? "Last Month" : "Today"}</p></CardContent></Card>
         <Card className="shadow-sm"><CardContent className="p-4 text-center"><p className="text-2xl font-bold text-amber-600">{stats.pending}</p><p className="text-xs text-muted-foreground">Pending</p></CardContent></Card>
         <Card className="shadow-sm"><CardContent className="p-4 text-center"><p className="text-2xl font-bold text-blue-600">{stats.confirmed}</p><p className="text-xs text-muted-foreground">Confirmed</p></CardContent></Card>
         <Card className="shadow-sm"><CardContent className="p-4 text-center"><p className="text-2xl font-bold text-green-600">{stats.seated}</p><p className="text-xs text-muted-foreground">Seated</p></CardContent></Card>
@@ -174,6 +184,7 @@ function ReservationsContent() {
                           <Badge className={`text-xs ${STATUS_COLORS[r.status] || ""}`}>{r.status.replace("_", " ")}</Badge>
                         </div>
                         <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />{r.reservation_date}</span>
                           <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{r.reservation_time?.slice(0, 5)}</span>
                           <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" />{r.party_size} guests</span>
                           <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" />{r.customer_phone}</span>

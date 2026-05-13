@@ -355,43 +355,60 @@ export default function RestaurantBilling() {
   const subscriptionQuery = useQuery({
     queryKey: ["admin", "billing", restaurant?.id, "subscription"],
     enabled: !!restaurant?.id,
+    retry: false,
     queryFn: async () => {
       const restaurantId = restaurant!.id;
+      try {
+        const { data: subscription, error: subError } = await supabase
+          .from("subscriptions")
+          .select(
+            "id, plan_id, restaurant_id, status, current_period_end, trial_ends_at, created_at, subscription_plans(id, name, slug, price_cents, currency, billing_period, trial_days, features)",
+          )
+          .eq("restaurant_id", restaurantId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-      const { data: subscription, error: subError } = await supabase
-        .from("subscriptions")
-        .select(
-          "id, plan_id, restaurant_id, status, current_period_end, trial_ends_at, created_at, subscription_plans(id, name, slug, price_cents, currency, billing_period, trial_days, features)",
-        )
-        .eq("restaurant_id", restaurantId)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        if (subError) {
+          console.warn("Subscription query error (non-fatal):", subError.message);
+          return { subscription: null, plan: null };
+        }
+        if (!subscription) return { subscription: null, plan: null };
 
-      if (subError) throw subError;
-      if (!subscription) return { subscription: null, plan: null };
-
-      const { subscription_plans: plan, ...sub } = subscription as any;
-      return { subscription: sub as SubscriptionRow, plan: plan as PlanRow | null };
+        const { subscription_plans: plan, ...sub } = subscription as any;
+        return { subscription: sub as SubscriptionRow, plan: plan as PlanRow | null };
+      } catch (e) {
+        console.warn("Subscription fetch failed:", e);
+        return { subscription: null, plan: null };
+      }
     },
   });
 
   const invoicesQuery = useQuery({
     queryKey: ["admin", "billing", restaurant?.id, "invoices"],
     enabled: !!restaurant?.id,
+    retry: false,
     queryFn: async () => {
       const restaurantId = restaurant!.id;
-      const { data, error } = await supabase
-        .from("invoices")
-        .select(
-          "id,provider_invoice_id,status,currency_code,amount_due_cents,amount_paid_cents,created_at,due_at,paid_at,hosted_invoice_url,invoice_pdf_url",
-        )
-        .eq("restaurant_id", restaurantId)
-        .order("created_at", { ascending: false })
-        .limit(50);
+      try {
+        const { data, error } = await supabase
+          .from("invoices")
+          .select(
+            "id,provider_invoice_id,status,currency_code,amount_due_cents,amount_paid_cents,created_at,due_at,paid_at,hosted_invoice_url,invoice_pdf_url",
+          )
+          .eq("restaurant_id", restaurantId)
+          .order("created_at", { ascending: false })
+          .limit(50);
 
-      if (error) throw error;
-      return (data ?? []) as InvoiceRow[];
+        if (error) {
+          console.warn("Invoices query error (non-fatal):", error.message);
+          return [] as InvoiceRow[];
+        }
+        return (data ?? []) as InvoiceRow[];
+      } catch (e) {
+        console.warn("Invoices fetch failed:", e);
+        return [] as InvoiceRow[];
+      }
     },
   });
 
