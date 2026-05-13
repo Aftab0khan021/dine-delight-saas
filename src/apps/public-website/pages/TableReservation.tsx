@@ -28,8 +28,6 @@ import {
   XCircle,
   CircleDot,
   Grid3X3,
-  Square,
-  Circle,
 } from "lucide-react";
 
 function normalizeSettings(settings: any | null) {
@@ -57,7 +55,7 @@ export default function TableReservation() {
   const [resParty, setResParty] = useState(2);
   const [resNotes, setResNotes] = useState("");
   const [resOccasion, setResOccasion] = useState("");
-  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [selectedTableIds, setSelectedTableIds] = useState<string[]>([]);
   const [resSubmitting, setResSubmitting] = useState(false);
   const [resSuccess, setResSuccess] = useState(false);
 
@@ -127,7 +125,8 @@ export default function TableReservation() {
       reservation_time: resTime,
       notes: notesText || null,
       status: "pending",
-      table_id: selectedTableId || null,
+      table_id: selectedTableIds.length > 0 ? selectedTableIds[0] : null,
+      table_ids: selectedTableIds.length > 0 ? selectedTableIds : [],
     });
     setResSubmitting(false);
     if (error) {
@@ -372,8 +371,8 @@ export default function TableReservation() {
                 restaurantId={restaurant!.id}
                 date={resDate}
                 partySize={resParty}
-                selectedTableId={selectedTableId}
-                onSelect={setSelectedTableId}
+                selectedTableIds={selectedTableIds}
+                onSelect={setSelectedTableIds}
                 themeColor={themeColor}
               />
 
@@ -503,15 +502,15 @@ function TablePicker({
   restaurantId,
   date,
   partySize,
-  selectedTableId,
+  selectedTableIds,
   onSelect,
   themeColor,
 }: {
   restaurantId: string;
   date: string;
   partySize: number;
-  selectedTableId: string | null;
-  onSelect: (id: string | null) => void;
+  selectedTableIds: string[];
+  onSelect: (ids: string[]) => void;
   themeColor: string;
 }) {
   // Fetch all active tables
@@ -537,15 +536,40 @@ function TablePicker({
     queryFn: async () => {
       const { data } = await supabase
         .from("reservations")
-        .select("table_id")
+        .select("table_id, table_ids")
         .eq("restaurant_id", restaurantId)
         .eq("reservation_date", date)
         .in("status", ["pending", "confirmed", "seated"]);
-      return (data ?? []).map((r: any) => r.table_id).filter(Boolean) as string[];
+      // Collect all reserved table IDs from both columns
+      const ids = new Set<string>();
+      (data ?? []).forEach((r: any) => {
+        if (r.table_id) ids.add(r.table_id);
+        if (Array.isArray(r.table_ids)) r.table_ids.forEach((id: string) => ids.add(id));
+      });
+      return Array.from(ids);
     },
   });
 
   if (tables.length === 0) return null;
+
+  // Calculate combined capacity of selected tables
+  const selectedCapacity = tables
+    .filter(t => selectedTableIds.includes(t.id))
+    .reduce((sum, t) => sum + t.capacity, 0);
+
+  const capacityMet = selectedCapacity >= partySize;
+
+  // Check if a single table can fit the party
+  const singleTableFits = tables.some(t => t.capacity >= partySize && !reservedTableIds.includes(t.id));
+
+  // Toggle a table in/out of the selection
+  const toggleTable = (tableId: string) => {
+    if (selectedTableIds.includes(tableId)) {
+      onSelect(selectedTableIds.filter(id => id !== tableId));
+    } else {
+      onSelect([...selectedTableIds, tableId]);
+    }
+  };
 
   // Group by floor
   const floors = Array.from(new Set(tables.map(t => t.floor || "main"))).sort();
@@ -555,12 +579,19 @@ function TablePicker({
       <CardContent className="p-5 space-y-4">
         <div className="flex items-center gap-2">
           <Grid3X3 className="h-4 w-4 text-muted-foreground" />
-          <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Choose a Table</h3>
-          <span className="text-xs text-muted-foreground ml-auto">(Optional)</span>
+          <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Choose Tables</h3>
+          <span className="text-xs text-muted-foreground ml-auto">(Optional — multi-select)</span>
         </div>
 
+        {/* Info banner when multi-table is needed */}
+        {!singleTableFits && partySize > 1 && date && (
+          <div className="text-xs bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2 text-blue-700 dark:text-blue-300">
+            <strong>💡 Multiple tables needed:</strong> No single table fits {partySize} guests. Select multiple tables to combine their capacity.
+          </div>
+        )}
+
         {/* Legend */}
-        <div className="flex gap-4 text-xs text-muted-foreground">
+        <div className="flex gap-4 text-xs text-muted-foreground flex-wrap">
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-sm border-2 border-green-500 bg-green-50 dark:bg-green-950/30" />
             Available
@@ -589,9 +620,8 @@ function TablePicker({
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {floorTables.map(table => {
                   const isReserved = reservedTableIds.includes(table.id);
-                  const tooSmall = table.capacity < partySize;
-                  const isSelected = selectedTableId === table.id;
-                  const isDisabled = isReserved || tooSmall;
+                  const isSelected = selectedTableIds.includes(table.id);
+                  const isDisabled = isReserved;
                   const isRound = table.shape === "round";
 
                   return (
@@ -599,7 +629,7 @@ function TablePicker({
                       key={table.id}
                       type="button"
                       disabled={isDisabled}
-                      onClick={() => onSelect(isSelected ? null : table.id)}
+                      onClick={() => toggleTable(table.id)}
                       className={`
                         relative flex flex-col items-center justify-center gap-0.5 p-3 border-2 transition-all
                         ${isRound ? "rounded-full" : "rounded-xl"}
@@ -619,9 +649,6 @@ function TablePicker({
                       {isReserved && (
                         <span className="absolute -top-1 -right-1 text-[8px] bg-amber-500 text-white px-1 rounded-full font-bold">Booked</span>
                       )}
-                      {tooSmall && !isReserved && (
-                        <span className="absolute -top-1 -right-1 text-[8px] bg-gray-500 text-white px-1 rounded-full font-bold">Small</span>
-                      )}
                       {isSelected && (
                         <CheckCircle2 className="absolute -top-1.5 -right-1.5 h-4 w-4" style={{ color: themeColor }} />
                       )}
@@ -633,10 +660,23 @@ function TablePicker({
           );
         })}
 
-        {selectedTableId && (
-          <p className="text-xs text-center" style={{ color: themeColor }}>
-            ✓ Table selected — the restaurant will try to seat you here
-          </p>
+        {/* Capacity summary */}
+        {selectedTableIds.length > 0 && (
+          <div className={`text-xs text-center rounded-lg px-3 py-2 border ${
+            capacityMet
+              ? 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'
+              : 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300'
+          }`}>
+            {selectedTableIds.length === 1
+              ? `✓ 1 table selected — Capacity: ${selectedCapacity} seats`
+              : `✓ ${selectedTableIds.length} tables selected — Combined capacity: ${selectedCapacity} seats`
+            }
+            {!capacityMet && (
+              <span className="block mt-1 font-semibold">
+                ⚠️ Need {partySize - selectedCapacity} more seat{partySize - selectedCapacity !== 1 ? 's' : ''} — select another table
+              </span>
+            )}
+          </div>
         )}
       </CardContent>
     </Card>
