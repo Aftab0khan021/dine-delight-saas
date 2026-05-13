@@ -116,9 +116,12 @@ export default function Plans() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['subscription-plans'] });
+            // Also invalidate restaurant feature access so admin panels pick up changes immediately
+            queryClient.invalidateQueries({ queryKey: ['restaurant-features'] });
+            queryClient.invalidateQueries({ queryKey: ['billing'] });
             toast({
                 title: "Success",
-                description: `Plan ${editingPlan ? 'updated' : 'created'} successfully`,
+                description: `Plan ${editingPlan ? 'updated' : 'created'} successfully. Changes will reflect on restaurant dashboards within 1 minute.`,
             });
             handleCloseDialog();
         },
@@ -142,6 +145,8 @@ export default function Plans() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['subscription-plans'] });
+            queryClient.invalidateQueries({ queryKey: ['restaurant-features'] });
+            queryClient.invalidateQueries({ queryKey: ['billing'] });
             toast({ title: "Plan deleted", description: "The plan has been permanently removed." });
         },
         onError: (error: Error) => {

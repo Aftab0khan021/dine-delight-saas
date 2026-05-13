@@ -38,7 +38,7 @@ export function useFeatureAccess(restaurantId: string | undefined) {
             }
         },
         enabled: !!restaurantId,
-        staleTime: 5 * 60 * 1000, // 5 minutes — feature flags don't change per-request
+        staleTime: 60_000, // 1 minute — fast enough for plan changes to reflect
         retry: false,
     });
 
