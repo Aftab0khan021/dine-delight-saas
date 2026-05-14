@@ -410,8 +410,6 @@ export default function PublicMenu() {
     }
 
     // Filter categories by time-based scheduling (available_from/available_to)
-    const now = new Date();
-    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
     const timeFiltered = categories.filter((c: any) => {
       if (c.available_from && c.available_to) {
