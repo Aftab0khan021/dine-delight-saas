@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, AlertCircle } from "lucide-react";
+import { Plus, Trash2, AlertCircle, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -69,6 +69,33 @@ export function AddonEditor({ menuItemId, restaurantId }: AddonEditorProps) {
             return data as Addon[];
         },
     });
+
+    // Fetch suggestions from other items in this restaurant
+    const { data: addonSuggestions = [] } = useQuery({
+        queryKey: ["addon-suggestions", restaurantId, menuItemId],
+        enabled: !!restaurantId,
+        staleTime: 5 * 60 * 1000,
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("menu_item_addons")
+                .select("name, price_cents, is_mandatory")
+                .eq("restaurant_id", restaurantId)
+                .neq("menu_item_id", menuItemId)
+                .order("name");
+            if (error) return [];
+            // Deduplicate by name
+            const seen = new Map<string, { price_cents: number; is_mandatory: boolean }>();
+            (data || []).forEach((a: any) => {
+                if (!seen.has(a.name)) seen.set(a.name, { price_cents: a.price_cents, is_mandatory: a.is_mandatory });
+            });
+            return Array.from(seen.entries()).map(([name, v]) => ({ name, ...v }));
+        },
+    });
+
+    // Filter out suggestions that are already added
+    const availableAddonSuggestions = addonSuggestions.filter(
+        (s) => !addons.some((a) => a.name.toLowerCase() === s.name.toLowerCase())
+    );
 
     // Add add-on mutation
     const addMutation = useMutation({
@@ -228,6 +255,33 @@ export function AddonEditor({ menuItemId, restaurantId }: AddonEditorProps) {
 
                 {/* Add New Add-on */}
                 <div className="border-t pt-4 space-y-3">
+                    {/* Quick Add from previous items */}
+                    {availableAddonSuggestions.length > 0 && (
+                        <div className="space-y-2">
+                            <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Zap className="h-3 w-3" /> Quick Add from other items
+                            </Label>
+                            <div className="flex flex-wrap gap-1.5">
+                                {availableAddonSuggestions.slice(0, 8).map((s) => (
+                                    <button
+                                        key={s.name}
+                                        type="button"
+                                        className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+                                        onClick={() => addMutation.mutate({
+                                            name: s.name,
+                                            price_cents: s.price_cents,
+                                            is_mandatory: s.is_mandatory,
+                                            max_quantity: 1,
+                                            is_active: true,
+                                            sort_order: addons.length,
+                                        })}
+                                    >
+                                        + {s.name} (+{getCurrencySymbol(currencyCode)}{fromCents(s.price_cents).toFixed(0)})
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-2">
                             <Label>Add-on Name</Label>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, Star } from "lucide-react";
+import { Plus, Trash2, Star, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -67,6 +67,33 @@ export function VariantEditor({ menuItemId, restaurantId, maxVariants = 5 }: Var
             return data as Variant[];
         },
     });
+
+    // Fetch suggestions from other items in this restaurant
+    const { data: suggestions = [] } = useQuery({
+        queryKey: ["variant-suggestions", restaurantId, menuItemId],
+        enabled: !!restaurantId,
+        staleTime: 5 * 60 * 1000,
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("menu_item_variants")
+                .select("name, price_cents")
+                .eq("restaurant_id", restaurantId)
+                .neq("menu_item_id", menuItemId)
+                .order("name");
+            if (error) return [];
+            // Deduplicate by name
+            const seen = new Map<string, number>();
+            (data || []).forEach((v: any) => {
+                if (!seen.has(v.name)) seen.set(v.name, v.price_cents);
+            });
+            return Array.from(seen.entries()).map(([name, price_cents]) => ({ name, price_cents }));
+        },
+    });
+
+    // Filter out suggestions that are already added
+    const availableSuggestions = suggestions.filter(
+        (s) => !variants.some((v) => v.name.toLowerCase() === s.name.toLowerCase())
+    );
 
     // Add variant mutation
     const addMutation = useMutation({
@@ -230,6 +257,32 @@ export function VariantEditor({ menuItemId, restaurantId, maxVariants = 5 }: Var
                 {/* Add New Variant */}
                 {variants.length < maxVariants && (
                     <div className="border-t pt-4 space-y-3">
+                        {/* Quick Add from previous items */}
+                        {availableSuggestions.length > 0 && (
+                            <div className="space-y-2">
+                                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <Zap className="h-3 w-3" /> Quick Add from other items
+                                </Label>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {availableSuggestions.slice(0, 8).map((s) => (
+                                        <button
+                                            key={s.name}
+                                            type="button"
+                                            className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+                                            onClick={() => addMutation.mutate({
+                                                name: s.name,
+                                                price_cents: s.price_cents,
+                                                is_default: variants.length === 0,
+                                                is_active: true,
+                                                sort_order: variants.length,
+                                            })}
+                                        >
+                                            + {s.name} ({getCurrencySymbol(currencyCode)}{fromCents(s.price_cents).toFixed(0)})
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-2">
                                 <Label>Variant Name</Label>

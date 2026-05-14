@@ -85,7 +85,12 @@ function KitchenDashboardContent() {
       // Time range based on filter
       const now = new Date();
       let timeStart: Date;
-      if (timeFilter === "weekly") {
+      let timeEnd: Date | null = null;
+      if (timeFilter === "tomorrow") {
+        const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+        timeStart = tomorrow;
+        timeEnd = new Date(tomorrow.getTime() + 24 * 60 * 60 * 1000);
+      } else if (timeFilter === "weekly") {
         timeStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       } else if (timeFilter === "monthly") {
         timeStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -105,6 +110,11 @@ function KitchenDashboardContent() {
         .gte("placed_at", timeStart.toISOString())
         .order("placed_at", { ascending: false })
         .limit(200);
+
+      // If timeEnd is set (e.g. tomorrow filter), also apply upper bound
+      if (timeEnd) {
+        q = q.lt("placed_at", timeEnd.toISOString());
+      }
 
       if (statusFilter === "active") {
         q = q.in("status", ["pending", "accepted", "in_progress", "ready"]);
@@ -206,6 +216,7 @@ function KitchenDashboardContent() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="daily">Today</SelectItem>
+              <SelectItem value="tomorrow">Tomorrow</SelectItem>
               <SelectItem value="weekly">This Week</SelectItem>
               <SelectItem value="monthly">This Month</SelectItem>
             </SelectContent>

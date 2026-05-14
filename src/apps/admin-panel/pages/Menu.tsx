@@ -14,6 +14,8 @@ import {
   AlertCircle,
   Zap,
   Sparkles,
+  Loader2,
+  CheckCircle2,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -329,12 +331,21 @@ export default function AdminMenu() {
       return result;
     },
     onSuccess: (result) => {
-      setItemSheetOpen(false);
       qc.invalidateQueries({ queryKey: ["admin", "menu"] });
-      toast({
-        title: result.action === "created" ? "Item created" : "Item updated",
-        description: `${result.data.name} has been saved.`
-      });
+      if (result.action === "created") {
+        // Keep sheet open → switch to edit mode so variants/addons unlock
+        setEditItem(result.data as MenuItemRow);
+        toast({
+          title: "Item created ✅",
+          description: `${result.data.name} saved! You can now add variants & add-ons below.`
+        });
+      } else {
+        setItemSheetOpen(false);
+        toast({
+          title: "Item updated",
+          description: `${result.data.name} has been saved.`
+        });
+      }
     },
     onError: (err: any) => {
       console.error("Save Item Error:", err);
@@ -611,6 +622,7 @@ export default function AdminMenu() {
         restaurantSettings={restaurant?.settings}
         onSave={(vals: any) => saveItem.mutate(vals)}
         onDelete={(id: string) => deleteItem.mutate(id)}
+        saving={saveItem.isPending}
         aiTier={tier("menu_description")}
         isPaidAI={isPaidAvailable("menu_description")}
         getAccessToken={getAccessToken}
@@ -901,7 +913,7 @@ function CategorySheet({ open, onOpenChange, data, onSave, onDelete, categories 
 }
 
 // --- Subcomponent: Item Sheet ---
-function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currencyCode, restaurantSettings, onSave, onDelete, aiTier, isPaidAI, getAccessToken }: any) {
+function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currencyCode, restaurantSettings, onSave, onDelete, saving, aiTier, isPaidAI, getAccessToken }: any) {
   const rs = restaurantSettings && typeof restaurantSettings === 'object' ? restaurantSettings as any : {};
   const TAG_OPTIONS: string[] = Array.isArray(rs.custom_tags) ? rs.custom_tags : ['Indian', 'Chinese', 'Italian', 'Continental', 'South Indian', 'Mughlai', 'Thai', 'Spicy', "Chef's Special", 'New', 'Bestseller', 'Healthy', 'Jain'];
   const ALLERGEN_OPTIONS: string[] = Array.isArray(rs.custom_allergens) ? rs.custom_allergens : ['Gluten', 'Dairy', 'Nuts', 'Peanuts', 'Shellfish', 'Soy', 'Egg', 'Fish', 'Sesame'];
@@ -1306,25 +1318,30 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currenc
 
           <SheetFooter className="gap-2 sm:justify-between flex-col sm:flex-row pt-4">
             {data && (
-              <Button type="button" variant="destructive" onClick={() => onDelete(data.id)}>
+              <Button type="button" variant="destructive" onClick={() => onDelete(data.id)} disabled={saving}>
                 <Trash2 className="mr-2 h-4 w-4" /> Delete
               </Button>
             )}
-            <Button type="submit">Save Item</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : "Save Item"}
+            </Button>
           </SheetFooter>
         </form>
 
         {/* Variants & Add-ons */}
-        <div className="space-y-4 mt-6 pt-6 border-t">
-          <h3 className="font-medium">Variants & Add-ons</h3>
+        <div className="space-y-4 mt-6 pt-6 border-t" id="variants-addons-section">
+          <h3 className="font-medium flex items-center gap-2">
+            Variants & Add-ons
+            {data && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+          </h3>
           {data && restaurantId ? (
             <>
               <VariantEditor menuItemId={data.id} restaurantId={restaurantId} />
               <AddonEditor menuItemId={data.id} restaurantId={restaurantId} />
             </>
           ) : (
-            <div className="rounded-md bg-muted p-4 text-center text-sm text-muted-foreground">
-              Please save the item first to add variants and add-ons.
+            <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-4 text-center text-sm text-amber-700 dark:text-amber-300">
+              💡 Save the item first — variants and add-ons will unlock automatically.
             </div>
           )}
         </div>

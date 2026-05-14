@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { startOfDay, subDays, subMonths } from "date-fns";
+import { addDays, startOfDay, subDays, subMonths } from "date-fns";
 import { Search, Lock, Bell, BellOff, Printer, ChevronLeft, ChevronRight, Store, Truck, ShoppingBag, Star, RefreshCw } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -314,19 +314,27 @@ export default function AdminOrders() {
   const { startISO, endISO } = useMemo(() => {
     const now = new Date();
     let start: Date;
+    let end: Date;
 
     switch (timeFilter) {
+      case "tomorrow":
+        start = addDays(startOfDay(now), 1);
+        end = addDays(startOfDay(now), 2);
+        break;
       case "weekly":
         start = subDays(now, 7);
+        end = now;
         break;
       case "monthly":
         start = subMonths(now, 1);
+        end = now;
         break;
       default: // daily — start of today
         start = startOfDay(now);
+        end = now;
     }
 
-    return { startISO: start.toISOString(), endISO: now.toISOString() };
+    return { startISO: start.toISOString(), endISO: end.toISOString() };
   }, [timeFilter]);
 
   // Reset page when filters change
@@ -641,6 +649,7 @@ export default function AdminOrders() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="daily">Today</SelectItem>
+                <SelectItem value="tomorrow">Tomorrow</SelectItem>
                 <SelectItem value="weekly">This Week</SelectItem>
                 <SelectItem value="monthly">This Month</SelectItem>
               </SelectContent>
