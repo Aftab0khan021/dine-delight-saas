@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { addDays, startOfDay, subDays, subMonths } from "date-fns";
+import { startOfDay, subDays, subMonths } from "date-fns";
 import { Search, Lock, Bell, BellOff, Printer, ChevronLeft, ChevronRight, Store, Truck, ShoppingBag, Star, RefreshCw } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -317,9 +317,9 @@ export default function AdminOrders() {
     let end: Date;
 
     switch (timeFilter) {
-      case "tomorrow":
-        start = addDays(startOfDay(now), 1);
-        end = addDays(startOfDay(now), 2);
+      case "yesterday":
+        start = subDays(startOfDay(now), 1);
+        end = startOfDay(now);
         break;
       case "weekly":
         start = subDays(now, 7);
@@ -649,7 +649,7 @@ export default function AdminOrders() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="daily">Today</SelectItem>
-                <SelectItem value="tomorrow">Tomorrow</SelectItem>
+                <SelectItem value="yesterday">Yesterday</SelectItem>
                 <SelectItem value="weekly">This Week</SelectItem>
                 <SelectItem value="monthly">This Month</SelectItem>
               </SelectContent>

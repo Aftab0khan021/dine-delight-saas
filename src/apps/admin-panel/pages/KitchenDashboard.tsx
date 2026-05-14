@@ -86,10 +86,10 @@ function KitchenDashboardContent() {
       const now = new Date();
       let timeStart: Date;
       let timeEnd: Date | null = null;
-      if (timeFilter === "tomorrow") {
-        const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-        timeStart = tomorrow;
-        timeEnd = new Date(tomorrow.getTime() + 24 * 60 * 60 * 1000);
+      if (timeFilter === "yesterday") {
+        const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        timeStart = yesterday;
+        timeEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       } else if (timeFilter === "weekly") {
         timeStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       } else if (timeFilter === "monthly") {
@@ -216,7 +216,7 @@ function KitchenDashboardContent() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="daily">Today</SelectItem>
-              <SelectItem value="tomorrow">Tomorrow</SelectItem>
+              <SelectItem value="yesterday">Yesterday</SelectItem>
               <SelectItem value="weekly">This Week</SelectItem>
               <SelectItem value="monthly">This Month</SelectItem>
             </SelectContent>
