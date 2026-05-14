@@ -9,6 +9,7 @@
 -- ─────────────────────────────────────────────────────────────
 ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS available_from TIME;
 ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS available_to TIME;
+ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS preparation_time_min INTEGER;
 
 -- ─────────────────────────────────────────────────────────────
 -- 1. PERFORMANCE INDEXES
