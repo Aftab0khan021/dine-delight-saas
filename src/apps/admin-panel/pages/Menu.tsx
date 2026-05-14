@@ -16,6 +16,7 @@ import {
   Sparkles,
   Loader2,
   CheckCircle2,
+  Clock,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -288,6 +289,8 @@ export default function AdminMenu() {
         allergens: values.allergens || [],
         packaging_charge_cents: toCents(values.packaging_charge_cents),
         additional_images: values.additional_images || [],
+        available_from: values.available_from || null,
+        available_to: values.available_to || null,
         restaurant_id: restaurant!.id
       };
 
@@ -976,11 +979,19 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currenc
         allergens: data?.allergens || [],
         packaging_charge_cents: fromCents(data?.packaging_charge_cents || 0),
         additional_images: data?.additional_images || [],
+        available_from: data?.available_from || "",
+        available_to: data?.available_to || "",
       });
     }
   }, [open, data, categories]);
 
-  const onSubmit = (values: any) => onSave({ ...values, price_cents: values.price_cents, additional_images: values.additional_images || [] });
+  const onSubmit = (values: any) => onSave({
+    ...values,
+    price_cents: values.price_cents,
+    additional_images: values.additional_images || [],
+    available_from: values.available_from || null,
+    available_to: values.available_to || null,
+  });
 
   // Upload handler for additional images
   const handleAdditionalImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1314,6 +1325,30 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currenc
               checked={form.watch("is_daily_special")}
               onCheckedChange={(v) => form.setValue("is_daily_special", v)}
             />
+          </div>
+
+          {/* Item Availability Schedule */}
+          <div className="space-y-2 rounded-lg border p-3 shadow-sm">
+            <Label className="flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5 text-blue-500" />
+              Availability Schedule <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+            </Label>
+            <p className="text-xs text-muted-foreground">Set a time window if this item is only available during specific hours (e.g. breakfast only 7–11 AM). Leave empty to show all day.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">From</Label>
+                <Input type="time" {...form.register("available_from")} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">To</Label>
+                <Input type="time" {...form.register("available_to")} />
+              </div>
+            </div>
+            {form.watch("available_from") && form.watch("available_to") && (
+              <p className="text-xs text-blue-600 dark:text-blue-400">
+                ⏰ This item will only show on the public menu between {form.watch("available_from")} – {form.watch("available_to")}
+              </p>
+            )}
           </div>
 
           <SheetFooter className="gap-2 sm:justify-between flex-col sm:flex-row pt-4">

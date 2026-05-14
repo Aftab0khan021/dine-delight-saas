@@ -393,7 +393,16 @@ export default function PublicMenu() {
     const items = itemsQuery.data ?? [];
 
     const byCategory = new Map<string, MenuItemRow[]>();
-    for (const item of items) {
+    // Filter items by per-item time schedule before grouping
+    const now = new Date();
+    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const visibleItems = items.filter((item: any) => {
+      if (item.available_from && item.available_to) {
+        return currentTime >= item.available_from && currentTime <= item.available_to;
+      }
+      return true; // No schedule = always visible
+    });
+    for (const item of visibleItems) {
       const key = item.category_id ?? "__uncategorized__";
       const list = byCategory.get(key) ?? [];
       list.push(item);

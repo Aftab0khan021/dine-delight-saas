@@ -5,6 +5,12 @@
 -- ═══════════════════════════════════════════════════════════════
 
 -- ─────────────────────────────────────────────────────────────
+-- 0. SCHEMA: Per-item time scheduling
+-- ─────────────────────────────────────────────────────────────
+ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS available_from TIME;
+ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS available_to TIME;
+
+-- ─────────────────────────────────────────────────────────────
 -- 1. PERFORMANCE INDEXES
 -- ─────────────────────────────────────────────────────────────
 
