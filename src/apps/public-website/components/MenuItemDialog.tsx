@@ -36,7 +36,7 @@ export function MenuItemDialog({ item, open, onOpenChange, onAddToCart, restaura
         queryFn: async () => {
             const { data } = await supabase
                 .from("menu_item_variants")
-                .select("*")
+                .select("id, name, price_cents, sort_order, is_active, is_default")
                 .eq("menu_item_id", item.id)
                 .eq("is_active", true)
                 .order("sort_order");
@@ -50,7 +50,7 @@ export function MenuItemDialog({ item, open, onOpenChange, onAddToCart, restaura
         queryFn: async () => {
             const { data } = await supabase
                 .from("menu_item_addons")
-                .select("*")
+                .select("id, name, price_cents, sort_order, is_active, is_mandatory")
                 .eq("menu_item_id", item.id)
                 .eq("is_active", true)
                 .order("sort_order");

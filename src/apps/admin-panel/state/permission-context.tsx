@@ -54,7 +54,7 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
                 if (allPermissions) {
                     setPermissions(new Set(allPermissions.map(p => p.code)));
                 }
-                console.log("🔍 [PermissionContext] ADMIN — loaded all", allPermissions?.length ?? 0, "permissions");
+                if (import.meta.env.DEV) console.log("🔍 [PermissionContext] ADMIN — loaded all", allPermissions?.length ?? 0, "permissions");
                 return;
             }
 
@@ -64,7 +64,7 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
                 p_restaurant_id: restaurant.id,
             });
 
-            console.log("🔍 [PermissionContext] STAFF permissions:", {
+            if (import.meta.env.DEV) console.log("🔍 [PermissionContext] STAFF permissions:", {
                 email: user.email,
                 role,
                 permissionCount: data?.length ?? 0,

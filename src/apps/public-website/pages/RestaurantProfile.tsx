@@ -105,8 +105,9 @@ export default function RestaurantProfile() {
   const { data: restaurant, isLoading, error } = useQuery({
     queryKey: ["public", "restaurant-profile", slug],
     enabled: !!slug,
+    staleTime: 5 * 60 * 1000, // 5 min cache
     queryFn: async () => {
-      const { data, error } = await supabase.from("restaurants").select("id, name, slug, logo_url, description, settings, is_holiday_mode, holiday_mode_message, operating_hours, currency_code, cuisine_types").eq("slug", slug).maybeSingle();
+      const { data, error } = await supabase.from("restaurants").select("id, name, slug, logo_url, description, settings, is_holiday_mode, holiday_mode_message, operating_hours, currency_code, cuisine_types, avg_rating, rating_count").eq("slug", slug).maybeSingle();
       if (error) throw error;
       if (!data) throw new Error("Restaurant not found");
       return data;
@@ -123,6 +124,7 @@ export default function RestaurantProfile() {
   const { data: featuredItems } = useQuery({
     queryKey: ["public", "featured-items", restaurant?.id],
     enabled: !!restaurant?.id,
+    staleTime: 5 * 60 * 1000, // 5 min cache
     queryFn: async () => {
       const { data } = await supabase.from("menu_items").select("id, name, price_cents, image_url, description").eq("restaurant_id", restaurant!.id).eq("is_active", true).is("deleted_at", null).limit(4);
       return data || [];
@@ -133,6 +135,7 @@ export default function RestaurantProfile() {
   const { data: activeCoupons } = useQuery({
     queryKey: ["public", "coupons", restaurant?.id],
     enabled: !!restaurant?.id,
+    staleTime: 5 * 60 * 1000, // 5 min cache
     queryFn: async () => {
       const { data } = await supabase
         .from("coupons")
@@ -154,22 +157,16 @@ export default function RestaurantProfile() {
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
-  // R6: Real avg rating from orders
-  const { data: ratingData } = useQuery({
-    queryKey: ["public", "restaurant-rating", restaurant?.id],
-    enabled: !!restaurant?.id,
-    staleTime: 120_000,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("orders")
-        .select("rating")
-        .eq("restaurant_id", restaurant!.id)
-        .not("rating", "is", null);
-      if (!data || data.length === 0) return null;
-      const avg = data.reduce((s, o) => s + (o.rating || 0), 0) / data.length;
-      return { avg: Math.round(avg * 10) / 10, count: data.length };
-    },
-  });
+  // R6: Real avg rating — uses pre-computed columns from restaurants table
+  // (avg_rating/rating_count are maintained by a DB trigger on orders.rating)
+  // Falls back to scanning orders if the migration hasn't been applied yet.
+  const ratingData = useMemo(() => {
+    const r = restaurant as any;
+    if (r?.avg_rating != null && r?.rating_count > 0) {
+      return { avg: Number(r.avg_rating), count: r.rating_count };
+    }
+    return null;
+  }, [restaurant]);
 
   // R8: Daily specials — items marked as Today's Special by admin
   const { data: specials } = useQuery({

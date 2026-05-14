@@ -53,16 +53,17 @@ export default function PublicMenu() {
   const restaurantQuery = useQuery({
     queryKey: ["public-menu", "restaurant", slug],
     enabled: !!slug,
+    staleTime: 5 * 60 * 1000, // 5 min — restaurant data rarely changes
     queryFn: async (): Promise<RestaurantRow> => {
       const { data, error } = await supabase
         .from("restaurants")
-        .select("*")
+        .select("id, name, slug, logo_url, description, settings, is_accepting_orders, is_holiday_mode, holiday_mode_message, operating_hours, currency_code, cuisine_types, online_payments_enabled")
         .eq("slug", slug)
         .maybeSingle();
 
       if (error) throw error;
       if (!data) throw new Error("Restaurant not found");
-      return data;
+      return data as unknown as RestaurantRow;
     },
   });
 
@@ -348,36 +349,38 @@ export default function PublicMenu() {
   const categoriesQuery = useQuery({
     queryKey: ["public-menu", "categories", slug, restaurantQuery.data?.id],
     enabled: !!restaurantQuery.data?.id,
+    staleTime: 5 * 60 * 1000, // 5 min cache
     queryFn: async (): Promise<CategoryRow[]> => {
       const restaurantId = restaurantQuery.data!.id;
       const { data, error } = await supabase
         .from("categories")
-        .select("*")
+        .select("id, name, description, is_active, sort_order, restaurant_id, created_at, updated_at, available_from, available_to")
         .eq("restaurant_id", restaurantId)
         .eq("is_active", true)
         .is("deleted_at", null)
         .order("sort_order", { ascending: true });
 
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as unknown as CategoryRow[];
     },
   });
 
   const itemsQuery = useQuery({
     queryKey: ["public-menu", "items", slug, restaurantQuery.data?.id],
     enabled: !!restaurantQuery.data?.id,
+    staleTime: 2 * 60 * 1000, // 2 min cache — menu items may change more often
     queryFn: async (): Promise<MenuItemRow[]> => {
       const restaurantId = restaurantQuery.data!.id;
       const { data, error } = await supabase
         .from("menu_items")
-        .select("*")
+        .select("id, name, description, price_cents, image_url, category_id, food_type, is_active, sort_order, restaurant_id, created_at, updated_at, is_daily_special, available_from, available_to, allergens, spice_level, preparation_time_min, additional_images")
         .eq("restaurant_id", restaurantId)
         .eq("is_active", true)
         .is("deleted_at", null)
         .order("sort_order", { ascending: true });
 
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as unknown as MenuItemRow[];
     },
   });
 
@@ -1221,7 +1224,7 @@ export default function PublicMenu() {
                               if (images.length > 0) {
                                 return (
                                   <div className="relative">
-                                    <img src={images[0]} alt={item.name} className="h-36 w-full object-cover cursor-pointer" onClick={() => setLightboxImg(images[0])} />
+                                    <img src={images[0]} alt={item.name} className="h-36 w-full object-cover cursor-pointer" loading="lazy" onClick={() => setLightboxImg(images[0])} />
                                     {images.length > 1 && (
                                       <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
                                         {images.map((_: string, i: number) => (
@@ -1973,7 +1976,7 @@ export default function PublicMenu() {
                   }}>
                   {suggestion.image_url && (
                     <img src={suggestion.image_url} alt={suggestion.name}
-                      className="w-full h-16 object-cover rounded-lg" />
+                      className="w-full h-16 object-cover rounded-lg" loading="lazy" />
                   )}
                   <p className="text-xs font-medium line-clamp-2">{suggestion.name}</p>
                   <p className="text-xs text-muted-foreground">

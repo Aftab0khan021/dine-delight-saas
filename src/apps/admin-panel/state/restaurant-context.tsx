@@ -60,10 +60,10 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       .eq("user_id", session.user.id)
       .neq("role", "super_admin");
 
-    console.log("🔍 [RestaurantContext] User:", session.user.email, "| Roles:", JSON.stringify(allUserRoles));
+    if (import.meta.env.DEV) console.log("🔍 [RestaurantContext] User:", session.user.email, "| Roles:", JSON.stringify(allUserRoles));
 
     if (roleError || !allUserRoles || allUserRoles.length === 0) {
-      console.warn("Access Denied: No restaurant role found for this user.");
+      if (import.meta.env.DEV) console.warn("Access Denied: No restaurant role found for this user.");
       setRestaurant(null);
       setRole(null);
       setStaffCategory(null);
@@ -87,7 +87,7 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       effectiveRole = "restaurant_admin";
       effectiveRestaurantId = adminRow.restaurant_id;
       effectiveCategoryId = null; // Admins don't use staff categories
-      console.log("🔍 [RestaurantContext] ✅ User is ADMIN for restaurant:", effectiveRestaurantId);
+      if (import.meta.env.DEV) console.log("🔍 [RestaurantContext] ✅ User is ADMIN for restaurant:", effectiveRestaurantId);
     } else if (staffRow) {
       // User appears to be staff only — BUT check if they're actually the restaurant creator
       // whose restaurant_admin role was lost (self-healing mechanism)
@@ -104,7 +104,7 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
         .maybeSingle();
 
       if (adminRequest && effectiveRestaurantId) {
-        console.warn("🔧 [RestaurantContext] SELF-HEAL: User has approved admin request but missing restaurant_admin role! Auto-promoting...");
+        if (import.meta.env.DEV) console.warn("🔧 [RestaurantContext] SELF-HEAL: User has approved admin request but missing restaurant_admin role! Auto-promoting...");
         // Try to restore the missing restaurant_admin role via RPC (bypasses RLS)
         try {
           const { data: healResult } = await supabase.rpc("self_heal_admin_role", {
@@ -113,14 +113,14 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
           });
 
           if (healResult?.success) {
-            console.log("🔧 [RestaurantContext] ✅ Self-healed:", healResult.message);
+            if (import.meta.env.DEV) console.log("🔧 [RestaurantContext] ✅ Self-healed:", healResult.message);
             effectiveRole = "restaurant_admin";
             effectiveCategoryId = null;
           } else {
-            console.warn("🔧 [RestaurantContext] ⚠️ Self-heal failed:", healResult?.error);
+            if (import.meta.env.DEV) console.warn("🔧 [RestaurantContext] ⚠️ Self-heal failed:", healResult?.error);
           }
         } catch (healError) {
-          console.warn("🔧 [RestaurantContext] ⚠️ Self-heal RPC not available:", healError);
+          if (import.meta.env.DEV) console.warn("🔧 [RestaurantContext] ⚠️ Self-heal RPC not available:", healError);
           // Fallback: check permissions count
           const { data: perms } = await supabase.rpc("get_user_permissions", {
             p_user_id: session.user.id,
@@ -128,13 +128,13 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
           });
           const { data: allPerms } = await supabase.from("permissions").select("code");
           if (perms && allPerms && perms.length >= allPerms.length) {
-            console.log("🔧 [RestaurantContext] ✅ DB confirms admin via permissions count");
+            if (import.meta.env.DEV) console.log("🔧 [RestaurantContext] ✅ DB confirms admin via permissions count");
             effectiveRole = "restaurant_admin";
             effectiveCategoryId = null;
           }
         }
       } else {
-        console.log("🔍 [RestaurantContext] 👤 User is STAFF with category:", effectiveCategoryId);
+        if (import.meta.env.DEV) console.log("🔍 [RestaurantContext] 👤 User is STAFF with category:", effectiveCategoryId);
       }
     } else {
       // Fallback: pick the first available role
@@ -142,7 +142,7 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       effectiveRole = firstRow.role as StaffRole;
       effectiveRestaurantId = firstRow.restaurant_id;
       effectiveCategoryId = firstRow.staff_category_id;
-      console.log("🔍 [RestaurantContext] ⚠️ Fallback role:", effectiveRole);
+      if (import.meta.env.DEV) console.log("🔍 [RestaurantContext] ⚠️ Fallback role:", effectiveRole);
     }
 
     // 3. Set role
@@ -162,7 +162,7 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
 
       // Fallback if RLS hides it but ID exists
       if (restaurantError || !finalRestaurant) {
-        console.warn("Restaurant details hidden by RLS. Using fallback.");
+        if (import.meta.env.DEV) console.warn("Restaurant details hidden by RLS. Using fallback.");
         finalRestaurant = {
           id: effectiveRestaurantId,
           name: "My Restaurant",
@@ -178,7 +178,7 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
     if (effectiveCategoryId && effectiveRole !== "restaurant_admin") {
       const { data: categoryRow } = await supabase
         .from("staff_categories")
-        .select("*")
+        .select("id, restaurant_id, name, description, color, is_default, created_at, updated_at")
         .eq("id", effectiveCategoryId)
         .maybeSingle();
 

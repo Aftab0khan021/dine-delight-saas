@@ -24,16 +24,16 @@ export function useFeatureAccess(restaurantId: string | undefined) {
             try {
                 const { data, error } = await supabase
                     .from('restaurant_feature_access')
-                    .select('*')
+                    .select('feature_key, feature_name, is_enabled, source')
                     .eq('restaurant_id', restaurantId);
 
                 if (error) {
-                    console.warn('Feature access query failed:', error.message);
+                    if (import.meta.env.DEV) console.warn('Feature access query failed:', error.message);
                     return [];
                 }
                 return data as FeatureAccess[];
             } catch (e) {
-                console.warn('Feature access unavailable:', e);
+                if (import.meta.env.DEV) console.warn('Feature access unavailable:', e);
                 return [];
             }
         },
@@ -92,12 +92,12 @@ export function useFeatureLimit(restaurantId: string | undefined, featureKey: st
                 });
 
                 if (error) {
-                    console.warn('Feature limit RPC failed:', error.message);
+                    if (import.meta.env.DEV) console.warn('Feature limit RPC failed:', error.message);
                     return -1; // Default to unlimited if RPC is unavailable
                 }
                 return data as number;
             } catch (e) {
-                console.warn('Feature limit unavailable:', e);
+                if (import.meta.env.DEV) console.warn('Feature limit unavailable:', e);
                 return -1;
             }
         },

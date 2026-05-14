@@ -165,7 +165,7 @@ export default function CustomerDashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("customer_profiles")
-        .select("*")
+        .select("id, phone, name, email, saved_addresses")
         .eq("phone", phone)
         .maybeSingle();
       if (error) throw error;

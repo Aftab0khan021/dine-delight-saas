@@ -3,10 +3,12 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import NotFound from "./pages/NotFound";
 
-// Public Website
+// ──────────────────────────────────────────────────────────────────────────────
+// Public Website — eagerly loaded (customers see these first, must be instant)
+// ──────────────────────────────────────────────────────────────────────────────
 import Home from "./apps/public-website/pages/Home";
 import PublicMenu from "./apps/public-website/pages/Menu";
 import TrackOrder from "./apps/public-website/pages/TrackOrder";
@@ -17,76 +19,107 @@ import TableReservation from "./apps/public-website/pages/TableReservation";
 import PrivacyPolicy from "./apps/public-website/pages/PrivacyPolicy";
 import TermsOfService from "./apps/public-website/pages/TermsOfService";
 
-// Admin Panel
+// ──────────────────────────────────────────────────────────────────────────────
+// Admin Panel — lazy-loaded (only restaurant admins/staff need these)
+// Auth pages stay eager since they're the entry point for admin users.
+// ──────────────────────────────────────────────────────────────────────────────
 import AdminAuth from "./apps/admin-panel/pages/Auth";
 import SetPassword from "./apps/admin-panel/pages/SetPassword";
 import AuthCallback from "./apps/admin-panel/pages/AuthCallback";
 import AcceptInvitation from "./apps/admin-panel/pages/AcceptInvitation";
 import { AdminLayout } from "./apps/admin-panel/components/AdminLayout";
-import AdminDashboard from "./apps/admin-panel/pages/Dashboard";
-import AdminOrders from "./apps/admin-panel/pages/Orders";
-import AdminMenu from "./apps/admin-panel/pages/Menu";
-import AdminQrMenu from "./apps/admin-panel/pages/QrMenu";
-import AdminStaff from "./apps/admin-panel/pages/Staff";
-import AdminStaffCategories from "./apps/admin-panel/pages/StaffCategories";
-import AdminBranding from "./apps/admin-panel/pages/Branding";
-import AdminBilling from "./apps/admin-panel/pages/Billing";
-import AdminCoupons from "./apps/admin-panel/pages/Coupons";
-import AdminMarketing from "./apps/admin-panel/pages/Marketing";
-import AdminMenuInsights from "./apps/admin-panel/pages/MenuInsights";
-import AdminDeveloperAPI from "./apps/admin-panel/pages/DeveloperAPI";
-import AdminKitchenDashboard from "./apps/admin-panel/pages/KitchenDashboard";
-import AdminReservations from "./apps/admin-panel/pages/Reservations";
-import AdminInventory from "./apps/admin-panel/pages/Inventory";
-import AdminOTPSettings from "./apps/admin-panel/pages/OTPSettings";
-import AdminReviews from "./apps/admin-panel/pages/Reviews";
-import AdminCustomers from "./apps/admin-panel/pages/Customers";
-import AdminAnalytics from "./apps/admin-panel/pages/Analytics";
-import AdminDeliveryZones from "./apps/admin-panel/pages/DeliveryZones";
-import AdminExploreFeatures from "./apps/admin-panel/pages/ExploreFeatures";
 import { ProtectedRoute } from "./apps/admin-panel/components/ProtectedRoute";
 import { usePermissionContext } from "./apps/admin-panel/state/permission-context";
 
-// Super Admin
+const AdminDashboard = lazy(() => import("./apps/admin-panel/pages/Dashboard"));
+const AdminOrders = lazy(() => import("./apps/admin-panel/pages/Orders"));
+const AdminMenu = lazy(() => import("./apps/admin-panel/pages/Menu"));
+const AdminQrMenu = lazy(() => import("./apps/admin-panel/pages/QrMenu"));
+const AdminStaff = lazy(() => import("./apps/admin-panel/pages/Staff"));
+const AdminStaffCategories = lazy(() => import("./apps/admin-panel/pages/StaffCategories"));
+const AdminBranding = lazy(() => import("./apps/admin-panel/pages/Branding"));
+const AdminBilling = lazy(() => import("./apps/admin-panel/pages/Billing"));
+const AdminCoupons = lazy(() => import("./apps/admin-panel/pages/Coupons"));
+const AdminMarketing = lazy(() => import("./apps/admin-panel/pages/Marketing"));
+const AdminMenuInsights = lazy(() => import("./apps/admin-panel/pages/MenuInsights"));
+const AdminDeveloperAPI = lazy(() => import("./apps/admin-panel/pages/DeveloperAPI"));
+const AdminKitchenDashboard = lazy(() => import("./apps/admin-panel/pages/KitchenDashboard"));
+const AdminReservations = lazy(() => import("./apps/admin-panel/pages/Reservations"));
+const AdminInventory = lazy(() => import("./apps/admin-panel/pages/Inventory"));
+const AdminOTPSettings = lazy(() => import("./apps/admin-panel/pages/OTPSettings"));
+const AdminReviews = lazy(() => import("./apps/admin-panel/pages/Reviews"));
+const AdminCustomers = lazy(() => import("./apps/admin-panel/pages/Customers"));
+const AdminAnalytics = lazy(() => import("./apps/admin-panel/pages/Analytics"));
+const AdminDeliveryZones = lazy(() => import("./apps/admin-panel/pages/DeliveryZones"));
+const AdminExploreFeatures = lazy(() => import("./apps/admin-panel/pages/ExploreFeatures"));
+const AdminWhatsAppSettings = lazy(() => import("./apps/admin-panel/pages/WhatsAppSettings"));
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Super Admin — lazy-loaded (only super admins need these, very few users)
+// Auth page stays eager since it's the entry point.
+// ──────────────────────────────────────────────────────────────────────────────
 import SuperAdminAuth from "./apps/super-admin/pages/Auth";
 import { SuperAdminLayout } from "./apps/super-admin/components/SuperAdminLayout";
-import SuperAdminDashboard from "./apps/super-admin/pages/Dashboard";
-import SuperAdminRestaurants from "./apps/super-admin/pages/Restaurants";
-import SuperAdminRestaurantDetails from "./apps/super-admin/pages/RestaurantDetails";
-import SuperAdminPlans from "./apps/super-admin/pages/Plans";
-import SuperAdminSubscriptions from "./apps/super-admin/pages/Subscriptions";
-import SuperAdminFeatureFlags from "./apps/super-admin/pages/FeatureFlags";
-import SuperAdminFeatureAccess from "./apps/super-admin/pages/FeatureAccess";
-import SuperAdminInvoices from "./apps/super-admin/pages/Invoices";
-import SuperAdminActivity from "./apps/super-admin/pages/Activity";
-import SuperAdminAbuse from "./apps/super-admin/pages/Abuse";
-import SuperAdminSupport from "./apps/super-admin/pages/Support";
-import SuperAdminErrors from "./apps/super-admin/pages/Errors";
-import SuperAdminSettings from "./apps/super-admin/pages/Settings";
-import SuperAdminUsers from "./apps/super-admin/pages/Users";
-import SuperAdminPendingApprovals from "./apps/super-admin/pages/PendingApprovals";
-import SuperAdminCloudKitchens from "./apps/super-admin/pages/CloudKitchens";
-// From dev branch: AI management + WhatsApp bot pages
-import SuperAdminAIProviders from "./apps/super-admin/pages/AIProviders";
-import SuperAdminAICostTracking from "./apps/super-admin/pages/AICostTracking";
-import SuperAdminAIUsageAnalytics from "./apps/super-admin/pages/AIUsageAnalytics";
-import SuperAdminRestaurantAIConfig from "./apps/super-admin/pages/RestaurantAIConfig";
-import SuperAdminWhatsAppManagement from "./apps/super-admin/pages/WhatsAppManagement";
-import SuperAdminAnnouncements from "./apps/super-admin/pages/Announcements";
-import SuperAdminAuditLog from "./apps/super-admin/pages/AuditLog";
-import SuperAdminWhiteLabel from "./apps/super-admin/pages/WhiteLabel";
-import AdminWhatsAppSettings from "./apps/admin-panel/pages/WhatsAppSettings";
 
+const SuperAdminDashboard = lazy(() => import("./apps/super-admin/pages/Dashboard"));
+const SuperAdminRestaurants = lazy(() => import("./apps/super-admin/pages/Restaurants"));
+const SuperAdminRestaurantDetails = lazy(() => import("./apps/super-admin/pages/RestaurantDetails"));
+const SuperAdminPlans = lazy(() => import("./apps/super-admin/pages/Plans"));
+const SuperAdminSubscriptions = lazy(() => import("./apps/super-admin/pages/Subscriptions"));
+const SuperAdminFeatureFlags = lazy(() => import("./apps/super-admin/pages/FeatureFlags"));
+const SuperAdminFeatureAccess = lazy(() => import("./apps/super-admin/pages/FeatureAccess"));
+const SuperAdminInvoices = lazy(() => import("./apps/super-admin/pages/Invoices"));
+const SuperAdminAbuse = lazy(() => import("./apps/super-admin/pages/Abuse"));
+const SuperAdminSupport = lazy(() => import("./apps/super-admin/pages/Support"));
+const SuperAdminErrors = lazy(() => import("./apps/super-admin/pages/Errors"));
+const SuperAdminSettings = lazy(() => import("./apps/super-admin/pages/Settings"));
+const SuperAdminUsers = lazy(() => import("./apps/super-admin/pages/Users"));
+const SuperAdminPendingApprovals = lazy(() => import("./apps/super-admin/pages/PendingApprovals"));
+const SuperAdminCloudKitchens = lazy(() => import("./apps/super-admin/pages/CloudKitchens"));
+const SuperAdminAIProviders = lazy(() => import("./apps/super-admin/pages/AIProviders"));
+const SuperAdminAICostTracking = lazy(() => import("./apps/super-admin/pages/AICostTracking"));
+const SuperAdminAIUsageAnalytics = lazy(() => import("./apps/super-admin/pages/AIUsageAnalytics"));
+const SuperAdminRestaurantAIConfig = lazy(() => import("./apps/super-admin/pages/RestaurantAIConfig"));
+const SuperAdminWhatsAppManagement = lazy(() => import("./apps/super-admin/pages/WhatsAppManagement"));
+const SuperAdminAnnouncements = lazy(() => import("./apps/super-admin/pages/Announcements"));
+const SuperAdminAuditLog = lazy(() => import("./apps/super-admin/pages/AuditLog"));
+const SuperAdminWhiteLabel = lazy(() => import("./apps/super-admin/pages/WhiteLabel"));
+
+// ──────────────────────────────────────────────────────────────────────────────
+// QueryClient — global defaults for caching and refetch behavior
+// ──────────────────────────────────────────────────────────────────────────────
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
+      // Don't refetch when user switches back to the tab — prevents
+      // 100+ simultaneous refetches when restaurant staff return from lunch.
+      refetchOnWindowFocus: false,
+      // Default 60s stale time — most data doesn't change every second.
+      // Individual queries can override this if they need fresher data.
+      staleTime: 60_000,
       // Critical: prevents unhandled query errors from crashing Error Boundary.
       // Pages show empty states instead of crashing.
       throwOnError: false,
     },
   },
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Suspense fallback — shown while lazy chunks are loading
+// ──────────────────────────────────────────────────────────────────────────────
+function LazyFallback() {
+  return (
+    <div className="flex items-center justify-center py-20">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+    </div>
+  );
+}
+
+/** Wraps a lazy-loaded page in Suspense with a consistent loading spinner. */
+function LazyPage({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<LazyFallback />}>{children}</Suspense>;
+}
 
 /**
  * Intercepts Supabase auth hash tokens on ANY page.
@@ -183,32 +216,32 @@ const App = () => (
           <Route path="/auth/accept-invitation" element={<AcceptInvitation />} />
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<SmartAdminRedirect />} />
-            <Route path="dashboard" element={<ProtectedRoute permission="view_dashboard"><AdminDashboard /></ProtectedRoute>} />
-            <Route path="orders" element={<ProtectedRoute permission="view_orders"><AdminOrders /></ProtectedRoute>} />
-            <Route path="menu" element={<ProtectedRoute permission="view_menu"><AdminMenu /></ProtectedRoute>} />
-            <Route path="qr" element={<ProtectedRoute permission="view_qr"><AdminQrMenu /></ProtectedRoute>} />
+            <Route path="dashboard" element={<LazyPage><ProtectedRoute permission="view_dashboard"><AdminDashboard /></ProtectedRoute></LazyPage>} />
+            <Route path="orders" element={<LazyPage><ProtectedRoute permission="view_orders"><AdminOrders /></ProtectedRoute></LazyPage>} />
+            <Route path="menu" element={<LazyPage><ProtectedRoute permission="view_menu"><AdminMenu /></ProtectedRoute></LazyPage>} />
+            <Route path="qr" element={<LazyPage><ProtectedRoute permission="view_qr"><AdminQrMenu /></ProtectedRoute></LazyPage>} />
             {/* Backwards compatible */}
             <Route path="qr-menu" element={<Navigate to="/admin/qr" replace />} />
-            <Route path="staff" element={<ProtectedRoute permission="view_staff"><AdminStaff /></ProtectedRoute>} />
+            <Route path="staff" element={<LazyPage><ProtectedRoute permission="view_staff"><AdminStaff /></ProtectedRoute></LazyPage>} />
             <Route path="staff-categories" element={<Navigate to="/admin/staff" replace />} />
-            <Route path="branding" element={<ProtectedRoute permission="manage_settings"><AdminBranding /></ProtectedRoute>} />
-            <Route path="billing" element={<ProtectedRoute adminOnly><AdminBilling /></ProtectedRoute>} />
-            <Route path="coupons" element={<ProtectedRoute permission="view_coupons"><AdminCoupons /></ProtectedRoute>} />
-            <Route path="marketing" element={<ProtectedRoute adminOnly><AdminMarketing /></ProtectedRoute>} />
-            <Route path="reviews" element={<ProtectedRoute permission="view_reviews"><AdminReviews /></ProtectedRoute>} />
-            <Route path="insights" element={<ProtectedRoute adminOnly><AdminMenuInsights /></ProtectedRoute>} />
-            <Route path="developer" element={<ProtectedRoute adminOnly><AdminDeveloperAPI /></ProtectedRoute>} />
-            <Route path="kitchen" element={<ProtectedRoute permission="view_kitchen"><AdminKitchenDashboard /></ProtectedRoute>} />
-            <Route path="reservations" element={<ProtectedRoute permission="view_reservations"><AdminReservations /></ProtectedRoute>} />
-            <Route path="inventory" element={<ProtectedRoute permission="view_inventory"><AdminInventory /></ProtectedRoute>} />
+            <Route path="branding" element={<LazyPage><ProtectedRoute permission="manage_settings"><AdminBranding /></ProtectedRoute></LazyPage>} />
+            <Route path="billing" element={<LazyPage><ProtectedRoute adminOnly><AdminBilling /></ProtectedRoute></LazyPage>} />
+            <Route path="coupons" element={<LazyPage><ProtectedRoute permission="view_coupons"><AdminCoupons /></ProtectedRoute></LazyPage>} />
+            <Route path="marketing" element={<LazyPage><ProtectedRoute adminOnly><AdminMarketing /></ProtectedRoute></LazyPage>} />
+            <Route path="reviews" element={<LazyPage><ProtectedRoute permission="view_reviews"><AdminReviews /></ProtectedRoute></LazyPage>} />
+            <Route path="insights" element={<LazyPage><ProtectedRoute adminOnly><AdminMenuInsights /></ProtectedRoute></LazyPage>} />
+            <Route path="developer" element={<LazyPage><ProtectedRoute adminOnly><AdminDeveloperAPI /></ProtectedRoute></LazyPage>} />
+            <Route path="kitchen" element={<LazyPage><ProtectedRoute permission="view_kitchen"><AdminKitchenDashboard /></ProtectedRoute></LazyPage>} />
+            <Route path="reservations" element={<LazyPage><ProtectedRoute permission="view_reservations"><AdminReservations /></ProtectedRoute></LazyPage>} />
+            <Route path="inventory" element={<LazyPage><ProtectedRoute permission="view_inventory"><AdminInventory /></ProtectedRoute></LazyPage>} />
             {/* WhatsApp bot settings (from dev merge) */}
-            <Route path="whatsapp" element={<ProtectedRoute adminOnly><AdminWhatsAppSettings /></ProtectedRoute>} />
-            <Route path="otp-settings" element={<ProtectedRoute adminOnly><AdminOTPSettings /></ProtectedRoute>} />
+            <Route path="whatsapp" element={<LazyPage><ProtectedRoute adminOnly><AdminWhatsAppSettings /></ProtectedRoute></LazyPage>} />
+            <Route path="otp-settings" element={<LazyPage><ProtectedRoute adminOnly><AdminOTPSettings /></ProtectedRoute></LazyPage>} />
             {/* Enhancement batch */}
-            <Route path="customers" element={<ProtectedRoute adminOnly><AdminCustomers /></ProtectedRoute>} />
-            <Route path="analytics" element={<ProtectedRoute permission="view_analytics"><AdminAnalytics /></ProtectedRoute>} />
-            <Route path="delivery-zones" element={<ProtectedRoute adminOnly><AdminDeliveryZones /></ProtectedRoute>} />
-            <Route path="explore" element={<ProtectedRoute adminOnly><AdminExploreFeatures /></ProtectedRoute>} />
+            <Route path="customers" element={<LazyPage><ProtectedRoute adminOnly><AdminCustomers /></ProtectedRoute></LazyPage>} />
+            <Route path="analytics" element={<LazyPage><ProtectedRoute permission="view_analytics"><AdminAnalytics /></ProtectedRoute></LazyPage>} />
+            <Route path="delivery-zones" element={<LazyPage><ProtectedRoute adminOnly><AdminDeliveryZones /></ProtectedRoute></LazyPage>} />
+            <Route path="explore" element={<LazyPage><ProtectedRoute adminOnly><AdminExploreFeatures /></ProtectedRoute></LazyPage>} />
           </Route>
 
           {/* Super Admin Routes */}
@@ -216,33 +249,33 @@ const App = () => (
           <Route path="/superadmin/auth" element={<SuperAdminAuth />} />
           <Route path="/superadmin" element={<SuperAdminLayout />}>
             <Route index element={<Navigate to="/superadmin/dashboard" replace />} />
-            <Route path="dashboard" element={<SuperAdminDashboard />} />
-            <Route path="restaurants" element={<SuperAdminRestaurants />} />
-            <Route path="restaurants/:id" element={<SuperAdminRestaurantDetails />} />
-            <Route path="plans" element={<SuperAdminPlans />} />
-            <Route path="subscriptions" element={<SuperAdminSubscriptions />} />
-            <Route path="features" element={<SuperAdminFeatureFlags />} />
-            <Route path="features/access" element={<SuperAdminFeatureAccess />} />
-            <Route path="invoices" element={<SuperAdminInvoices />} />
+            <Route path="dashboard" element={<LazyPage><SuperAdminDashboard /></LazyPage>} />
+            <Route path="restaurants" element={<LazyPage><SuperAdminRestaurants /></LazyPage>} />
+            <Route path="restaurants/:id" element={<LazyPage><SuperAdminRestaurantDetails /></LazyPage>} />
+            <Route path="plans" element={<LazyPage><SuperAdminPlans /></LazyPage>} />
+            <Route path="subscriptions" element={<LazyPage><SuperAdminSubscriptions /></LazyPage>} />
+            <Route path="features" element={<LazyPage><SuperAdminFeatureFlags /></LazyPage>} />
+            <Route path="features/access" element={<LazyPage><SuperAdminFeatureAccess /></LazyPage>} />
+            <Route path="invoices" element={<LazyPage><SuperAdminInvoices /></LazyPage>} />
             <Route path="activity" element={<Navigate to="/superadmin/audit-log" replace />} />
-            <Route path="abuse" element={<SuperAdminAbuse />} />
-            <Route path="support" element={<SuperAdminSupport />} />
-            <Route path="errors" element={<SuperAdminErrors />} />
-            <Route path="users" element={<SuperAdminUsers />} />
-            <Route path="settings" element={<SuperAdminSettings />} />
-            <Route path="approvals" element={<SuperAdminPendingApprovals />} />
-            <Route path="cloud-kitchens" element={<SuperAdminCloudKitchens />} />
+            <Route path="abuse" element={<LazyPage><SuperAdminAbuse /></LazyPage>} />
+            <Route path="support" element={<LazyPage><SuperAdminSupport /></LazyPage>} />
+            <Route path="errors" element={<LazyPage><SuperAdminErrors /></LazyPage>} />
+            <Route path="users" element={<LazyPage><SuperAdminUsers /></LazyPage>} />
+            <Route path="settings" element={<LazyPage><SuperAdminSettings /></LazyPage>} />
+            <Route path="approvals" element={<LazyPage><SuperAdminPendingApprovals /></LazyPage>} />
+            <Route path="cloud-kitchens" element={<LazyPage><SuperAdminCloudKitchens /></LazyPage>} />
             {/* AI Management (from dev merge) */}
-            <Route path="ai/providers" element={<SuperAdminAIProviders />} />
-            <Route path="ai/costs" element={<SuperAdminAICostTracking />} />
-            <Route path="ai/usage" element={<SuperAdminAIUsageAnalytics />} />
-            <Route path="restaurants/:id/ai" element={<SuperAdminRestaurantAIConfig />} />
+            <Route path="ai/providers" element={<LazyPage><SuperAdminAIProviders /></LazyPage>} />
+            <Route path="ai/costs" element={<LazyPage><SuperAdminAICostTracking /></LazyPage>} />
+            <Route path="ai/usage" element={<LazyPage><SuperAdminAIUsageAnalytics /></LazyPage>} />
+            <Route path="restaurants/:id/ai" element={<LazyPage><SuperAdminRestaurantAIConfig /></LazyPage>} />
             {/* WhatsApp Bot Management (from dev merge) */}
-            <Route path="whatsapp" element={<SuperAdminWhatsAppManagement />} />
+            <Route path="whatsapp" element={<LazyPage><SuperAdminWhatsAppManagement /></LazyPage>} />
             {/* Enhancement batch */}
-            <Route path="announcements" element={<SuperAdminAnnouncements />} />
-            <Route path="audit-log" element={<SuperAdminAuditLog />} />
-            <Route path="white-label" element={<SuperAdminWhiteLabel />} />
+            <Route path="announcements" element={<LazyPage><SuperAdminAnnouncements /></LazyPage>} />
+            <Route path="audit-log" element={<LazyPage><SuperAdminAuditLog /></LazyPage>} />
+            <Route path="white-label" element={<LazyPage><SuperAdminWhiteLabel /></LazyPage>} />
           </Route>
 
           {/* Legacy redirects: /super-admin -> /superadmin */}
