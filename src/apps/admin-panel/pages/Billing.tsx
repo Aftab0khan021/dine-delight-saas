@@ -375,7 +375,7 @@ export default function RestaurantBilling() {
           .maybeSingle();
 
         if (subError) {
-          console.warn("Subscription query error (non-fatal):", subError.message);
+          if (import.meta.env.DEV) console.warn("Subscription query error (non-fatal):", subError.message);
           return { subscription: null, plan: null };
         }
         if (!subscription) return { subscription: null, plan: null };
@@ -383,7 +383,7 @@ export default function RestaurantBilling() {
         const { subscription_plans: plan, ...sub } = subscription as any;
         return { subscription: sub as SubscriptionRow, plan: plan as PlanRow | null };
       } catch (e) {
-        console.warn("Subscription fetch failed:", e);
+        if (import.meta.env.DEV) console.warn("Subscription fetch failed:", e);
         return { subscription: null, plan: null };
       }
     },
@@ -406,12 +406,12 @@ export default function RestaurantBilling() {
           .limit(50);
 
         if (error) {
-          console.warn("Invoices query error (non-fatal):", error.message);
+          if (import.meta.env.DEV) console.warn("Invoices query error (non-fatal):", error.message);
           return [] as InvoiceRow[];
         }
         return (data ?? []) as InvoiceRow[];
       } catch (e) {
-        console.warn("Invoices fetch failed:", e);
+        if (import.meta.env.DEV) console.warn("Invoices fetch failed:", e);
         return [] as InvoiceRow[];
       }
     },

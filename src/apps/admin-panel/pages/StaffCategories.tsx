@@ -67,7 +67,7 @@ function StaffCategoriesContent() {
             if (!restaurant?.id) return [];
             const { data, error } = await supabase
                 .from("staff_categories")
-                .select("*")
+                .select("id, restaurant_id, name, description, color, is_default, created_at, updated_at")
                 .eq("restaurant_id", restaurant.id)
                 .order("created_at", { ascending: true });
 
@@ -83,7 +83,7 @@ function StaffCategoriesContent() {
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("permissions")
-                .select("*")
+                .select("id, key, label, description, category")
                 .order("category", { ascending: true });
 
             if (error) throw error;

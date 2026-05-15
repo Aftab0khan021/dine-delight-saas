@@ -25,7 +25,7 @@ export default function WhiteLabel() {
     queryFn: async () => {
       const { data } = await supabase
         .from("platform_config")
-        .select("*")
+        .select("id, restaurant_id, custom_domain, brand_name, brand_logo_url, brand_colors, is_active, created_at")
         .eq("key", "branding")
         .maybeSingle();
       return data?.value || {};

@@ -34,7 +34,7 @@ function ReviewsContent() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("customer_reviews")
-        .select("*")
+        .select("id, restaurant_id, customer_name, customer_phone, rating, review_text, created_at, sentiment_label, ai_reply")
         .eq("restaurant_id", restaurant!.id)
         .order("created_at", { ascending: false });
       if (error) return [];

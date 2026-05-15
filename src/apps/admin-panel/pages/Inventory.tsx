@@ -72,7 +72,7 @@ function InventoryContent() {
     enabled: !!restaurant?.id,
     queryFn: async () => {
       const { data, error } = await supabase.from("ingredients")
-        .select("*").eq("restaurant_id", restaurant!.id).order("name");
+        .select("id, name, unit, current_stock, low_stock_threshold, cost_per_unit_cents, is_tracked, created_at, updated_at, restaurant_id").eq("restaurant_id", restaurant!.id).order("name");
       if (error) throw error;
       return (data || []) as Ingredient[];
     },
@@ -105,7 +105,7 @@ function InventoryContent() {
     enabled: !!selected?.id && historyOpen,
     queryFn: async () => {
       const { data, error } = await supabase.from("stock_movements")
-        .select("*").eq("ingredient_id", selected!.id).order("created_at", { ascending: false }).limit(50);
+        .select("id, change_qty, reason, notes, created_at, reference_id").eq("ingredient_id", selected!.id).order("created_at", { ascending: false }).limit(50);
       if (error) throw error;
       return (data || []) as StockMovement[];
     },

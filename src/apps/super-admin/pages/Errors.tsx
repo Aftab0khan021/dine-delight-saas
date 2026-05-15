@@ -55,7 +55,7 @@ export default function SuperAdminErrors() {
         queryFn: async () => {
             let query = supabase
                 .from("error_logs")
-                .select("*")
+                .select("id, message, stack, context, user_agent, user_id, restaurant_id, severity, resolved, created_at")
                 .order("created_at", { ascending: false })
                 .limit(500);
 

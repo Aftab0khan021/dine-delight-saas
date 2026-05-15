@@ -26,7 +26,7 @@ export default function Announcements() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("announcements")
-        .select("*")
+        .select("id, title, message, type, target_audience, is_active, created_at, expires_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data || [];

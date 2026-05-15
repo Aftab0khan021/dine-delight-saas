@@ -43,7 +43,7 @@ class OrderNotificationService {
      */
     async requestPermission(): Promise<boolean> {
         if (!('Notification' in window)) {
-            console.warn('This browser does not support notifications');
+            if (import.meta.env.DEV) console.warn('This browser does not support notifications');
             return false;
         }
 
@@ -100,7 +100,7 @@ class OrderNotificationService {
      */
     showNotification(title: string, options?: NotificationOptions) {
         if (!this.permissionGranted) {
-            console.warn('Notification permission not granted');
+            if (import.meta.env.DEV) console.warn('Notification permission not granted');
             return null;
         }
 

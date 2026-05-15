@@ -59,7 +59,7 @@ export function VariantEditor({ menuItemId, restaurantId, maxVariants = 5 }: Var
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("menu_item_variants")
-                .select("*")
+                .select("id, name, price_cents, is_default, sort_order, is_active, menu_item_id, restaurant_id")
                 .eq("menu_item_id", menuItemId)
                 .order("sort_order");
 

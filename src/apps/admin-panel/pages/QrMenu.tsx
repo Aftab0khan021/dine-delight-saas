@@ -59,7 +59,7 @@ export default function AdminQrMenu() {
     queryFn: async () => {
       const { data } = await supabase
         .from("qr_codes")
-        .select("*")
+        .select("id, label, capacity, is_active, qr_code_url, restaurant_id, shape, floor")
         .eq("restaurant_id", restaurant!.id)
         .order("created_at", { ascending: false });
       return data || [];

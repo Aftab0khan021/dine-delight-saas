@@ -37,7 +37,7 @@ export function InviteStaffDialog({ open, onOpenChange }: Props) {
       if (!restaurant?.id) return [];
       const { data, error } = await supabase
         .from("staff_categories")
-        .select("*")
+        .select("id, name, color, restaurant_id")
         .eq("restaurant_id", restaurant.id)
         .order("name", { ascending: true });
 

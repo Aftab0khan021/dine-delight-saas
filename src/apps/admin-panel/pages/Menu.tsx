@@ -116,7 +116,7 @@ export default function AdminMenu() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("categories")
-        .select("*")
+        .select("id, name, description, is_active, sort_order, restaurant_id, created_at, updated_at, available_from, available_to, deleted_at")
         .eq("restaurant_id", restaurant!.id)
         .is("deleted_at", null)
         .order("sort_order");
@@ -131,7 +131,7 @@ export default function AdminMenu() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("menu_items")
-        .select("*")
+        .select("id, name, description, price_cents, image_url, category_id, food_type, is_active, sort_order, restaurant_id, created_at, updated_at, is_daily_special, tags, spice_level, allergens, packaging_charge_cents, additional_images, available_from, available_to, deleted_at")
         .eq("restaurant_id", restaurant!.id)
         .is("deleted_at", null)
         .order("sort_order");
@@ -1131,7 +1131,7 @@ function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currenc
                       const desc = generateDescriptionFree(name, cat?.name, price);
                       form.setValue("description", desc, { shouldDirty: true });
                     } catch (err) {
-                      console.warn("AI generation failed, using free tier:", err);
+                      if (import.meta.env.DEV) console.warn("AI generation failed, using free tier:", err);
                       const name = form.watch("name");
                       const desc = generateDescriptionFree(name);
                       form.setValue("description", desc, { shouldDirty: true });

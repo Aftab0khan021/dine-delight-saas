@@ -195,7 +195,7 @@ function CouponsContent() {
             // NOTE: Ensure 'coupons' table exists via migration
             const { data, error } = await supabase
                 .from("coupons")
-                .select("*")
+                .select("id, code, description, discount_type, discount_value, min_order_cents, max_discount_cents, is_active, expires_at, usage_count, usage_limit, restaurant_id, created_at")
                 .eq("restaurant_id", restaurant!.id)
                 .order("created_at", { ascending: false });
 

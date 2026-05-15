@@ -96,7 +96,7 @@ function ReservationsContent() {
             },
           });
         } catch (notifErr) {
-          console.warn("Notification send failed (non-blocking):", notifErr);
+          if (import.meta.env.DEV) console.warn("Notification send failed (non-blocking):", notifErr);
         }
       }
     },

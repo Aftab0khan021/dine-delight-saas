@@ -166,7 +166,7 @@ export default function AdminStaff() {
       if (!restaurant?.id) return [];
       const { data, error } = await supabase
         .from("staff_categories")
-        .select("*")
+        .select("id, name, color, restaurant_id, created_at")
         .eq("restaurant_id", restaurant.id)
         .order("name", { ascending: true });
 
@@ -180,7 +180,7 @@ export default function AdminStaff() {
   const permissionsQuery = useQuery({
     queryKey: ["permissions"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("permissions").select("*").order("category", { ascending: true });
+      const { data, error } = await supabase.from("permissions").select("id, key, label, description, category").order("category", { ascending: true });
       if (error) throw error;
       return (data ?? []) as Permission[];
     },

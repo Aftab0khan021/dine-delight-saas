@@ -105,7 +105,7 @@ export async function generateDescriptionPaid(
     );
     return data.description || generateDescriptionFree(itemName, categoryName, priceCents);
   } catch {
-    console.warn("Paid AI description failed, falling back to free tier");
+    if (import.meta.env.DEV) console.warn("Paid AI description failed, falling back to free tier");
     return generateDescriptionFree(itemName, categoryName, priceCents);
   }
 }
@@ -217,7 +217,7 @@ export async function analyzeSentimentPaid(
       tierUsed: "paid",
     };
   } catch {
-    console.warn("Paid sentiment failed, falling back to free");
+    if (import.meta.env.DEV) console.warn("Paid sentiment failed, falling back to free");
     return analyzeSentimentFree(text, rating);
   }
 }
@@ -315,7 +315,7 @@ export async function forecastDemandPaid(
 
     return { ...data, tierUsed: "paid" };
   } catch {
-    console.warn("Paid demand forecast failed, falling back to free");
+    if (import.meta.env.DEV) console.warn("Paid demand forecast failed, falling back to free");
     return forecastDemandFree(matrix, dayLabels, hourLabels);
   }
 }

@@ -61,7 +61,7 @@ export function AddonEditor({ menuItemId, restaurantId }: AddonEditorProps) {
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("menu_item_addons")
-                .select("*")
+                .select("id, name, price_cents, is_mandatory, max_quantity, sort_order, is_active, menu_item_id, restaurant_id")
                 .eq("menu_item_id", menuItemId)
                 .order("sort_order");
 

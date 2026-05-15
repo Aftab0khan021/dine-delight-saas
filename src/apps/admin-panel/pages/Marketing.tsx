@@ -39,7 +39,7 @@ const TYPE_LABELS: Record<string, string> = {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("whatsapp_campaigns")
-        .select("*")
+        .select("id, restaurant_id, title, message, channel, status, scheduled_at, sent_at, target_audience, created_at")
         .eq("restaurant_id", restaurant!.id)
         .order("created_at", { ascending: false })
         .limit(100);

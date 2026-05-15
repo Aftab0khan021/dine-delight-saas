@@ -38,7 +38,7 @@ function DeliveryZonesContent() {
     queryFn: async () => {
       const { data } = await supabase
         .from("delivery_zones")
-        .select("*")
+        .select("id, restaurant_id, zone_name, pincode, delivery_fee_cents, min_order_cents, is_active, created_at")
         .eq("restaurant_id", restaurant!.id)
         .order("radius_km", { ascending: true });
       return data || [];
