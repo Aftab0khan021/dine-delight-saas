@@ -520,7 +520,7 @@ function TablePicker({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("restaurant_tables")
-        .select("id, label, capacity, is_active, shape, floor")
+        .select("id, label, capacity, is_active")
         .eq("restaurant_id", restaurantId)
         .eq("is_active", true)
         .order("label");
