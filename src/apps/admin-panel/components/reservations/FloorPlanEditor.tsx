@@ -95,7 +95,7 @@ export default function FloorPlanEditor({ restaurantId, todayReservations }: {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("restaurant_tables")
-        .select("id, label, capacity, is_active, restaurant_id, shape, floor, position_x, position_y, qr_code_url")
+        .select("id, label, capacity, is_active, restaurant_id, created_at")
         .eq("restaurant_id", restaurantId)
         .order("label");
       if (error) throw error;

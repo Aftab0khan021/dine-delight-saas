@@ -94,7 +94,7 @@ function DeveloperAPIContent() {
       if (endpointIds.length === 0) return [];
       const { data, error } = await supabase
         .from("webhook_deliveries")
-        .select("id, restaurant_id, key_prefix, label, scopes, is_active, created_at, expires_at, last_used_at")
+        .select("id, endpoint_id, restaurant_id, event, status, http_status, attempts, created_at")
         .in("endpoint_id", endpointIds)
         .order("created_at", { ascending: false })
         .limit(20);

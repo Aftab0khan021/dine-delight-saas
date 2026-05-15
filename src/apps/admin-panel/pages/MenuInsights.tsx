@@ -49,7 +49,7 @@ function MenuInsightsContent() {
       if (period === "7d") {
         const { data, error } = await supabase
           .from("menu_item_popularity")
-          .select("id, name, price_cents, category_id, food_type, is_active, sort_order")
+          .select("restaurant_id, menu_item_id, order_count_7d, total_qty_7d, revenue_cents_7d, last_ordered_at")
           .eq("restaurant_id", restaurant!.id)
           .order("order_count_7d", { ascending: false })
           .limit(20);

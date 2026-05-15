@@ -51,7 +51,7 @@ export default function AcceptInvitation() {
             // Verify token in database
             const { data, error: tokenError } = await supabase
                 .from("invitation_tokens")
-                .select("id, email, role, status, restaurant_id, staff_category_id, created_at")
+                .select("id, email, token, role, restaurant_id, staff_category_id, expires_at, used_at, created_at")
                 .eq("token", token)
                 .is("used_at", null)
                 .gt("expires_at", new Date().toISOString())

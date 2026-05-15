@@ -83,7 +83,7 @@ function StaffCategoriesContent() {
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("permissions")
-                .select("id, key, label, description, category")
+                .select("id, code, name, description, category")
                 .order("category", { ascending: true });
 
             if (error) throw error;
