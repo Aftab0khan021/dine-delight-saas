@@ -825,11 +825,31 @@ export default function PublicMenu() {
           }
         }
       },
-      { rootMargin: "-120px 0px -60% 0px", threshold: 0 }
+      // rootMargin top must match the combined sticky bar height (~117px)
+      { rootMargin: "-120px 0px -55% 0px", threshold: 0 }
     );
     sections.forEach(s => observer.observe(s));
     return () => observer.disconnect();
   }, [categoriesWithItems]);
+
+  /**
+   * Scrolls to a category section accounting for all sticky bars.
+   * Reads the real pixel height of the sticky header + category bar at runtime
+   * so it works even if those heights change (e.g. on mobile vs desktop).
+   */
+  const scrollToCategory = useCallback((catId: string) => {
+    const el = document.getElementById(`section-${catId}`);
+    if (!el) return;
+    // Measure sticky bars dynamically
+    const stickyHeader = document.querySelector("header.sticky") as HTMLElement | null;
+    const stickyBar = document.querySelector(".sticky.top-\\[73px\\]") as HTMLElement | null;
+    const headerH = stickyHeader?.offsetHeight ?? 73;
+    const barH = stickyBar?.offsetHeight ?? 45;
+    const EXTRA_PADDING = 8; // a little breathing room
+    const offset = headerH + barH + EXTRA_PADDING;
+    const top = el.getBoundingClientRect().top + window.scrollY - offset;
+    window.scrollTo({ top, behavior: "smooth" });
+  }, []);
 
   return (
     <main className="min-h-screen w-full bg-background overflow-x-hidden">
@@ -1079,8 +1099,7 @@ export default function PublicMenu() {
                         <button
                           key={cat.id}
                           onClick={() => {
-                            const el = document.getElementById(`section-${cat.id}`);
-                            if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                            scrollToCategory(cat.id);
                             setActiveCategory(cat.id);
                           }}
                           className={`relative shrink-0 flex items-center gap-1.5 px-3 py-3 text-xs font-medium transition-colors whitespace-nowrap ${
@@ -1130,9 +1149,9 @@ export default function PublicMenu() {
                           <DrawerClose asChild key={cat.id}>
                             <button
                               onClick={() => {
-                                const el = document.getElementById(`section-${cat.id}`);
-                                if (el) { setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 150); }
                                 setActiveCategory(cat.id);
+                                // Delay scroll until after the drawer close animation (~300ms)
+                                setTimeout(() => scrollToCategory(cat.id), 320);
                               }}
                               className={`w-full flex items-center justify-between py-3.5 text-left border-b last:border-0 transition-colors ${
                                 isActive ? "text-primary" : "text-foreground hover:text-primary"
