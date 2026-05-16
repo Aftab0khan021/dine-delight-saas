@@ -200,25 +200,17 @@ export default function QuickOrder() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const currency = restaurant?.currency_code ?? "INR";
+  const restaurantId = restaurant?.id;
 
-  // Guard: wait for restaurant to be available
-  if (!restaurant) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    );
-  }
-
-  // ── Menu data ──
+  // ── Menu data — all queries disabled until restaurant is loaded ──
   const catsQuery = useQuery({
-    queryKey: ["admin", "quick-order", "categories", restaurant?.id],
-    enabled: !!restaurant?.id,
+    queryKey: ["admin", "quick-order", "categories", restaurantId],
+    enabled: !!restaurantId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("categories")
         .select("id, name, sort_order")
-        .eq("restaurant_id", restaurant!.id)
+        .eq("restaurant_id", restaurantId!)
         .eq("is_active", true)
         .is("deleted_at", null)
         .order("sort_order");
@@ -228,13 +220,13 @@ export default function QuickOrder() {
   });
 
   const itemsQuery = useQuery({
-    queryKey: ["admin", "quick-order", "items", restaurant?.id],
-    enabled: !!restaurant?.id,
+    queryKey: ["admin", "quick-order", "items", restaurantId],
+    enabled: !!restaurantId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("menu_items")
         .select("id, name, price_cents, image_url, category_id, food_type, is_active, is_sold_out")
-        .eq("restaurant_id", restaurant!.id)
+        .eq("restaurant_id", restaurantId!)
         .eq("is_active", true)
         .is("deleted_at", null)
         .order("sort_order");
@@ -244,13 +236,13 @@ export default function QuickOrder() {
   });
 
   const variantsQuery = useQuery({
-    queryKey: ["admin", "quick-order", "variants", restaurant?.id],
-    enabled: !!restaurant?.id,
+    queryKey: ["admin", "quick-order", "variants", restaurantId],
+    enabled: !!restaurantId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("menu_item_variants")
         .select("id, menu_item_id, name, price_cents, is_active, is_default")
-        .eq("restaurant_id", restaurant!.id)
+        .eq("restaurant_id", restaurantId!)
         .eq("is_active", true)
         .order("sort_order");
       if (error) throw error;
@@ -259,13 +251,13 @@ export default function QuickOrder() {
   });
 
   const addonsQuery = useQuery({
-    queryKey: ["admin", "quick-order", "addons", restaurant?.id],
-    enabled: !!restaurant?.id,
+    queryKey: ["admin", "quick-order", "addons", restaurantId],
+    enabled: !!restaurantId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("menu_item_addons")
         .select("id, menu_item_id, name, price_cents, is_active")
-        .eq("restaurant_id", restaurant!.id)
+        .eq("restaurant_id", restaurantId!)
         .eq("is_active", true)
         .order("sort_order");
       if (error) throw error;
@@ -295,7 +287,7 @@ export default function QuickOrder() {
   const [placing, setPlacing] = useState(false);
   const [successToken, setSuccessToken] = useState<string | null>(null);
 
-  // ── Derived ──
+  // ── Derived (all useMemo must be BEFORE any early return) ──
   const categories = catsQuery.data ?? [];
   const allItems = itemsQuery.data ?? [];
 
@@ -313,6 +305,15 @@ export default function QuickOrder() {
   const subtotal = cart.reduce((s, i) => s + i.unit_price * i.quantity, 0);
   const taxCents = Math.round(subtotal * taxSettings.rate);
   const total = subtotal + taxCents;
+
+  // Guard: show spinner while restaurant context is loading (placed after ALL hooks)
+  if (!restaurantId) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
 
   // ── Cart helpers ──
   function addToCart(ci: Omit<CartItem, "cart_id" | "quantity">) {
