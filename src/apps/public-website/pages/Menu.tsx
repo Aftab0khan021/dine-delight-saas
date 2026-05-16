@@ -833,22 +833,14 @@ export default function PublicMenu() {
   }, [categoriesWithItems]);
 
   /**
-   * Scrolls to a category section accounting for all sticky bars.
-   * Reads the real pixel height of the sticky header + category bar at runtime
-   * so it works even if those heights change (e.g. on mobile vs desktop).
+   * Scrolls to a category section.
+   * Each <section> has scrollMarginTop set so scrollIntoView automatically
+   * accounts for the sticky header + category bar heights.
    */
   const scrollToCategory = useCallback((catId: string) => {
     const el = document.getElementById(`section-${catId}`);
     if (!el) return;
-    // Measure sticky bars dynamically
-    const stickyHeader = document.querySelector("header.sticky") as HTMLElement | null;
-    const stickyBar = document.querySelector(".sticky.top-\\[73px\\]") as HTMLElement | null;
-    const headerH = stickyHeader?.offsetHeight ?? 73;
-    const barH = stickyBar?.offsetHeight ?? 45;
-    const EXTRA_PADDING = 8; // a little breathing room
-    const offset = headerH + barH + EXTRA_PADDING;
-    const top = el.getBoundingClientRect().top + window.scrollY - offset;
-    window.scrollTo({ top, behavior: "smooth" });
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
   return (
@@ -1273,7 +1265,13 @@ export default function PublicMenu() {
               }
 
               return (
-                <section key={category.id} id={`section-${category.id}`} data-category-id={category.id} aria-labelledby={`cat-${category.id}`}>
+                <section
+                  key={category.id}
+                  id={`section-${category.id}`}
+                  data-category-id={category.id}
+                  aria-labelledby={`cat-${category.id}`}
+                  style={{ scrollMarginTop: "130px" }}
+                >
                   <div className="flex items-baseline justify-between gap-3 mb-4">
                     <div className="min-w-0">
                       <h2 id={`cat-${category.id}`} className="text-lg font-semibold tracking-tight">{category.name}</h2>
