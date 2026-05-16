@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { addDays, startOfDay, subHours, eachHourOfInterval, format } from "date-fns";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Link } from "react-router-dom";
 import {
@@ -46,6 +47,11 @@ export default function AdminDashboard() {
     const s = startOfDay(new Date());
     return { startISO: s.toISOString(), endISO: addDays(s, 1).toISOString() };
   }, [todayKey]);
+
+  // ── Real-time: dashboard KPIs update when orders change ──
+  useRealtimeSync(restaurant?.id, [
+    { table: "orders", queryKey: ["dashboard"] },
+  ]);
 
   const todayOrdersQ = useQuery({
     queryKey: ["dashboard", restaurant?.id, "today", todayKey],

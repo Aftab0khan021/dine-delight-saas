@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { Card } from "@/components/ui/card";
@@ -195,28 +196,50 @@ export default function PublicMenu() {
   );
 
   // Active coupons for offers banner
+  // SECURITY: Filter expired AND limit-reached coupons at the DB query level.
+  // The client-side filter below is a secondary safety net — the DB filter is the source of truth.
   const { data: menuCoupons } = useQuery({
     queryKey: ["public-menu", "coupons", restaurantQuery.data?.id],
     enabled: !!restaurantQuery.data?.id,
     queryFn: async () => {
+      const now = new Date().toISOString();
       const { data } = await supabase
         .from("coupons")
         .select("id, code, description, discount_type, discount_value, min_order_cents, max_discount_cents, expires_at, usage_count, usage_limit")
         .eq("restaurant_id", restaurantQuery.data!.id)
         .eq("is_active", true)
-        .or(`expires_at.is.null,expires_at.gte.${new Date().toISOString()}`)
+        // Only fetch coupons that have not expired (null = never expires)
+        .or(`expires_at.is.null,expires_at.gt.${now}`)
         .order("discount_value", { ascending: false })
         .limit(6);
-      // Filter out coupons that have reached their usage limit
+      // Secondary client-side guard: also exclude limit-reached coupons
       return (data || []).filter((c: any) => !c.usage_limit || c.usage_count < c.usage_limit);
     },
   });
   const [copiedOffer, setCopiedOffer] = useState<string | null>(null);
 
-  // Auto-apply best coupon when cart has items
+  // Auto-apply best coupon when cart has items.
+  // SECURITY: Re-validates from menuCoupons (already DB-filtered) — never trusts stale client state.
+  // If a coupon expired or hit its limit since the last fetch, the real-time subscription will
+  // refetch menuCoupons and this effect will skip/remove the invalid coupon.
   useEffect(() => {
-    if (!menuCoupons || menuCoupons.length === 0 || activeCart.items.length === 0 || activeCart.coupon) return;
-    // Find the best coupon that meets min order
+    if (!menuCoupons || menuCoupons.length === 0 || activeCart.items.length === 0) return;
+
+    // If a coupon is already applied, verify it still appears in the valid list
+    if (activeCart.coupon) {
+      const stillValid = menuCoupons.some((c: any) => c.code === activeCart.coupon!.code);
+      if (!stillValid) {
+        // Remove the now-invalid coupon from the cart silently
+        activeCart.removeCoupon?.();
+        toast({
+          title: "Offer removed",
+          description: "The applied coupon is no longer available.",
+        });
+      }
+      return; // Don't auto-apply if we already have (or just removed) a coupon
+    }
+
+    // Find the best valid coupon that meets the minimum order value
     let bestDiscount = 0;
     let bestCoupon: any = null;
     for (const c of menuCoupons) {
@@ -388,6 +411,19 @@ export default function PublicMenu() {
   const currencyCode = useMemo(() => {
     return restaurantQuery.data?.currency_code ?? "INR";
   }, [restaurantQuery.data]);
+
+  // ── Real-time subscriptions for public menu ──
+  // Uses restaurant ID (not slug) so we match Supabase RLS filters correctly.
+  const restaurantId = restaurantQuery.data?.id;
+  useRealtimeSync(restaurantId, [
+    // Menu items: admin toggles availability, prices, sold-out — customers see instantly
+    { table: "menu_items", queryKey: ["public-menu", "items"] },
+    // Categories: admin adds/removes/reorders categories
+    { table: "categories",  queryKey: ["public-menu", "categories"] },
+    // Coupons: admin deactivates, expires, or limit is reached — removed from offers bar in real-time
+    { table: "coupons",     queryKey: ["public-menu", "coupons"] },
+  ]);
+
 
   const categoriesWithItems = useMemo((): CategoryWithItems[] => {
     const categories = categoriesQuery.data ?? [];
@@ -1885,29 +1921,73 @@ export default function PublicMenu() {
                           setCouponLoading(true);
                           setCouponError(null);
                           try {
+                            // SECURITY STEP 1: Re-fetch the coupon fresh from DB.
+                            // Never trust the client-side cache for discount decisions.
+                            const { data: freshCoupon, error: fetchError } = await supabase
+                              .from("coupons")
+                              .select("id, code, is_active, expires_at, usage_count, usage_limit, min_order_cents")
+                              .eq("restaurant_id", restaurantQuery.data.id)
+                              .eq("code", couponInput.toUpperCase().trim())
+                              .maybeSingle();
+
+                            if (fetchError) throw fetchError;
+
+                            // SECURITY STEP 2: Client-side pre-checks with specific error messages.
+                            // These run before the RPC to give better UX without an extra round-trip.
+                            if (!freshCoupon) {
+                              setCouponError("Invalid coupon code. Please check and try again.");
+                              return;
+                            }
+                            if (!freshCoupon.is_active) {
+                              setCouponError("This coupon is no longer active.");
+                              return;
+                            }
+                            if (freshCoupon.expires_at && new Date(freshCoupon.expires_at) <= new Date()) {
+                              setCouponError("This coupon has expired.");
+                              return;
+                            }
+                            if (freshCoupon.usage_limit && freshCoupon.usage_count >= freshCoupon.usage_limit) {
+                              setCouponError("This coupon has reached its maximum usage limit.");
+                              return;
+                            }
+
+                            // SECURITY STEP 3: Server-side RPC validates discount calculation.
+                            // The RPC is the authoritative source for the actual discount value.
                             const { data, error } = await supabase.rpc('validate_coupon', {
                               _restaurant_id: restaurantQuery.data.id,
-                              _coupon_code: couponInput,
+                              _coupon_code: couponInput.toUpperCase().trim(),
                               _order_total_cents: activeCart.subtotalCents,
                             });
                             if (error) throw error;
                             const result = data?.[0] || data;
                             if (result?.valid) {
                               activeCart.applyCoupon({
-                                code: couponInput,
+                                code: couponInput.toUpperCase().trim(),
                                 discount_type: 'fixed',
                                 discount_value: result.discount_cents,
                               });
-                              toast({ title: "Coupon Applied!", description: `You save ${formatMoney(result.discount_cents, currencyCode)}` });
+                              setCouponInput("");
+                              toast({ title: "Coupon Applied! 🎉", description: `You save ${formatMoney(result.discount_cents, currencyCode)}` });
                             } else {
-                              setCouponError(result?.message || 'Invalid coupon');
+                              // RPC returned an explicit error reason
+                              const msg = result?.message || '';
+                              if (msg.toLowerCase().includes('expired')) {
+                                setCouponError("This coupon has expired.");
+                              } else if (msg.toLowerCase().includes('limit') || msg.toLowerCase().includes('usage')) {
+                                setCouponError("This coupon has reached its maximum usage limit.");
+                              } else if (msg.toLowerCase().includes('minimum') || msg.toLowerCase().includes('min order')) {
+                                setCouponError(`Minimum order of ${formatMoney(freshCoupon.min_order_cents || 0, currencyCode)} required.`);
+                              } else {
+                                setCouponError(msg || 'This coupon cannot be applied to your current order.');
+                              }
                             }
                           } catch (err: any) {
-                            setCouponError(err.message || 'Could not validate coupon');
+                            setCouponError(err.message || 'Could not validate coupon. Please try again.');
                           } finally {
                             setCouponLoading(false);
                           }
                         }}
+
                       >
                         {couponLoading ? '...' : 'Apply'}
                       </Button>

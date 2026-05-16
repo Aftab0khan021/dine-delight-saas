@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import {
@@ -107,6 +108,11 @@ function CouponsContent() {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [deleteId, setDeleteId] = useState<string | null>(null);
+
+    // ── Real-time: coupon usage counts and status update live ──
+    useRealtimeSync(restaurant?.id, [
+        { table: "coupons", queryKey: ["admin", "coupons"] },
+    ]);
 
     // Loyalty & Referral state
     const [loyaltyEnabled, setLoyaltyEnabled] = useState(false);

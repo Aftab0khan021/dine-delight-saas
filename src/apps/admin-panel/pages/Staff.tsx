@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -99,6 +100,14 @@ export default function AdminStaff() {
   const [roleTarget, setRoleTarget] = useState<{ id: string; name: string; role: string } | null>(null);
   const [newRole, setNewRole] = useState<StaffRole>("user");
   const [activeTab, setActiveTab] = useState("team");
+
+  // ── Real-time: staff roster and invite status update live ──
+  useRealtimeSync(restaurant?.id, [
+    { table: "user_roles",       queryKey: ["admin", "staff"] },
+    { table: "staff_invites",    queryKey: ["admin", "staff"] },
+    { table: "staff_categories", queryKey: ["staff-categories"] },
+    { table: "activity_logs",    queryKey: ["admin", "staff"] },
+  ]);
 
   // Categories tab state
   const [catDialogOpen, setCatDialogOpen] = useState(false);

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { FeatureGate } from "../components/FeatureGate";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,11 @@ function ReviewsContent() {
   const qc = useQueryClient();
   const { tier } = useAITier(restaurant?.id);
   const sentimentTier = tier("sentiment_analysis");
+
+  // ── Real-time: new customer reviews appear without refresh ──
+  useRealtimeSync(restaurant?.id, [
+    { table: "customer_reviews", queryKey: ["admin", "reviews"] },
+  ]);
 
   const reviewsQuery = useQuery({
     queryKey: ["admin", "reviews", restaurant?.id],

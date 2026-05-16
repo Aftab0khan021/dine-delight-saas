@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import {
   Building2,
   Users,
@@ -29,6 +30,18 @@ const PIE_COLORS = ["#6366f1", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#3b8
 
 export default function SuperAdminDashboard() {
   const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
+  const qc = useQueryClient();
+
+  // ── Real-time: new restaurant signups and subscription changes appear live ──
+  // Super admin has no restaurant_id filter — we watch all changes platform-wide.
+  useRealtimeSync(
+    "platform", // Sentinel ID so the channel is unique; filter is disabled below
+    [
+      { table: "restaurants",  queryKey: ["platform-metrics"],  filterColumn: null },
+      { table: "subscriptions", queryKey: ["platform-metrics"], filterColumn: null },
+      { table: "subscriptions", queryKey: ["plan-distribution"], filterColumn: null },
+    ]
+  );
 
   // Fetch platform metrics
   const { data: metrics, isLoading: metricsLoading } = useQuery({

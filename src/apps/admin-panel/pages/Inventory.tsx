@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { FeatureGate } from "../components/FeatureGate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -75,6 +76,13 @@ function InventoryContent() {
   const [linkFactor, setLinkFactor] = useState("1");          // conversion factor
   const [linkSuggestion, setLinkSuggestion] = useState<{ label: string; note?: string } | null>(null);
   const [search, setSearch] = useState("");
+
+  // ── Real-time: invalidate inventory queries on any DB change ──
+  useRealtimeSync(restaurant?.id, [
+    { table: "ingredients",          queryKey: ["ingredients"] },
+    { table: "stock_movements",       queryKey: ["stock-history"] },
+    { table: "ingredient_menu_items", queryKey: ["ingredient-links"] },
+  ]);
 
   // Queries
   const ingredientsQuery = useQuery({

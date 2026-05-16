@@ -25,6 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useFeatureLimit } from "../hooks/useFeatureAccess";
 import { generateDescriptionFree, getStaleLabel } from "../lib/ai-utils";
 import { useAITier } from "../hooks/useAITier";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 
 // UI Components
 import { Badge } from "@/components/ui/badge";
@@ -145,6 +146,14 @@ export default function AdminMenu() {
   const currentMenuItems = itemsQuery.data?.length || 0;
   const isMenuAtLimit = isAtLimit(currentMenuItems);
   const isUnlimited = menuItemsLimit === -1;
+
+  // ── Real-time: invalidate menu queries on any DB change ──
+  useRealtimeSync(restaurant?.id, [
+    { table: "menu_items",         queryKey: ["admin", "menu"] },
+    { table: "categories",         queryKey: ["admin", "menu"] },
+    { table: "menu_item_variants", queryKey: ["admin", "menu"] },
+    { table: "menu_item_addons",   queryKey: ["admin", "menu"] },
+  ]);
 
   const categories = categoriesQuery.data ?? [];
   const items = itemsQuery.data ?? [];

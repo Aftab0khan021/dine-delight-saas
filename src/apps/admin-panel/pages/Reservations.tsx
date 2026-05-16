@@ -4,6 +4,7 @@ import { CalendarDays, Clock, Users, Check, X, Phone, ChevronDown, List, Grid3X3
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { FeatureGate } from "../components/FeatureGate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,6 +44,11 @@ function ReservationsContent() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(0);
   const ITEMS_PER_PAGE = 20;
+
+  // ── Real-time: new / updated reservations appear instantly ──
+  useRealtimeSync(restaurant?.id, [
+    { table: "reservations", queryKey: ["admin", "reservations"] },
+  ]);
 
   const { data: reservations, isLoading, isFetching } = useQuery({
     queryKey: ["admin", "reservations", restaurant?.id, dateFilter, statusFilter],

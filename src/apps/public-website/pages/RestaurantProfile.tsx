@@ -2,6 +2,7 @@ import { useEffect, useRef, useMemo, useState, useCallback } from "react";
 import { useSEO } from "@/hooks/useSEO";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { MapPin, Phone, Clock, ArrowRight, Utensils, Mail, AlertCircle, Instagram, Facebook, Twitter, Youtube, Star, MessageCircle, CalendarDays, Moon, Sun, ChevronLeft, ChevronRight, X, Tag, Copy, CheckCircle2, Share2, Home, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -131,23 +132,31 @@ export default function RestaurantProfile() {
     },
   });
 
-  // Active Coupons / Offers
+  // Active Coupons / Offers — SECURITY: filter expired and limit-reached coupons at DB level
   const { data: activeCoupons } = useQuery({
     queryKey: ["public", "coupons", restaurant?.id],
     enabled: !!restaurant?.id,
     staleTime: 5 * 60 * 1000, // 5 min cache
     queryFn: async () => {
+      const now = new Date().toISOString();
       const { data } = await supabase
         .from("coupons")
-        .select("id, code, description, discount_type, discount_value, min_order_cents, max_discount_cents, expires_at")
+        .select("id, code, description, discount_type, discount_value, min_order_cents, max_discount_cents, expires_at, usage_count, usage_limit")
         .eq("restaurant_id", restaurant!.id)
         .eq("is_active", true)
-        .or(`expires_at.is.null,expires_at.gte.${new Date().toISOString()}`)
+        .or(`expires_at.is.null,expires_at.gt.${now}`)
         .order("created_at", { ascending: false })
         .limit(6);
-      return data || [];
+      // Secondary filter: exclude coupons that have reached their usage limit
+      return (data || []).filter((c: any) => !c.usage_limit || c.usage_count < c.usage_limit);
     },
   });
+
+  // ── Real-time: coupon and profile updates appear live on the public profile page ──
+  useRealtimeSync(restaurant?.id, [
+    { table: "coupons",     queryKey: ["public", "coupons"] },
+    { table: "restaurants", queryKey: ["public", "restaurant"] },
+  ]);
 
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const handleCopyCode = (code: string) => {
