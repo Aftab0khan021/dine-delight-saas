@@ -40,7 +40,8 @@ export const ALL_UNITS: UnitDef[] = [
   { symbol: "dsp",    label: "Dessert Spoon (dsp)",   category: "spoon",  toBase: 0.009858 },
   { symbol: "drop",   label: "Drop",                  category: "spoon",  toBase: 0.00005 },
   { symbol: "dash",   label: "Dash",                  category: "spoon",  toBase: 0.000616 },
-  { symbol: "pinch",  label: "Pinch (dry ~0.3g)",     category: "spoon",  toBase: 0.0003 },   // in kg
+  // NOTE: pinch is a dry measure — placed in weight (base: kg) to avoid mixed-base errors in spoon category
+  { symbol: "pinch",  label: "Pinch (dry ~0.3g)",     category: "weight", toBase: 0.0003 },
 
   // Count
   { symbol: "pcs",    label: "Piece (pcs)",           category: "count",  toBase: 1 },
@@ -62,13 +63,16 @@ export const UNIT_CATEGORIES: Record<UnitCategory, string> = {
 /** All symbols as a flat string array (for the old UNITS constant) */
 export const ALL_UNIT_SYMBOLS = ALL_UNITS.map(u => u.symbol);
 
-/** Group units by category for Select rendering */
+/** Group units by category for Select rendering — memoized at module level */
+const _unitsByCategory: Record<UnitCategory, UnitDef[]> = {
+  weight: [], volume: [], spoon: [], count: [],
+};
+for (const u of ALL_UNITS) _unitsByCategory[u.category].push(u);
+export const UNITS_BY_CATEGORY = _unitsByCategory;
+
+/** @deprecated Use UNITS_BY_CATEGORY instead — kept for backward compat */
 export function getUnitsByCategory(): Record<UnitCategory, UnitDef[]> {
-  const result: Record<UnitCategory, UnitDef[]> = {
-    weight: [], volume: [], spoon: [], count: [],
-  };
-  for (const u of ALL_UNITS) result[u.category].push(u);
-  return result;
+  return UNITS_BY_CATEGORY;
 }
 
 // ─── Unit → Category lookup ───────────────────────────────────────────────────
@@ -114,11 +118,13 @@ interface ConversionSuggestion {
 
 export const CONVERSION_SUGGESTIONS: ConversionSuggestion[] = [
   // ── Flours ────────────────────────────────────────────────────────────────
-  { patterns: ["flour", "maida", "atta", "besan", "cornflour", "cornstarch"], from: "tbsp", to: "g",  factor: 8,     note: "USDA all-purpose flour" },
-  { patterns: ["flour", "maida", "atta"],                                      from: "cup",  to: "g",  factor: 120,   note: "USDA all-purpose flour" },
-  { patterns: ["besan"],                                                        from: "cup",  to: "g",  factor: 92,    note: "Chickpea flour" },
-  { patterns: ["cornstarch", "cornflour"],                                      from: "tbsp", to: "g",  factor: 8,     note: "USDA" },
-  { patterns: ["cornstarch", "cornflour"],                                      from: "cup",  to: "g",  factor: 128,   note: "USDA" },
+  // NOTE: besan and cornflour/cornstarch have dedicated rows below — excluded here to prevent wrong match order
+  { patterns: ["flour", "maida", "atta"],                                       from: "tbsp", to: "g",  factor: 8,     note: "USDA all-purpose flour" },
+  { patterns: ["flour", "maida", "atta"],                                       from: "cup",  to: "g",  factor: 120,   note: "USDA all-purpose flour" },
+  { patterns: ["besan"],                                                         from: "tbsp", to: "g",  factor: 10,    note: "Chickpea flour" },
+  { patterns: ["besan"],                                                         from: "cup",  to: "g",  factor: 92,    note: "Chickpea flour" },
+  { patterns: ["cornstarch", "cornflour"],                                       from: "tbsp", to: "g",  factor: 8,     note: "USDA" },
+  { patterns: ["cornstarch", "cornflour"],                                       from: "cup",  to: "g",  factor: 128,   note: "USDA" },
   { patterns: ["cocoa"],                                                         from: "tbsp", to: "g",  factor: 5.4,   note: "USDA cocoa powder" },
   { patterns: ["cocoa"],                                                         from: "cup",  to: "g",  factor: 85,    note: "USDA" },
 
@@ -246,8 +252,10 @@ export function getSuggestedConversion(
 
 /**
  * Format a factor for display, removing trailing zeros.
+ * Returns "—" for non-finite/NaN values.
  */
 export function formatFactor(factor: number): string {
+  if (!isFinite(factor) || isNaN(factor)) return "—";
   if (factor === 0) return "0";
   if (factor >= 1) return parseFloat(factor.toFixed(4)).toString();
   return parseFloat(factor.toFixed(6)).toString();

@@ -294,7 +294,7 @@ function OrderKOTCard({ order, brandMap, currency, qc }: {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("order_ingredient_preview")
-        .select("ingredient_name, unit, current_stock, total_needed, stock_after, low_stock_threshold")
+        .select("ingredient_name, storage_unit, current_stock, total_needed, stock_after, low_stock_threshold")
         .eq("order_id", order.id);
       if (error) return [];
       return data || [];

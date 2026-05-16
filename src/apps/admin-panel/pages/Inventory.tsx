@@ -22,8 +22,10 @@ import { toCents } from "@/lib/formatting";
 import { ALL_UNIT_SYMBOLS, ALL_UNITS, UNIT_CATEGORIES, getUnitsByCategory, getSuggestedConversion, formatFactor } from "@/lib/unit-conversions";
 import type { UnitCategory } from "@/lib/unit-conversions";
 
-// Storage units shown in the ingredient form (subset of all units)
-const UNITS = ALL_UNIT_SYMBOLS;
+// Storage units for ingredient master (sensible warehouse units only)
+const STORAGE_UNITS = ["pcs", "g", "kg", "ml", "L", "lb", "oz", "bunch", "portion", "fillet", "slice", "clove", "doz"];
+// Keep UNITS as the storage-only list for Add/Edit ingredient forms
+const UNITS = STORAGE_UNITS;
 
 type Ingredient = {
   id: string; name: string; unit: string; current_stock: number;
@@ -162,7 +164,11 @@ function InventoryContent() {
 
   const linkMutation = useMutation({
     mutationFn: async () => {
-      const factor = parseFloat(linkFactor) || 1;
+      const factor = parseFloat(linkFactor);
+      // H1: Validate factor — must be a positive finite number
+      if (!isFinite(factor) || isNaN(factor) || factor <= 0) {
+        throw new Error("Conversion factor must be a positive number greater than zero.");
+      }
       const recipeUnit = linkRecipeUnit && linkRecipeUnit !== selected?.unit ? linkRecipeUnit : null;
       const { error } = await supabase.from("menu_item_ingredients").insert({
         menu_item_id: linkItemId,
@@ -406,8 +412,14 @@ function InventoryContent() {
         </DialogContent>
       </Dialog>
 
-      {/* Link Menu Items Dialog */}
-      <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
+      {/* Link Menu Items Dialog — M1: reset link state on close */}
+      <Dialog open={linkOpen} onOpenChange={(open) => {
+        setLinkOpen(open);
+        if (!open) {
+          setLinkItemId(""); setLinkQty("1");
+          setLinkRecipeUnit(""); setLinkFactor("1"); setLinkSuggestion(null);
+        }
+      }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Link Menu Items: {selected?.name}</DialogTitle>

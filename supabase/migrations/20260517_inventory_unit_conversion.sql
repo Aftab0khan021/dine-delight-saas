@@ -79,6 +79,13 @@ BEGIN
         AND i.is_tracked      = true
         AND i.restaurant_id   = p_restaurant_id
     LOOP
+      -- ── Guard: skip if conversion_factor is invalid (H2) ──────────────────
+      IF ing.conversion_factor <= 0 THEN
+        RAISE WARNING 'Invalid conversion_factor % for ingredient_id %, skipping deduction',
+          ing.conversion_factor, ing.ingredient_id;
+        CONTINUE;
+      END IF;
+
       -- ── Core formula (with unit conversion) ────────────────────────────
       -- effective_qty = how much to deduct from storage (always in storage_unit)
       -- = quantity_needed (in recipe_unit) × conversion_factor × order_quantity
@@ -104,7 +111,7 @@ BEGIN
           WHEN ing.recipe_unit IS NOT NULL AND ing.recipe_unit != ing.storage_unit
           THEN ing.quantity_needed::TEXT || ' ' || ing.recipe_unit
                || ' × ' || ing.conversion_factor::TEXT
-               || ' = ' || round(effective_qty / item.quantity, 6)::TEXT
+               || ' = ' || round(effective_qty / NULLIF(item.quantity, 0), 6)::TEXT
                || ' ' || ing.storage_unit || '/item'
           ELSE NULL
         END
