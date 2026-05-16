@@ -3,8 +3,10 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
+// L2 — Restrict CORS to known app origin instead of wildcard
+const allowedOrigin = Deno.env.get("APP_BASE_URL") || "*";
 const corsHeaders = {
-  "access-control-allow-origin": "*",
+  "access-control-allow-origin": allowedOrigin,
   "access-control-allow-headers": "authorization, x-client-info, apikey, content-type",
 };
 
@@ -309,8 +311,9 @@ serve(async (req) => {
     const invitationToken = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-    console.log("🔑 Generated token:", invitationToken);
-    console.log("⏰ Expires at:", expiresAt.toISOString());
+    // L4 — Never log the raw token; log a masked prefix only for debugging
+    console.log("Token stored in database (prefix):", invitationToken.substring(0, 8) + '...');
+    console.log("Expires at:", expiresAt.toISOString());
 
     // Store invitation token in database. Role defaults to 'user' if not provided.
     const effectiveRole = role && role.length > 0 ? role : "user";
@@ -356,9 +359,19 @@ serve(async (req) => {
       "https://dine-delight-saas.vercel.app";
     const invitationLink = `${appUrl}/auth/accept-invitation?token=${invitationToken}`;
 
-    console.log("🔗 Invitation link:", invitationLink);
+    // L4 — Do not log the invitation link (contains the one-time token)
+    console.log("Invitation created for:", email, "Restaurant:", targetRestaurantId);
 
-    // Create email HTML
+    // L6 — HTML-escape dynamic values before inserting into the email template
+    function escapeHtml(str: string): string {
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+    const safeRestaurantName = escapeHtml(restaurantName);
     const emailHtml = `
 <!DOCTYPE html>
 <html>
@@ -409,7 +422,7 @@ serve(async (req) => {
 <body>
   <div class="container">
     <h1>🎉 You're Invited!</h1>
-    <p>You've been invited to join <strong>${restaurantName}</strong> as a staff member.</p>
+    <p>You've been invited to join <strong>${safeRestaurantName}</strong> as a staff member.</p>
     
     <p>Click the button below to accept your invitation and set your password:</p>
     
@@ -459,12 +472,13 @@ serve(async (req) => {
     }
 
     if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
-      console.warn("⚠️ Gmail SMTP not configured, skipping email send");
+      console.warn("Gmail SMTP not configured, invitation token stored in DB only");
+      // H4 — Do NOT return the invitation link in the API response (contains a one-time token).
+      // In production, configure GMAIL_USER + GMAIL_APP_PASSWORD in Supabase function secrets.
       return new Response(
         JSON.stringify({
           success: true,
-          message: "Invitation created (email not sent - Gmail SMTP not configured)",
-          invitationLink // Return link for testing
+          message: "Invitation created. Configure Gmail SMTP to send email automatically.",
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },

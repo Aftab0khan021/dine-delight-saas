@@ -34,8 +34,11 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // IP Rate Limit
-    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
+    // M8 — Use CF-Connecting-IP (trusted by Cloudflare/Vercel) first, then fall back to x-forwarded-for
+    const clientIp =
+      req.headers.get('cf-connecting-ip') ||
+      req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+      'unknown';
     if (clientIp !== 'unknown') {
       const { count } = await supabase
         .from('orders')
@@ -70,9 +73,15 @@ serve(async (req) => {
       return json({ error: "Server configuration error" }, 500);
     }
 
-    // Skip Turnstile for internal calls from verify-payment (already verified)
-    if (payment_verified === true) {
-      console.log('Skipping Turnstile — payment already verified by verify-payment');
+    // C3 — Verify internal calls from verify-payment using service-role key as shared secret.
+    // The client boolean 'payment_verified' is no longer trusted. Instead, verify-payment passes
+    // the service-role key in the X-Internal-Secret header (both functions have access to it).
+    const internalSecret = req.headers.get('X-Internal-Secret');
+    const serviceSecret = serviceRoleKey; // already validated above
+    const isInternalCall = internalSecret !== null && internalSecret === serviceSecret;
+
+    if (isInternalCall) {
+      // Legitimate server-to-server call from verify-payment — no Turnstile needed
     } else if (via_staff === true) {
       // Staff-placed orders: verify the caller is an authenticated user via JWT
       const authHeader = req.headers.get("Authorization");
@@ -193,6 +202,18 @@ serve(async (req) => {
     if (!restaurant.is_accepting_orders) {
       return json({ error: "Restaurant is not accepting orders at this time" }, 400);
     }
+
+    // M6 — Fetch restaurant settings to compute tax server-side
+    // Re-use the restaurant row already fetched above (add settings to the select)
+    const { data: restaurantFull } = await supabase
+      .from('restaurants')
+      .select('settings')
+      .eq('id', restaurant_id)
+      .single();
+    const rSettings = (restaurantFull?.settings && typeof restaurantFull.settings === 'object' && !Array.isArray(restaurantFull.settings))
+      ? restaurantFull.settings as Record<string, any>
+      : {};
+    const taxConfig = rSettings.tax_config && typeof rSettings.tax_config === 'object' ? rSettings.tax_config as Record<string, any> : null;
 
     // Fetch menu items, variants, and addons
     const itemIds = items.map((i: any) => i.menu_item_id);
@@ -319,6 +340,9 @@ serve(async (req) => {
 
       if (rpcError) {
         console.error("Coupon RPC error:", rpcError);
+        // M2 — If the coupon was explicitly provided by the user, fail the order rather than
+        // silently proceeding without the discount the customer was expecting.
+        return json({ error: "Coupon validation failed. Please try again or remove the coupon." }, 400);
       } else if (result && result.valid) {
         couponId = result.coupon_id;
         couponCode = result.coupon_code;
@@ -326,16 +350,36 @@ serve(async (req) => {
         discountType = result.discount_type;
         // Note: Usage count is already incremented in the DB by the RPC
       } else {
-        console.warn("Invalid coupon:", result?.error);
+        // M2 — Coupon was provided but failed validation (expired/limit reached/min order).
+        // Return a clear error instead of silently placing the order at full price.
+        const couponErr = result?.error || 'Invalid coupon code';
+        return json({ error: couponErr }, 400);
       }
     }
 
-    // Final Calculation — include tax, tip, and extra charges from client
+    // M6 — Compute tax server-side from restaurant settings; tip/extra from client but capped safely
     const subtotal = totalCents;
-    const taxCents = Math.max(0, Math.round(Number(clientTaxCents) || 0));
-    const tipCents = Math.max(0, Math.round(Number(clientTipCents) || 0));
+
+    // Tax: prefer server-computed value from restaurant settings
+    let taxCents: number;
+    if (taxConfig && typeof taxConfig.rate_pct === 'number' && taxConfig.rate_pct > 0) {
+      taxCents = Math.round((subtotal * taxConfig.rate_pct) / 100);
+    } else {
+      // Fall back to client-provided value if no server tax config (e.g. tax handled externally)
+      taxCents = Math.max(0, Math.round(Number(clientTaxCents) || 0));
+    }
+
+    // Tip: cap at 50% of subtotal to prevent manipulation
+    const rawTipCents = Math.max(0, Math.round(Number(clientTipCents) || 0));
+    const tipCents = Math.min(rawTipCents, Math.round(subtotal * 0.5));
+
+    // Extra charges: cap each at 100% of subtotal, total capped at 50%
     const extraCharges = Array.isArray(clientExtraCharges) ? clientExtraCharges : [];
-    const extraChargesCents = extraCharges.reduce((sum: number, c: any) => sum + (Math.round(Number(c?.cents) || 0)), 0);
+    const extraChargesCents = Math.min(
+      extraCharges.reduce((sum: number, c: any) => sum + (Math.round(Number(c?.cents) || 0)), 0),
+      Math.round(subtotal * 0.5)
+    );
+
     const finalTotal = Math.max(0, subtotal + taxCents + tipCents + extraChargesCents - discountCents);
 
     // Generate secure order token for tracking
@@ -377,6 +421,12 @@ serve(async (req) => {
 
     if (insertError) {
       console.error("Order insert error:", insertError);
+      // H6 — Roll back coupon usage if the order failed after the RPC incremented it
+      if (couponId) {
+        await supabase.rpc('decrement_coupon_usage', { p_coupon_id: couponId }).catch(
+          (e: unknown) => console.error('Failed to rollback coupon usage:', e)
+        );
+      }
       throw insertError;
     }
 
@@ -389,6 +439,12 @@ serve(async (req) => {
       console.error("Order items insert error:", itemsError);
       // Attempt to delete the order if items insert failed
       await supabase.from('orders').delete().eq('id', order.id);
+      // H6 — Also roll back coupon usage
+      if (couponId) {
+        await supabase.rpc('decrement_coupon_usage', { p_coupon_id: couponId }).catch(
+          (e: unknown) => console.error('Failed to rollback coupon usage:', e)
+        );
+      }
       throw new Error("Failed to create order items");
     }
 

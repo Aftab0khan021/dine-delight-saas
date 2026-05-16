@@ -116,19 +116,13 @@ function OTPSettingsContent() {
     if (!testPhone || !restaurant?.id) return;
     setTestResult("Sending...");
     try {
-      const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-otp`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          },
-          body: JSON.stringify({ phone: testPhone, restaurant_id: restaurant.id }),
-        }
-      );
-      const data = await resp.json();
-      setTestResult(data.success ? "✅ OTP sent successfully!" : `❌ ${data.error}`);
+      // M4 — Use supabase.functions.invoke which automatically attaches the
+      // authenticated user's JWT instead of the anon key as a Bearer token.
+      const { data, error } = await supabase.functions.invoke("send-otp", {
+        body: { phone: testPhone, restaurant_id: restaurant.id },
+      });
+      if (error) throw error;
+      setTestResult(data?.success ? "✅ OTP sent successfully!" : `❌ ${data?.error || "Unknown error"}`);
     } catch (e: any) {
       setTestResult(`❌ ${e.message}`);
     }

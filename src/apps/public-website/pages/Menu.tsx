@@ -955,14 +955,14 @@ export default function PublicMenu() {
             <button onClick={() => setView(viewMode === 'list' ? 'grid' : 'list')} className="h-9 w-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-accent transition-colors" title={viewMode === 'list' ? 'Grid view' : 'List view'}>
               {viewMode === 'list' ? <Grid2x2 className="h-4 w-4" /> : <List className="h-4 w-4" />}
             </button>
-            {/* M11: My Orders */}
-            {restaurantQuery.data?.slug && localStorage.getItem('dd-phone') && (
+            {/* M11: My Orders — use dd-ordered-before flag (non-PII) instead of phone */}
+            {restaurantQuery.data?.slug && localStorage.getItem('dd-ordered-before') && (
               <Link to={`/r/${restaurantQuery.data.slug}/account`} className="h-9 w-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors" title="My Orders">
                 <ShoppingBag className="h-4 w-4" />
               </Link>
             )}
             {/* Account */}
-            {restaurantQuery.data?.slug && !localStorage.getItem('dd-phone') && (
+            {restaurantQuery.data?.slug && !localStorage.getItem('dd-ordered-before') && (
               <Link to={`/r/${restaurantQuery.data.slug}/account`} className="h-9 w-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors" title="My Account">
                 <User className="h-4 w-4" />
               </Link>

@@ -85,11 +85,14 @@ serve(async (req) => {
         "Content-Type": "application/json",
         Authorization: `Bearer ${serviceRoleKey}`,
         apikey: serviceRoleKey,
+        // C3 — Use shared service-role secret to prove this is a trusted internal call.
+        // place-order verifies this header and skips Turnstile only when it matches.
+        "X-Internal-Secret": serviceRoleKey,
       },
       body: JSON.stringify({
         ...order_payload,
         payment_method: "online",
-        payment_verified: true, // Flag so place-order knows payment is verified
+        // payment_verified flag is no longer trusted — header is the authority
       }),
     });
 

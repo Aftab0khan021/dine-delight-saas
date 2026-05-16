@@ -4,11 +4,29 @@ import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 
-function normalizeDestination(dest: string) {
+function normalizeDestination(dest: string): string {
   const trimmed = dest.trim();
   if (!trimmed) return "";
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
-  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  // Internal paths (start with /) are always safe — use client-side navigate
+  if (trimmed.startsWith("/")) return trimmed;
+  // H1 — External URLs: only allow our own origin to prevent open redirect attacks.
+  // QR codes stored in the DB should only point to internal paths anyway.
+  // If a future use case requires external URLs, add domains to this list explicitly.
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    try {
+      const url = new URL(trimmed);
+      const appOrigin = window.location.origin;
+      if (url.origin === appOrigin) {
+        // Same origin — treat as an internal path
+        return url.pathname + url.search + url.hash;
+      }
+    } catch {
+      // malformed URL — reject
+    }
+    // External domain — reject to prevent open redirect
+    return "";
+  }
+  return `/${trimmed}`;
 }
 
 export default function QrResolver() {

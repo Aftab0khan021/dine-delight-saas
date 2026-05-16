@@ -2,8 +2,10 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// L2 — Restrict CORS to known app origin instead of wildcard
+const allowedOrigin = Deno.env.get("APP_BASE_URL") || "*";
 const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": allowedOrigin,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
@@ -163,9 +165,13 @@ serve(async (req) => {
                 throw new Error("Failed to create impersonation session");
             }
 
-            // Generate impersonation URL using the configured app base URL
-            // APP_BASE_URL must be set in Supabase function secrets (e.g. https://your-app.vercel.app)
-            const appBaseUrl = Deno.env.get("APP_BASE_URL") ?? "http://localhost:8080";
+            // L3 — APP_BASE_URL must be set in Supabase secrets in production.
+            // Fail loudly rather than silently generating a localhost URL.
+            const appBaseUrl = Deno.env.get("APP_BASE_URL");
+            if (!appBaseUrl) {
+                console.error("APP_BASE_URL is not set. Set it in Supabase function secrets.");
+                throw new Error("APP_BASE_URL is not configured. Contact the platform administrator.");
+            }
             const impersonationUrl = `${appBaseUrl}/admin?impersonate_token=${sessionToken}`;
 
             console.log(`Impersonation session created: ${session.id} by ${user.email} for ${targetUserRole.profiles?.email}`);

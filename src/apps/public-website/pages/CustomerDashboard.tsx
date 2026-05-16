@@ -24,6 +24,9 @@ export default function CustomerDashboard() {
   const [loading, setLoading] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
+  // M3 — Signed session token from verify-otp (replaces unsigned JSON)
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
+
   // Once authenticated
   const [customerId, setCustomerId] = useState<string | null>(null);
 
@@ -66,17 +69,29 @@ export default function CustomerDashboard() {
   const { isFeatureEnabled: isFF } = usePublicFeatureAccess(restaurant?.id);
   const loyaltyFF = isFF('loyalty_program');
 
-  // Restore session from localStorage
+  // M3 — Restore signed session token from localStorage
   useEffect(() => {
     if (!restaurant?.id) return;
-    const storedSession = localStorage.getItem(`customer_session_${restaurant.id}`);
-    if (storedSession) {
-      const sessionData = JSON.parse(storedSession);
-      // Validate expiration
-      if (sessionData.expires_at && new Date(sessionData.expires_at) > new Date()) {
-        setPhone(sessionData.phone);
-        setStep("dashboard");
-      } else {
+    const storedToken = localStorage.getItem(`customer_session_${restaurant.id}`);
+    if (storedToken) {
+      // The token is self-validating (HMAC-signed with expiry inside).
+      // We extract the expiry for a quick client-side check to avoid flashing dashboard.
+      try {
+        const parts = storedToken.split('|');
+        if (parts.length === 4) {
+          const expiresAt = parts[2];
+          if (new Date(expiresAt) > new Date()) {
+            setSessionToken(storedToken);
+            setPhone(parts[0]);
+            setStep("dashboard");
+          } else {
+            localStorage.removeItem(`customer_session_${restaurant.id}`);
+          }
+        } else {
+          // Legacy unsigned session — remove it
+          localStorage.removeItem(`customer_session_${restaurant.id}`);
+        }
+      } catch {
         localStorage.removeItem(`customer_session_${restaurant.id}`);
       }
     }
@@ -131,11 +146,12 @@ export default function CustomerDashboard() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
-      if (data?.verified) {
-        // Successful login
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 30); // 30 days session
-        localStorage.setItem(`customer_session_${restaurant!.id}`, JSON.stringify({ phone, expires_at: expiresAt.toISOString() }));
+      if (data?.verified && data?.session_token) {
+        // M3 — Store the HMAC-signed session token (not raw phone)
+        localStorage.setItem(`customer_session_${restaurant!.id}`, data.session_token);
+        setSessionToken(data.session_token);
+        // Also set dd-ordered-before flag (non-PII) for Menu.tsx icon toggle
+        localStorage.setItem('dd-ordered-before', '1');
         
         setStep("dashboard");
         toast({ title: "Welcome back!", description: "You are now logged in." });
@@ -155,66 +171,42 @@ export default function CustomerDashboard() {
     }
     setPhone("");
     setOtp("");
+    setSessionToken(null);
     setStep("phone");
   };
 
-  // Queries for Dashboard
-  const profileQuery = useQuery({
-    queryKey: ["customer-dashboard", "profile", phone],
-    enabled: step === "dashboard" && !!phone,
+  // M3 — Queries for Dashboard: route through signed-session edge function
+  // instead of direct anon Supabase queries (which are blocked by C1/H2 RLS fixes)
+  const dashboardQuery = useQuery({
+    queryKey: ["customer-dashboard", "all-data", sessionToken, restaurant?.id],
+    enabled: step === "dashboard" && !!sessionToken && !!restaurant?.id,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("customer_profiles")
-        .select("id, phone, name, email, saved_addresses")
-        .eq("phone", phone)
-        .maybeSingle();
+      const { data, error } = await supabase.functions.invoke("customer-dashboard", {
+        body: { action: "get_dashboard", session_token: sessionToken, restaurant_id: restaurant!.id },
+      });
       if (error) throw error;
-      return data;
+      if (data?.error) throw new Error(data.error);
+      return data as { profile: any; orders: any[]; loyalty: any };
     },
   });
 
-  const ordersQuery = useQuery({
-    queryKey: ["customer-dashboard", "orders", phone, restaurant?.id],
-    enabled: step === "dashboard" && !!phone && !!restaurant?.id,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("orders")
-        .select("id, status, total_cents, placed_at, payment_method, order_type, order_token, rating, review_text, order_items(name_snapshot, quantity, line_total_cents)")
-        .eq("customer_phone", phone)
-        .eq("restaurant_id", restaurant!.id)
-        .order("placed_at", { ascending: false })
-        .limit(20);
-      if (error) throw error;
-      return data || [];
-    },
-  });
-
-  const loyaltyQuery = useQuery({
-    queryKey: ["customer-dashboard", "loyalty", phone, restaurant?.id],
-    enabled: step === "dashboard" && !!phone && !!restaurant?.id,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("loyalty_points")
-        .select("points, lifetime_points")
-        .eq("customer_phone", phone)
-        .eq("restaurant_id", restaurant!.id)
-        .maybeSingle();
-      if (error && error.code !== 'PGRST116') throw error; // ignore no rows
-      return data;
-    },
-  });
+  // Derived data from the single dashboard query
+  const profileData = dashboardQuery.data?.profile;
+  const ordersData = dashboardQuery.data?.orders || [];
+  const loyaltyData = dashboardQuery.data?.loyalty;
 
   const handleUpdateProfile = async () => {
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from("customer_profiles")
-        .update({ name: editName, email: editEmail })
-        .eq("phone", phone);
+      // M3 — Route through edge function with signed session token
+      const { data, error } = await supabase.functions.invoke("customer-dashboard", {
+        body: { action: "update_profile", session_token: sessionToken, name: editName, email: editEmail },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       toast({ title: "Success", description: "Profile updated successfully." });
       setIsEditingProfile(false);
-      profileQuery.refetch();
+      dashboardQuery.refetch();
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
@@ -226,20 +218,20 @@ export default function CustomerDashboard() {
     if (!newAddressText) return;
     setLoading(true);
     try {
-      const currentAddresses = profileQuery.data?.saved_addresses || [];
+      const currentAddresses = profileData?.saved_addresses || [];
       const newAddresses = [...currentAddresses, { label: newAddressLabel || "Address", address: newAddressText }];
       
-      const { error } = await supabase
-        .from("customer_profiles")
-        .update({ saved_addresses: newAddresses })
-        .eq("phone", phone);
-        
+      // M3 — Route through edge function with signed session token
+      const { data, error } = await supabase.functions.invoke("customer-dashboard", {
+        body: { action: "update_addresses", session_token: sessionToken, addresses: newAddresses },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       toast({ title: "Success", description: "Address added successfully." });
       setIsAddingAddress(false);
       setNewAddressLabel("");
       setNewAddressText("");
-      profileQuery.refetch();
+      dashboardQuery.refetch();
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
@@ -250,17 +242,17 @@ export default function CustomerDashboard() {
   const handleRemoveAddress = async (index: number) => {
     setLoading(true);
     try {
-      const currentAddresses = profileQuery.data?.saved_addresses || [];
+      const currentAddresses = profileData?.saved_addresses || [];
       const newAddresses = currentAddresses.filter((_: any, i: number) => i !== index);
       
-      const { error } = await supabase
-        .from("customer_profiles")
-        .update({ saved_addresses: newAddresses })
-        .eq("phone", phone);
-        
+      // M3 — Route through edge function with signed session token
+      const { data, error } = await supabase.functions.invoke("customer-dashboard", {
+        body: { action: "update_addresses", session_token: sessionToken, addresses: newAddresses },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       toast({ title: "Success", description: "Address removed." });
-      profileQuery.refetch();
+      dashboardQuery.refetch();
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
@@ -386,7 +378,7 @@ export default function CustomerDashboard() {
           <div className="space-y-6">
             
             {/* Loyalty Section — gated by loyalty_program feature flag */}
-            {loyaltyFF && loyaltyQuery.data && (
+            {loyaltyFF && loyaltyData && (
               <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950/40 dark:to-amber-900/40 border-amber-200 dark:border-amber-800">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
@@ -401,7 +393,7 @@ export default function CustomerDashboard() {
                     </div>
                     <div className="text-right">
                       <div className="text-3xl font-black text-amber-600 dark:text-amber-400">
-                        {loyaltyQuery.data.points || 0}
+                        {loyaltyData.points || 0}
                       </div>
                       <div className="text-xs text-amber-800/70 font-medium uppercase tracking-wider">Points Available</div>
                     </div>
@@ -438,16 +430,16 @@ export default function CustomerDashboard() {
                       </div>
                     ) : (
                       <div>
-                        <h3 className="font-semibold text-lg">{profileQuery.data?.name || "Customer"}</h3>
+                        <h3 className="font-semibold text-lg">{profileData?.name || "Customer"}</h3>
                         <p className="text-muted-foreground">{phone}</p>
-                        {profileQuery.data?.email && <p className="text-sm text-muted-foreground">{profileQuery.data.email}</p>}
+                        {profileData?.email && <p className="text-sm text-muted-foreground">{profileData.email}</p>}
                       </div>
                     )}
                   </div>
                   {!isEditingProfile && (
                     <Button variant="ghost" size="icon" onClick={() => {
-                      setEditName(profileQuery.data?.name || "");
-                      setEditEmail(profileQuery.data?.email || "");
+                      setEditName(profileData?.name || "");
+                      setEditEmail(profileData?.email || "");
                       setIsEditingProfile(true);
                     }}>
                       <Edit2 className="h-4 w-4" />
@@ -489,9 +481,9 @@ export default function CustomerDashboard() {
                   </div>
                 )}
 
-                {profileQuery.data?.saved_addresses && Array.isArray(profileQuery.data.saved_addresses) && profileQuery.data.saved_addresses.length > 0 ? (
+                {profileData?.saved_addresses && Array.isArray(profileData.saved_addresses) && profileData.saved_addresses.length > 0 ? (
                   <div className="space-y-3">
-                    {profileQuery.data.saved_addresses.map((addr: any, i: number) => (
+                    {profileData.saved_addresses.map((addr: any, i: number) => (
                       <div key={i} className="flex flex-col gap-1 p-3 border rounded-md group relative pr-10">
                         <span className="font-medium text-sm">{addr.label || 'Address'}</span>
                         <span className="text-sm text-muted-foreground">{addr.address}</span>
@@ -520,9 +512,9 @@ export default function CustomerDashboard() {
                 <h3 className="text-xl font-bold tracking-tight">Recent Orders</h3>
               </div>
 
-              {ordersQuery.isLoading ? (
+              {dashboardQuery.isLoading ? (
                 <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-              ) : ordersQuery.data?.length === 0 ? (
+              ) : ordersData.length === 0 ? (
                 <Card className="p-8 text-center border-dashed">
                   <Package className="h-10 w-10 mx-auto text-muted-foreground/30 mb-3" />
                   <p className="text-muted-foreground">You haven't placed any orders yet.</p>
@@ -532,7 +524,7 @@ export default function CustomerDashboard() {
                 </Card>
               ) : (
                 <div className="grid gap-4">
-                  {ordersQuery.data?.map((order) => {
+                  {ordersData.map((order) => {
                     const isActive = ['pending', 'accepted', 'preparing', 'ready'].includes(order.status);
                     const isCompleted = order.status === 'completed';
                     const isRating = ratingOrderId === order.id;
