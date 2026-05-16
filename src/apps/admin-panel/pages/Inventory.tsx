@@ -15,12 +15,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Plus, Package, AlertTriangle, ArrowUpDown, RefreshCw, Link2, Unlink, History, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Plus, Package, AlertTriangle, ArrowUpDown, RefreshCw, Link2, Unlink, History, MoreHorizontal, Pencil, Trash2, Lightbulb } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toCents } from "@/lib/formatting";
+import { ALL_UNIT_SYMBOLS, ALL_UNITS, UNIT_CATEGORIES, getUnitsByCategory, getSuggestedConversion, formatFactor } from "@/lib/unit-conversions";
+import type { UnitCategory } from "@/lib/unit-conversions";
 
-const UNITS = ["pcs", "g", "kg", "ml", "L", "cups", "tbsp", "tsp", "oz", "lb"];
+// Storage units shown in the ingredient form (subset of all units)
+const UNITS = ALL_UNIT_SYMBOLS;
 
 type Ingredient = {
   id: string; name: string; unit: string; current_stock: number;
@@ -31,6 +34,8 @@ type Ingredient = {
 type MenuItemLink = {
   id: string; menu_item_id: string; ingredient_id: string;
   quantity_needed: number; restaurant_id: string;
+  recipe_unit: string | null;
+  conversion_factor: number;
   menu_items?: { name: string; is_active: boolean };
 };
 
@@ -64,6 +69,9 @@ function InventoryContent() {
   const [restockNotes, setRestockNotes] = useState("");
   const [linkItemId, setLinkItemId] = useState("");
   const [linkQty, setLinkQty] = useState("1");
+  const [linkRecipeUnit, setLinkRecipeUnit] = useState("");   // recipe unit (may differ from storage)
+  const [linkFactor, setLinkFactor] = useState("1");          // conversion factor
+  const [linkSuggestion, setLinkSuggestion] = useState<{ label: string; note?: string } | null>(null);
   const [search, setSearch] = useState("");
 
   // Queries
@@ -154,15 +162,21 @@ function InventoryContent() {
 
   const linkMutation = useMutation({
     mutationFn: async () => {
+      const factor = parseFloat(linkFactor) || 1;
+      const recipeUnit = linkRecipeUnit && linkRecipeUnit !== selected?.unit ? linkRecipeUnit : null;
       const { error } = await supabase.from("menu_item_ingredients").insert({
-        menu_item_id: linkItemId, ingredient_id: selected!.id,
-        quantity_needed: parseFloat(linkQty) || 1, restaurant_id: restaurant!.id,
+        menu_item_id: linkItemId,
+        ingredient_id: selected!.id,
+        quantity_needed: parseFloat(linkQty) || 1,
+        restaurant_id: restaurant!.id,
+        recipe_unit: recipeUnit,
+        conversion_factor: factor,
       });
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ingredient-links"] });
-      setLinkItemId(""); setLinkQty("1");
+      setLinkItemId(""); setLinkQty("1"); setLinkRecipeUnit(""); setLinkFactor("1"); setLinkSuggestion(null);
       toast({ title: "Linked to menu item" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -395,54 +409,176 @@ function InventoryContent() {
       {/* Link Menu Items Dialog */}
       <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Link Menu Items: {selected?.name}</DialogTitle><DialogDescription>Set how much of this ingredient each menu item uses.</DialogDescription></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Link Menu Items: {selected?.name}</DialogTitle>
+            <DialogDescription>
+              Stored in <strong>{selected?.unit}</strong>. Set how much each menu item uses, in any unit.
+            </DialogDescription>
+          </DialogHeader>
+
           {/* Existing links */}
-          <div className="space-y-2 max-h-48 overflow-y-auto">
-            {(linksQuery.data || []).map(link => (
-              <div key={link.id} className="flex items-center justify-between border rounded-lg px-3 py-2">
-                <div>
-                  <span className="font-medium">{(link as any).menu_items?.name || "Unknown"}</span>
-                  <span className="text-sm text-muted-foreground ml-2">({link.quantity_needed} {selected?.unit} per item)</span>
+          <div className="space-y-2 max-h-44 overflow-y-auto">
+            {(linksQuery.data || []).map(link => {
+              const hasConversion = link.recipe_unit && link.recipe_unit !== selected?.unit;
+              return (
+                <div key={link.id} className="flex items-center justify-between border rounded-lg px-3 py-2 gap-2">
+                  <div className="min-w-0">
+                    <span className="font-medium text-sm">{(link as any).menu_items?.name || "Unknown"}</span>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {hasConversion ? (
+                        <>
+                          <span className="text-primary font-medium">
+                            {link.quantity_needed} {link.recipe_unit}
+                          </span>
+                          {" → "}
+                          <span>
+                            {formatFactor(link.quantity_needed * (link.conversion_factor ?? 1))} {selected?.unit} per item
+                          </span>
+                        </>
+                      ) : (
+                        <span>{link.quantity_needed} {selected?.unit} per item</span>
+                      )}
+                    </div>
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={() => unlinkMutation.mutate(link.id)}>
+                    <Unlink className="h-3 w-3" />
+                  </Button>
                 </div>
-                <Button size="sm" variant="ghost" onClick={() => unlinkMutation.mutate(link.id)}><Unlink className="h-3 w-3" /></Button>
-              </div>
-            ))}
-            {(linksQuery.data || []).length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No menu items linked yet.</p>}
+              );
+            })}
+            {(linksQuery.data || []).length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">No menu items linked yet.</p>
+            )}
           </div>
+
           {/* Add new link */}
           <div className="border-t pt-4 space-y-3">
             <Label>Link New Menu Item</Label>
-            <div className="grid grid-cols-1 gap-2">
-              <Select value={linkItemId} onValueChange={setLinkItemId}>
-                <SelectTrigger><SelectValue placeholder="Select menu item..." /></SelectTrigger>
-                <SelectContent>{(menuItemsQuery.data || []).map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}</SelectContent>
-              </Select>
-              <div className="flex gap-2 items-center">
-                <div className="flex-1">
-                  <Label className="text-xs text-muted-foreground mb-1 block">
-                    Quantity used per order of this item ({selected?.unit})
-                  </Label>
-                  <Input
-                    type="number"
-                    value={linkQty}
-                    onChange={e => setLinkQty(e.target.value)}
-                    placeholder={`e.g. 0.5`}
-                    min="0.001"
-                    step="0.001"
-                  />
-                </div>
-                <div className="pt-5">
-                  <span className="text-sm font-medium text-muted-foreground">{selected?.unit}</span>
-                </div>
+
+            {/* Menu item picker */}
+            <Select value={linkItemId} onValueChange={setLinkItemId}>
+              <SelectTrigger><SelectValue placeholder="Select menu item..." /></SelectTrigger>
+              <SelectContent>
+                {(menuItemsQuery.data || []).map(m => (
+                  <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Quantity + Recipe unit */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Quantity in recipe</Label>
+                <Input
+                  type="number"
+                  value={linkQty}
+                  onChange={e => setLinkQty(e.target.value)}
+                  placeholder="e.g. 2"
+                  min="0.001" step="0.001"
+                />
               </div>
-              <Button
-                onClick={() => linkMutation.mutate()}
-                disabled={!linkItemId || !linkQty || parseFloat(linkQty) <= 0 || linkMutation.isPending}
-                className="w-full"
-              >
-                {linkMutation.isPending ? "Linking..." : `Link — uses ${linkQty || "?"} ${selected?.unit} per item`}
-              </Button>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Recipe unit</Label>
+                <Select
+                  value={linkRecipeUnit || selected?.unit || ""}
+                  onValueChange={v => {
+                    setLinkRecipeUnit(v);
+                    setLinkSuggestion(null);
+                    // Auto-reset factor if unit matches storage
+                    if (v === selected?.unit) { setLinkFactor("1"); }
+                  }}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(getUnitsByCategory()).map(([cat, units]) => (
+                      units.length === 0 ? null : (
+                        <div key={cat}>
+                          <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                            {UNIT_CATEGORIES[cat as UnitCategory]}
+                          </div>
+                          {units.map(u => (
+                            <SelectItem key={u.symbol} value={u.symbol}>{u.label}</SelectItem>
+                          ))}
+                        </div>
+                      )
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+
+            {/* Conversion factor — shown when recipe unit ≠ storage unit */}
+            {linkRecipeUnit && linkRecipeUnit !== selected?.unit && (
+              <div className="space-y-2 rounded-lg border border-dashed bg-muted/30 p-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-muted-foreground">
+                    1 {linkRecipeUnit} = ? {selected?.unit}
+                  </Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => {
+                      const hint = getSuggestedConversion(
+                        selected?.name ?? "",
+                        linkRecipeUnit,
+                        selected?.unit ?? "",
+                      );
+                      if (hint) {
+                        setLinkFactor(String(hint.factor));
+                        setLinkSuggestion({ label: hint.label, note: hint.note });
+                      } else {
+                        setLinkSuggestion({ label: "No suggestion found — enter manually", note: undefined });
+                      }
+                    }}
+                  >
+                    <Lightbulb className="h-3 w-3" /> Suggest
+                  </Button>
+                </div>
+
+                <Input
+                  type="number"
+                  value={linkFactor}
+                  onChange={e => { setLinkFactor(e.target.value); setLinkSuggestion(null); }}
+                  placeholder="Conversion factor"
+                  min="0.000001" step="0.000001"
+                />
+
+                {linkSuggestion && (
+                  <p className={`text-xs ${linkSuggestion.note ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600'}`}>
+                    {linkSuggestion.note
+                      ? `💡 ${linkSuggestion.label} — ${linkSuggestion.note}`
+                      : `⚠️ ${linkSuggestion.label}`
+                    }
+                  </p>
+                )}
+
+                {/* Live preview */}
+                {parseFloat(linkQty) > 0 && parseFloat(linkFactor) > 0 && (
+                  <div className="rounded bg-primary/10 px-3 py-2 text-xs font-medium text-primary">
+                    Preview: {linkQty} {linkRecipeUnit} × {linkFactor} = {" "}
+                    <strong>
+                      {formatFactor(parseFloat(linkQty) * parseFloat(linkFactor))} {selected?.unit}
+                    </strong>
+                    {" "} deducted from stock per item ordered
+                  </div>
+                )}
+              </div>
+            )}
+
+            <Button
+              onClick={() => linkMutation.mutate()}
+              disabled={!linkItemId || !linkQty || parseFloat(linkQty) <= 0 || linkMutation.isPending}
+              className="w-full"
+            >
+              {linkMutation.isPending
+                ? "Linking..."
+                : linkRecipeUnit && linkRecipeUnit !== selected?.unit
+                  ? `Link — uses ${linkQty} ${linkRecipeUnit} (= ${formatFactor(parseFloat(linkQty) * (parseFloat(linkFactor) || 1))} ${selected?.unit}) per item`
+                  : `Link — uses ${linkQty || "?"} ${selected?.unit} per item`
+              }
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
