@@ -1483,7 +1483,11 @@ export default function PublicMenu() {
           <button
             ref={cartBtnRef}
             type="button"
-            className={`fixed bottom-4 right-4 z-40 transition-transform duration-150 ${cartBounce ? 'scale-125' : 'scale-100'}`}
+            className={`fixed ${
+              activeCart.itemCount > 0 && !cartOpen
+                ? 'bottom-[88px]'  // above the ~68px sticky cart bar
+                : 'bottom-6'
+            } right-4 z-40 transition-all duration-200 ${cartBounce ? 'scale-125' : 'scale-100'}`}
             aria-label="Open cart"
             onClick={() => setCartOpen(true)}
           >
@@ -2147,7 +2151,11 @@ export default function PublicMenu() {
             href={`https://wa.me/${waNum.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi! I'd like to place an order from ${restaurantQuery.data?.name || 'your restaurant'}`)}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="fixed bottom-4 right-20 z-40 h-14 w-14 rounded-full bg-green-500 text-white shadow-lg flex items-center justify-center hover:bg-green-600 hover:scale-110 transition-all"
+            className={`fixed ${
+              activeCart.itemCount > 0 && !cartOpen
+                ? 'bottom-[88px]'  // above the cart bar, left of Cart FAB
+                : 'bottom-6'
+            } right-20 z-40 h-14 w-14 rounded-full bg-green-500 text-white shadow-lg flex items-center justify-center hover:bg-green-600 hover:scale-110 transition-all`}
             aria-label="Order via WhatsApp"
           >
             <MessageCircle className="h-7 w-7" />
