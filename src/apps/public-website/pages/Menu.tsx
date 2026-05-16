@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import { parseSettings } from "@/types/restaurant-settings";
+import type { MenuItemExtended, RestaurantPublic } from "@/types/supabase-helpers";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -35,9 +37,9 @@ import { formatMoney, toCents } from "@/lib/formatting";
 import { usePublicFeatureAccess } from "../hooks/usePublicFeatureAccess";
 import confetti from "canvas-confetti";
 
-type RestaurantRow = Tables<"restaurants">;
-type CategoryRow = Tables<"categories">;
-type MenuItemRow = Tables<"menu_items">;
+type RestaurantRow = Tables<"restaurants"> & Partial<RestaurantPublic>;
+type CategoryRow = Tables<"categories"> & { available_from?: string; available_to?: string };
+type MenuItemRow = Tables<"menu_items"> & Partial<MenuItemExtended>;
 
 type CategoryWithItems = CategoryRow & { items: MenuItemRow[] };
 
@@ -160,9 +162,10 @@ export default function PublicMenu() {
 
   // Allergen exclusion filter — load custom list from restaurant settings
   const ALLERGEN_OPTIONS = useMemo(() => {
-    const s = restaurantQuery.data?.settings as any;
-    if (s && typeof s === 'object' && Array.isArray(s.custom_allergens) && s.custom_allergens.length > 0) {
-      return s.custom_allergens as string[];
+    const s = parseSettings(restaurantQuery.data?.settings);
+    const custom = s.custom_allergens;
+    if (Array.isArray(custom) && custom.length > 0) {
+      return custom as string[];
     }
     return ['Gluten', 'Dairy', 'Nuts', 'Shellfish', 'Soy', 'Egg', 'Fish', 'Sesame'];
   }, [restaurantQuery.data?.settings]);
@@ -172,13 +175,13 @@ export default function PublicMenu() {
   useSEO({
     title: restaurantQuery.data ? `Menu — ${restaurantQuery.data.name} | Dine Delight` : "Menu | Dine Delight",
     description: restaurantQuery.data ? `Browse the menu and order from ${restaurantQuery.data.name}. Fresh food, easy ordering.` : undefined,
-    ogImage: (restaurantQuery.data as any)?.logo_url || undefined,
+    ogImage: restaurantQuery.data?.logo_url || undefined,
   });
 
   // Payment method
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online' | 'upi'>('cash');
   const [upiApp, setUpiApp] = useState<'google_pay' | 'phonepe' | 'paytm' | null>(null);
-  const onlinePaymentsEnabled = !!(restaurantQuery.data as any)?.online_payments_enabled;
+  const onlinePaymentsEnabled = !!(restaurantQuery.data as RestaurantPublic | undefined)?.online_payments_enabled;
 
   // Feature flags — gate public features by subscription
   const { isFeatureEnabled } = usePublicFeatureAccess(restaurantQuery.data?.id);
@@ -274,9 +277,10 @@ export default function PublicMenu() {
 
   // Tip selector — reads config from restaurant settings
   const tipConfig = useMemo(() => {
-    const s = restaurantQuery.data?.settings as any;
-    if (!s?.tip_config?.enabled) return null;
-    return s.tip_config as { mode: string; percentage_options?: number[]; amount_options?: number[] };
+    const s = parseSettings(restaurantQuery.data?.settings);
+    const tc = s.tip_config as { enabled?: boolean; mode?: string; percentage_options?: number[]; amount_options?: number[] } | undefined;
+    if (!tc?.enabled) return null;
+    return tc as { mode: string; percentage_options?: number[]; amount_options?: number[] };
   }, [restaurantQuery.data?.settings]);
   const [tipPercent, setTipPercent] = useState<number>(0);
   const [tipAmount, setTipAmount] = useState<number>(0);
@@ -290,16 +294,17 @@ export default function PublicMenu() {
 
   // Tax & Bill Charges — dynamic from restaurant settings
   const taxSettings = useMemo(() => {
-    const s = restaurantQuery.data?.settings as any;
-    return { rate: (s?.tax_rate ?? 5) / 100, label: s?.tax_label || 'GST' };
+    const s = parseSettings(restaurantQuery.data?.settings);
+    return { rate: (Number(s.tax_rate) || 5) / 100, label: String(s.tax_label || 'GST') };
   }, [restaurantQuery.data?.settings]);
   const gstCents = Math.round(activeCart.subtotalCents * taxSettings.rate);
 
   // Additional bill charges (CGST, SGST, service charge, packing, delivery, etc.)
   type BillCharge = { label: string; type: 'percentage' | 'flat'; value: number };
   const billCharges: BillCharge[] = useMemo(() => {
-    const s = restaurantQuery.data?.settings as any;
-    return Array.isArray(s?.bill_charges) ? s.bill_charges.filter((c: any) => c.label && c.value > 0) : [];
+    const s = parseSettings(restaurantQuery.data?.settings);
+    const charges = s.bill_charges;
+    return Array.isArray(charges) ? (charges as BillCharge[]).filter((c) => c.label && c.value > 0) : [];
   }, [restaurantQuery.data?.settings]);
 
   const billChargeAmounts = useMemo(() => {
@@ -338,8 +343,8 @@ export default function PublicMenu() {
 
   // Loyalty points
   const loyaltyConfig = useMemo(() => {
-    const s = restaurantQuery.data?.settings as any;
-    if (!s?.loyalty_config?.enabled) return null;
+    const s = parseSettings(restaurantQuery.data?.settings);
+    if (!s.loyalty_config?.enabled) return null;
     return s.loyalty_config as { points_per_100_spent: number; points_to_currency: number; min_redeem_points: number };
   }, [restaurantQuery.data?.settings]);
   // Loyalty points — H2: anon SELECT on loyalty_points is now blocked by RLS.
@@ -501,6 +506,26 @@ export default function PublicMenu() {
     return url.toString();
   }, [placedOrderToken]);
 
+  // L7: Stale price detection — when menu items refetch, compare with cart prices
+  const prevItemsDataRef = useRef<typeof itemsQuery.data>(undefined);
+  useEffect(() => {
+    const data = itemsQuery.data;
+    if (!data || data === prevItemsDataRef.current) return;
+    prevItemsDataRef.current = data;
+    // Only check if the active cart has items
+    if (activeCart.itemCount === 0 || !('refreshPrices' in activeCart)) return;
+    const changes = (activeCart as ReturnType<typeof useRestaurantCart>).refreshPrices(data);
+    if (changes.length > 0) {
+      const summary = changes
+        .map(c => `${c.name}: ${formatMoney(c.old_price_cents, currencyCode)} → ${formatMoney(c.new_price_cents, currencyCode)}`)
+        .join(', ');
+      toast({
+        title: '💰 Prices Updated',
+        description: `Some items in your cart had price changes: ${summary}. Your cart has been updated.`,
+      });
+    }
+  }, [itemsQuery.data]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const placeOrder = async () => {
     if (placingOrder) return;
     const restaurantId = restaurantQuery.data?.id;
@@ -558,7 +583,7 @@ export default function PublicMenu() {
         extra_charges: billChargeAmounts.map(c => ({ label: c.label, cents: c.cents })),
       };
 
-      let data: any;
+      let data: Record<string, unknown> | undefined;
 
       if (paymentMethod === 'online' && canUseOnlinePayments) {
         // === ONLINE PAYMENT FLOW ===
@@ -592,7 +617,7 @@ export default function PublicMenu() {
         }
 
         // 2. Load Razorpay.js if needed
-        if (!(window as any).Razorpay) {
+        if (!window.Razorpay) {
           await new Promise<void>((resolve, reject) => {
             const s = document.createElement('script');
             s.src = 'https://checkout.razorpay.com/v1/checkout.js';
@@ -603,7 +628,7 @@ export default function PublicMenu() {
         }
 
         // 3. Open Razorpay popup
-        data = await new Promise<any>((resolve, reject) => {
+        data = await new Promise<Record<string, unknown>>((resolve, reject) => {
           const options = {
             key: rzpData.key_id,
             amount: rzpData.amount,
@@ -611,7 +636,7 @@ export default function PublicMenu() {
             name: restaurantQuery.data?.name || 'Restaurant',
             description: `Order from ${restaurantQuery.data?.name || 'Restaurant'}`,
             order_id: rzpData.razorpay_order_id,
-            handler: async (response: any) => {
+            handler: async (response: RazorpayResponse) => {
               try {
                 // 4. Verify payment + place order
                 const { data: verifyData, error: verifyError } = await supabase.functions.invoke("verify-payment", {
@@ -640,7 +665,7 @@ export default function PublicMenu() {
             },
             theme: { color: '#1a1a2e' },
           };
-          const rzp = new (window as any).Razorpay(options);
+          const rzp = new window.Razorpay!(options);
           rzp.open();
         });
       } else if (paymentMethod === 'upi') {
@@ -658,7 +683,7 @@ export default function PublicMenu() {
           if (rzpData?.error) throw new Error(rzpData.error);
           if (!rzpData?.razorpay_order_id) throw new Error("No order ID from gateway.");
 
-          if (!(window as any).Razorpay) {
+          if (!window.Razorpay) {
             await new Promise<void>((resolve, reject) => {
               const s = document.createElement('script');
               s.src = 'https://checkout.razorpay.com/v1/checkout.js';
@@ -669,15 +694,15 @@ export default function PublicMenu() {
           }
 
           // Open Razorpay in UPI-only mode (PhonePe, GPay, Paytm buttons)
-          data = await new Promise<any>((resolve, reject) => {
-            const rzp = new (window as any).Razorpay({
+          data = await new Promise<Record<string, unknown>>((resolve, reject) => {
+            const rzp = new window.Razorpay!({
               key: rzpData.key_id,
               amount: rzpData.amount,
               currency: rzpData.currency,
               name: restaurantQuery.data?.name || 'Restaurant',
               description: `Order from ${restaurantQuery.data?.name || 'Restaurant'}`,
               order_id: rzpData.razorpay_order_id,
-              handler: async (response: any) => {
+              handler: async (response: RazorpayResponse) => {
                 try {
                   const { data: v, error: vErr } = await supabase.functions.invoke("verify-payment", {
                     body: {
@@ -763,7 +788,7 @@ export default function PublicMenu() {
         toast({
           title: `🛒 You have ${activeCart.itemCount} item${activeCart.itemCount > 1 ? 's' : ''} in your cart`,
           description: "Ready to complete your order?",
-          action: <button onClick={() => setCartOpen(true)} className="text-xs font-semibold underline">View Cart</button> as any,
+          action: (<button onClick={() => setCartOpen(true)} className="text-xs font-semibold underline">View Cart</button>) as React.ReactNode,
         });
       }
     }, 800);
@@ -988,9 +1013,9 @@ export default function PublicMenu() {
 
       {/* M6: Prep/Delivery time */}
       {(() => {
-        const s = restaurantQuery.data?.settings as any;
-        const prep = s?.prep_time_minutes;
-        const del = s?.delivery_time_minutes;
+        const s = parseSettings(restaurantQuery.data?.settings);
+        const prep = s.prep_time_minutes as number | undefined;
+        const del = s.delivery_time_minutes as number | undefined;
         if (!prep && !del) return null;
         return (
           <div className="w-full max-w-3xl mx-auto px-4 pt-2">
@@ -1013,7 +1038,7 @@ export default function PublicMenu() {
         ) : (
           <div className="flex gap-1 p-1 bg-muted rounded-lg">
             {([['pickup', 'Pickup', ShoppingBag], ...(deliveryEnabled ? [['delivery', 'Delivery', Truck]] : [])] as const).map(([type, label, Icon]) => (
-              <button key={type} onClick={() => setOrderType(type as any)}
+              <button key={type} onClick={() => setOrderType(type as 'pickup' | 'delivery')}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-sm font-medium transition-colors ${orderType === type ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
                 <Icon className="h-3.5 w-3.5" />{label}
               </button>
@@ -1266,7 +1291,7 @@ export default function PublicMenu() {
               if (filteredItems.length === 0) return null;
 
               // M10: Availability countdown
-              const cat = category as any;
+              const cat = category;
               let countdownLabel: string | null = null;
               if (cat.available_from && cat.available_to) {
                 const [eh, em] = cat.available_to.split(':').map(Number);
@@ -1296,9 +1321,9 @@ export default function PublicMenu() {
                     {filteredItems.map((item) => {
                       const inCart = activeCart.items.find(i => i.menu_item_id === item.id);
                       const isNew = item.created_at && (Date.now() - new Date(item.created_at).getTime()) < 7 * 86400_000;
-                      const isSpecial = (item as any).is_daily_special;
+                      const isSpecial = (item as MenuItemExtended).is_daily_special;
                       const isBestseller = popularIds.includes(item.id);
-                      const hasVariants = !!(item as any).variants?.length || !!(item as any).addons?.length;
+                      const hasVariants = !!(item as MenuItemExtended).variants?.length || !!(item as MenuItemExtended).addons?.length;
 
                       const handleAdd = (e: React.MouseEvent) => {
                         navigator.vibrate?.(30); // M14 haptic
@@ -1335,7 +1360,7 @@ export default function PublicMenu() {
                             </div>
                             <button className="absolute top-2 right-2 z-10 h-6 w-6 rounded-full bg-black/40 flex items-center justify-center" onClick={handleShare}><Share2 className="h-3 w-3 text-white" /></button>
                             {(() => {
-                              const images: string[] = [item.image_url, ...((item as any).additional_images || [])].filter(Boolean);
+                              const images: string[] = [item.image_url, ...((item as MenuItemExtended).additional_images || [])].filter(Boolean) as string[];
                               if (images.length > 0) {
                                 return (
                                   <div className="relative">
@@ -1399,9 +1424,9 @@ export default function PublicMenu() {
                               {item.image_url ? (
                                 <div className="relative">
                                   <img src={item.image_url} alt={item.name} className="h-20 w-20 rounded-md object-cover border cursor-pointer hover:opacity-80 transition-opacity" loading="lazy" onClick={() => setLightboxImg(item.image_url)} />
-                                  {((item as any).additional_images?.length || 0) > 0 && (
+                                  {((item as MenuItemExtended).additional_images?.length || 0) > 0 && (
                                     <span className="absolute bottom-0 right-0 bg-black/70 text-white text-[8px] font-bold px-1 rounded-tl">
-                                      +{(item as any).additional_images.length}
+                                      +{(item as MenuItemExtended).additional_images!.length}
                                     </span>
                                   )}
                                 </div>
@@ -1504,7 +1529,7 @@ export default function PublicMenu() {
                     )}
                     {/* M12: WhatsApp deep link */}
                     {(() => {
-                      const wp = (restaurantQuery.data?.settings as any)?.whatsapp_number;
+                      const wp = parseSettings(restaurantQuery.data?.settings).whatsapp_number;
                       if (!wp) return null;
                       const msg = encodeURIComponent(`My order token: ${placedOrderToken}`);
                       return (
@@ -2152,8 +2177,8 @@ export default function PublicMenu() {
       )}
       {/* WhatsApp Floating Button */}
       {(() => {
-        const s = restaurantQuery.data?.settings as any;
-        const waNum = s && typeof s === 'object' ? s.whatsapp_number : null;
+        const s = parseSettings(restaurantQuery.data?.settings);
+        const waNum = s.whatsapp_number ?? null;
         if (!waNum) return null;
         return (
           <a

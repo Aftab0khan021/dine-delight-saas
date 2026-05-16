@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
+import { parseSettings } from "@/types/restaurant-settings";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
 import { useFeatureLimit } from "../hooks/useFeatureAccess";
@@ -560,7 +561,7 @@ export default function AdminMenu() {
 
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${(item as any).food_type === 'nonveg' ? 'bg-red-500' : (item as any).food_type === 'egg' ? 'bg-yellow-500' : 'bg-green-500'}`} title={(item as any).food_type || 'veg'} />
+                        <span className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${item.food_type === 'nonveg' ? 'bg-red-500' : item.food_type === 'egg' ? 'bg-yellow-500' : 'bg-green-500'}`} title={item.food_type || 'veg'} />
                         <span className="truncate text-sm font-medium">{item.name}</span>
                         {item.is_daily_special && (
                           <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[9px] font-bold px-1.5 py-0.5 shrink-0">
@@ -570,10 +571,10 @@ export default function AdminMenu() {
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xs font-mono text-muted-foreground">{formatMoney(item.price_cents, currencyCode)}</span>
-                        {(item as any).spice_level > 0 && <span className="text-xs">{'🌶️'.repeat(Math.min((item as any).spice_level, 3))}</span>}
-                        {((item as any).tags || []).slice(0, 2).map((t: string) => <Badge key={t} variant="outline" className="h-4 px-1 text-[9px]">{t}</Badge>)}
+                        {(item.spice_level ?? 0) > 0 && <span className="text-xs">{'🌶️'.repeat(Math.min(item.spice_level!, 3))}</span>}
+                        {(item.tags || []).slice(0, 2).map((t: string) => <Badge key={t} variant="outline" className="h-4 px-1 text-[9px]">{t}</Badge>)}
                         {!item.is_active && <Badge variant="destructive" className="h-4 px-1 text-[10px]">Hidden</Badge>}
-                        {(item as any).is_sold_out && <Badge variant="outline" className="h-4 px-1 text-[10px] border-red-400 text-red-600">Sold Out</Badge>}
+                        {item.is_sold_out && <Badge variant="outline" className="h-4 px-1 text-[10px] border-red-400 text-red-600">Sold Out</Badge>}
                         {(() => {
                           const stale = getStaleLabel(lastOrderedMap.get(item.id) || null);
                           if (!stale.variant) return null;
@@ -589,17 +590,17 @@ export default function AdminMenu() {
 
                   <div className="flex items-center gap-1">
                     <Button
-                      variant={(item as any).is_sold_out ? "destructive" : "outline"}
+                      variant={item.is_sold_out ? "destructive" : "outline"}
                       size="sm"
                       className="text-xs h-7 px-2"
                       onClick={async (e) => {
                         e.stopPropagation();
-                        const next = !(item as any).is_sold_out;
+                        const next = !item.is_sold_out;
                         await supabase.from("menu_items").update({ is_sold_out: next }).eq("id", item.id);
                         qc.invalidateQueries({ queryKey: ["admin", "menu"] });
                       }}
                     >
-                      {(item as any).is_sold_out ? "Restock" : "Sold Out"}
+                      {item.is_sold_out ? "Restock" : "Sold Out"}
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => { setEditItem(item); setItemSheetOpen(true); }}>
                       Edit
@@ -679,11 +680,11 @@ function MenuSettingsSection({ restaurantId }: { restaurantId?: string }) {
 
   useEffect(() => {
     if (restaurantData) {
-      const s = restaurantData.settings && typeof restaurantData.settings === "object" ? restaurantData.settings as any : {};
-      setCuisineTypes(Array.isArray((restaurantData as any).cuisine_types) ? (restaurantData as any).cuisine_types : []);
-      setCustomTags(Array.isArray(s.custom_tags) ? s.custom_tags : DEFAULT_TAGS);
-      setCustomAllergens(Array.isArray(s.custom_allergens) ? s.custom_allergens : DEFAULT_ALLERGENS);
-      setMaxVariants((restaurantData as any).max_variants_per_item ?? 5);
+      const s = parseSettings(restaurantData.settings);
+      setCuisineTypes(Array.isArray(restaurantData.cuisine_types) ? restaurantData.cuisine_types as string[] : []);
+      setCustomTags(Array.isArray(s.custom_tags) ? s.custom_tags as string[] : DEFAULT_TAGS);
+      setCustomAllergens(Array.isArray(s.custom_allergens) ? s.custom_allergens as string[] : DEFAULT_ALLERGENS);
+      setMaxVariants(Number(restaurantData.max_variants_per_item) || 5);
       setMaxAddons(typeof s.max_addons_per_item === 'number' ? s.max_addons_per_item : 10);
     }
   }, [restaurantData]);
@@ -692,17 +693,17 @@ function MenuSettingsSection({ restaurantId }: { restaurantId?: string }) {
     if (!restaurantId) return;
     setSaving(true);
     try {
-      const currentSettings = restaurantData?.settings && typeof restaurantData.settings === "object" ? restaurantData.settings as any : {};
+      const currentSettings = parseSettings(restaurantData?.settings);
       const { error } = await supabase.from("restaurants").update({
         settings: {
           ...currentSettings,
           custom_tags: customTags,
           custom_allergens: customAllergens,
           max_addons_per_item: maxAddons,
-        },
+        } as Record<string, unknown>,
         cuisine_types: cuisineTypes,
         max_variants_per_item: maxVariants,
-      } as any).eq("id", restaurantId);
+      } as Record<string, unknown>).eq("id", restaurantId);
       if (error) throw error;
       toast({ title: "Saved", description: "Menu settings updated." });
       qc.invalidateQueries({ queryKey: ["admin", "restaurant"] });
@@ -926,7 +927,7 @@ function CategorySheet({ open, onOpenChange, data, onSave, onDelete, categories 
 
 // --- Subcomponent: Item Sheet ---
 function ItemSheet({ open, onOpenChange, data, categories, restaurantId, currencyCode, restaurantSettings, onSave, onDelete, saving, aiTier, isPaidAI, getAccessToken }: any) {
-  const rs = restaurantSettings && typeof restaurantSettings === 'object' ? restaurantSettings as any : {};
+  const rs = parseSettings(restaurantSettings);
   const TAG_OPTIONS: string[] = Array.isArray(rs.custom_tags) ? rs.custom_tags : ['Indian', 'Chinese', 'Italian', 'Continental', 'South Indian', 'Mughlai', 'Thai', 'Spicy', "Chef's Special", 'New', 'Bestseller', 'Healthy', 'Jain'];
   const ALLERGEN_OPTIONS: string[] = Array.isArray(rs.custom_allergens) ? rs.custom_allergens : ['Gluten', 'Dairy', 'Nuts', 'Peanuts', 'Shellfish', 'Soy', 'Egg', 'Fish', 'Sesame'];
   const form = useForm();

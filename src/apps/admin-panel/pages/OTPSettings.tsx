@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { parseSettings } from "@/types/restaurant-settings";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,8 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Shield, MessageCircle, Phone, Send } from "lucide-react";
 
-function normalizeSettings(s: any) {
-  return s && typeof s === "object" && !Array.isArray(s) ? s : {};
+function normalizeSettings(s: unknown) {
+  return parseSettings(s as Parameters<typeof parseSettings>[0]);
 }
 
 export default function OTPSettings() {
@@ -100,7 +101,7 @@ function OTPSettingsContent() {
       };
       const { error } = await supabase
         .from("restaurants")
-        .update({ settings: nextSettings } as any)
+        .update({ settings: nextSettings } as Record<string, unknown>)
         .eq("id", restaurant.id);
       if (error) throw error;
       qc.invalidateQueries({ queryKey: ["admin", "restaurant-otp"] });

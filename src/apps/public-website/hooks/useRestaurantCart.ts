@@ -192,6 +192,47 @@ export function useRestaurantCart(restaurantSlug: string) {
 
   const totalCents = Math.max(0, subtotalCents - discountCents);
 
+  /**
+   * L7 — Stale price detection.
+   * Compare cached cart prices with live menu data.
+   * Returns items whose prices have changed. If `autoUpdate` is true, 
+   * cart prices are automatically updated to the latest values.
+   */
+  type PriceChange = {
+    cart_id: string;
+    name: string;
+    old_price_cents: number;
+    new_price_cents: number;
+  };
+
+  const refreshPrices = useCallback(
+    (liveMenuItems: Array<{ id: string; price_cents: number; name?: string }>): PriceChange[] => {
+      const priceMap = new Map(liveMenuItems.map((m) => [m.id, m.price_cents]));
+      const changes: PriceChange[] = [];
+
+      setItems((prev) => {
+        const next = prev.map((ci) => {
+          const livePrice = priceMap.get(ci.menu_item_id);
+          if (livePrice !== undefined && livePrice !== ci.price_cents) {
+            changes.push({
+              cart_id: ci.cart_id,
+              name: ci.name,
+              old_price_cents: ci.price_cents,
+              new_price_cents: livePrice,
+            });
+            return { ...ci, price_cents: livePrice };
+          }
+          return ci;
+        });
+        // Only create a new array reference if something changed
+        return changes.length > 0 ? next : prev;
+      });
+
+      return changes;
+    },
+    [],
+  );
+
   return {
     items,
     tableLabel,
@@ -209,6 +250,7 @@ export function useRestaurantCart(restaurantSlug: string) {
     itemCount,
     subtotalCents,
     discountCents, // [NEW]
-    totalCents     // [NEW]
+    totalCents,    // [NEW]
+    refreshPrices, // [L7] Stale price detection
   };
 }

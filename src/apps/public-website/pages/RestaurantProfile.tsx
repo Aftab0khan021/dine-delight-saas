@@ -14,20 +14,22 @@ import { useToast } from "@/hooks/use-toast";
 import { formatMoney, fromCents } from "@/lib/formatting";
 import { Turnstile } from "@/components/security/Turnstile";
 import { usePublicFeatureAccess } from "../hooks/usePublicFeatureAccess";
+import { parseSettings, type RestaurantSettings, type OperatingHours, type EventItem } from "@/types/restaurant-settings";
+import type { RestaurantPublic } from "@/types/supabase-helpers";
 
-function normalizeSettings(settings: any | null) {
-  return settings && typeof settings === "object" && !Array.isArray(settings) ? settings : {};
+function normalizeSettings(settings: unknown): RestaurantSettings {
+  return parseSettings(settings as Parameters<typeof parseSettings>[0]);
 }
 
-function formatOperatingHours(operatingHours: any) {
+function formatOperatingHours(operatingHours: OperatingHours | null | undefined) {
   if (!operatingHours || typeof operatingHours !== 'object') return null;
-  const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
   const dayLabels: Record<string, string> = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' };
   const schedule: string[] = [];
   days.forEach(day => {
     const slots = operatingHours[day];
     if (!slots || slots.length === 0) { schedule.push(`${dayLabels[day]}: Closed`); }
-    else { const times = slots.map((slot: any) => `${slot.open}-${slot.close}`).join(', '); schedule.push(`${dayLabels[day]}: ${times}`); }
+    else { const times = slots.map((slot) => `${slot.open}-${slot.close}`).join(', '); schedule.push(`${dayLabels[day]}: ${times}`); }
   });
   return schedule;
 }
@@ -170,9 +172,9 @@ export default function RestaurantProfile() {
   // (avg_rating/rating_count are maintained by a DB trigger on orders.rating)
   // Falls back to scanning orders if the migration hasn't been applied yet.
   const ratingData = useMemo(() => {
-    const r = restaurant as any;
-    if (r?.avg_rating != null && r?.rating_count > 0) {
-      return { avg: Number(r.avg_rating), count: r.rating_count };
+    const r = restaurant as RestaurantPublic & Record<string, unknown>;
+    if (r?.avg_rating != null && Number(r?.rating_count) > 0) {
+      return { avg: Number(r.avg_rating), count: Number(r.rating_count) };
     }
     return null;
   }, [restaurant]);
@@ -365,9 +367,9 @@ export default function RestaurantProfile() {
               </div>
             )}
             {/* Cuisine Badges */}
-            {Array.isArray((restaurant as any)?.cuisine_types) && (restaurant as any).cuisine_types.length > 0 && (
+            {Array.isArray((restaurant as RestaurantPublic)?.cuisine_types) && (restaurant as RestaurantPublic).cuisine_types!.length > 0 && (
               <div className="flex flex-wrap justify-center gap-1.5 pt-1">
-                {(restaurant as any).cuisine_types.map((c: string) => (
+                {(restaurant as RestaurantPublic).cuisine_types!.map((c: string) => (
                   <Badge key={c} variant="secondary" className="bg-white/20 text-white border-white/30 text-xs backdrop-blur-sm">{c}</Badge>
                 ))}
               </div>
@@ -394,7 +396,7 @@ export default function RestaurantProfile() {
 
       {/* R12: Improved Holiday Banner with countdown */}
       {restaurant.is_holiday_mode && (() => {
-        const endDateStr = (settings as any)?.holiday_mode_end_date as string | undefined;
+        const endDateStr = settings.holiday_mode_end_date;
         const countdown = endDateStr ? formatCountdown(endDateStr) : null;
         return (
           <div className="bg-amber-50 dark:bg-amber-950/40 border-l-4 border-amber-400">
@@ -549,22 +551,22 @@ export default function RestaurantProfile() {
         )}
 
         {/* Chef's Story — R10 animated */}
-        {(settings as any)?.chefs_story && (
+        {settings.chefs_story && (
           <AnimatedSection>
-            <section className="space-y-4 text-center">
-              <h2 className="text-2xl font-bold tracking-tight">Our Story</h2>
-              <p className="text-muted-foreground leading-relaxed text-base max-w-2xl mx-auto">{(settings as any).chefs_story}</p>
+            <section className="text-center">
+              <h2 className="text-2xl font-bold mb-4">Chef's Story</h2>
+              <p className="text-muted-foreground leading-relaxed text-base max-w-2xl mx-auto">{settings.chefs_story}</p>
             </section>
           </AnimatedSection>
         )}
 
         {/* Events & Special Nights — R10 animated */}
-        {Array.isArray((settings as any)?.events) && (settings as any).events.length > 0 && (
+        {Array.isArray(settings.events) && settings.events.length > 0 && (
           <AnimatedSection delay={40}>
-            <section className="space-y-4">
-              <h2 className="text-2xl font-bold tracking-tight text-center">Events & Special Nights</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {(settings as any).events.map((evt: any, i: number) => (
+            <section>
+              <h2 className="text-2xl font-bold mb-4 text-center">Upcoming Events</h2>
+              <div className="grid sm:grid-cols-2 gap-4">
+                {(settings.events as any[]).map((evt: any, i: number) => (
                   <div key={i} className="rounded-xl border bg-card p-5 space-y-2 shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex items-center gap-3">
                       <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"><CalendarDays className="h-6 w-6 text-primary" /></div>
@@ -745,7 +747,7 @@ export default function RestaurantProfile() {
         ...(settings?.address ? { "address": { "@type": "PostalAddress", "streetAddress": settings.address } } : {}),
         ...(contactPhone ? { "telephone": contactPhone } : {}),
         ...(contactEmail ? { "email": contactEmail } : {}),
-        "servesCuisine": Array.isArray((restaurant as any)?.cuisine_types) ? (restaurant as any).cuisine_types : [],
+        "servesCuisine": Array.isArray((restaurant as RestaurantPublic)?.cuisine_types) ? (restaurant as RestaurantPublic).cuisine_types : [],
       }) }} />
 
       {/* Gallery Lightbox */}

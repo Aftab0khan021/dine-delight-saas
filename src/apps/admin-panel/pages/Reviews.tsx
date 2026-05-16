@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { parseSettings } from "@/types/restaurant-settings";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { FeatureGate } from "../components/FeatureGate";
@@ -259,8 +260,8 @@ function TestimonialsSection({ restaurantId }: { restaurantId?: string }) {
 
   useEffect(() => {
     if (restaurantData) {
-      const s = restaurantData.settings && typeof restaurantData.settings === "object" ? restaurantData.settings as any : {};
-      setTestimonials(Array.isArray(s.testimonials) ? s.testimonials : []);
+      const s = parseSettings(restaurantData.settings);
+      setTestimonials(Array.isArray(s.testimonials) ? s.testimonials as Testimonial[] : []);
     }
   }, [restaurantData]);
 
@@ -268,10 +269,10 @@ function TestimonialsSection({ restaurantId }: { restaurantId?: string }) {
     if (!restaurantId) return;
     setSaving(true);
     try {
-      const currentSettings = restaurantData?.settings && typeof restaurantData.settings === "object" ? restaurantData.settings as any : {};
+      const currentSettings = parseSettings(restaurantData?.settings);
       const { error } = await supabase.from("restaurants").update({
-        settings: { ...currentSettings, testimonials },
-      } as any).eq("id", restaurantId);
+        settings: { ...currentSettings, testimonials } as Record<string, unknown>,
+      }).eq("id", restaurantId);
       if (error) throw error;
       toast({ title: "Saved", description: "Testimonials updated." });
       qc.invalidateQueries({ queryKey: ["admin", "restaurant"] });

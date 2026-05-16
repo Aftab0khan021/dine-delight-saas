@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { parseSettings } from "@/types/restaurant-settings";
+import type { OrderWithDetails } from "@/types/supabase-helpers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PhoneInput } from "@/components/ui/phone-input";
@@ -186,7 +188,7 @@ export default function CustomerDashboard() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      return data as { profile: any; orders: any[]; loyalty: any };
+      return data as { profile: Record<string, unknown> | null; orders: OrderWithDetails[]; loyalty: { points?: number; lifetime_points?: number } | null };
     },
   });
 
@@ -265,7 +267,7 @@ export default function CustomerDashboard() {
     try {
       const { error } = await supabase
         .from("orders")
-        .update({ rating, review_text: text || null, reviewed_at: new Date().toISOString() } as any)
+        .update({ rating, review_text: text || null, reviewed_at: new Date().toISOString() } as Partial<Record<string, unknown>>)
         .eq("id", orderId)
         .eq("customer_phone", phone);
       if (error) throw error;
@@ -289,7 +291,7 @@ export default function CustomerDashboard() {
     return <div className="min-h-screen flex items-center justify-center text-destructive">Restaurant not found.</div>;
   }
 
-  const themeColor = (restaurant.settings as any)?.theme?.primary_color || "hsl(var(--primary))";
+  const themeColor = parseSettings(restaurant.settings).theme?.primary_color || "hsl(var(--primary))";
 
   return (
     <div className="min-h-screen bg-muted/30 overflow-x-hidden">
@@ -528,13 +530,13 @@ export default function CustomerDashboard() {
                     const isActive = ['pending', 'accepted', 'preparing', 'ready'].includes(order.status);
                     const isCompleted = order.status === 'completed';
                     const isRating = ratingOrderId === order.id;
-                    const orderTypeIcon = (order as any).order_type === 'delivery'
+                    const orderTypeIcon = order.order_type === 'delivery'
                       ? <Truck className="h-3 w-3" />
-                      : (order as any).order_type === 'pickup'
+                      : order.order_type === 'pickup'
                       ? <Store className="h-3 w-3" />
                       : <UtensilsCrossed className="h-3 w-3" />;
-                    const orderTypeLabel = (order as any).order_type === 'delivery' ? 'Delivery'
-                      : (order as any).order_type === 'pickup' ? 'Pickup' : 'Dine-In';
+                    const orderTypeLabel = order.order_type === 'delivery' ? 'Delivery'
+                      : order.order_type === 'pickup' ? 'Pickup' : 'Dine-In';
 
                     return (
                     <Card key={order.id} className="overflow-hidden hover:shadow-md transition-shadow">
@@ -551,18 +553,18 @@ export default function CustomerDashboard() {
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground border">
                               {orderTypeIcon} {orderTypeLabel}
                             </span>
-                            {(order as any).rating && (
+                            {order.rating && (
                               <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                                {'⭐'.repeat((order as any).rating)}
+                                {'⭐'.repeat(order.rating)}
                               </span>
                             )}
                           </div>
                         </div>
                         <div className="text-right shrink-0">
                           <p className="font-bold text-lg">{formatMoney(order.total_cents, restaurant.currency_code)}</p>
-                          {isActive && (order as any).order_token && (
+                          {isActive && order.order_token && (
                             <a
-                              href={`/track?token=${encodeURIComponent((order as any).order_token)}`}
+                              href={`/track?token=${encodeURIComponent(order.order_token)}`}
                               className="inline-block mt-1 text-[10px] font-semibold text-primary underline"
                             >
                               Track Order →
@@ -603,7 +605,7 @@ export default function CustomerDashboard() {
                         )}
 
                         {/* Rating Section — shown for completed orders without rating */}
-                        {isCompleted && !(order as any).rating && (
+                        {isCompleted && !order.rating && (
                           <div className="mt-3 pt-3 border-t">
                             {!isRating ? (
                               <button
@@ -649,9 +651,9 @@ export default function CustomerDashboard() {
                         )}
 
                         {/* Show existing review text */}
-                        {isCompleted && (order as any).review_text && (
-                          <p className="mt-2 text-xs text-muted-foreground italic border-t pt-2">
-                            "{(order as any).review_text}"
+                        {isCompleted && order.review_text && (
+                          <p className="px-4 py-2 text-xs italic text-muted-foreground border-t bg-muted/10">
+                            "{order.review_text}"
                           </p>
                         )}
                       </div>

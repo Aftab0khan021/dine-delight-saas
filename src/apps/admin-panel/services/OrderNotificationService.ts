@@ -19,7 +19,7 @@ class OrderNotificationService {
     private ensureAudioContext(): AudioContext | null {
         try {
             if (this.audioContext) return this.audioContext;
-            const Ctor = (window as any).AudioContext || (window as any).webkitAudioContext;
+            const Ctor = window.AudioContext || window.webkitAudioContext;
             if (!Ctor) return null;
             this.audioContext = new Ctor();
             return this.audioContext;

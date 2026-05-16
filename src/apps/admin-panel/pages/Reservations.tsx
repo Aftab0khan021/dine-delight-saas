@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, Clock, Users, Check, X, Phone, ChevronDown, List, Grid3X3, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { parseSettings } from "@/types/restaurant-settings";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtimeSync } from "@/hooks/useRealtimeSync";
@@ -276,9 +277,9 @@ function ReservationSettings({ restaurantId }: { restaurantId?: string }) {
 
   useEffect(() => {
     if (restaurantData) {
-      const s = restaurantData.settings && typeof restaurantData.settings === "object" ? restaurantData.settings as any : {};
+      const s = parseSettings(restaurantData.settings);
       setReservationEnabled(!!s.reservation_enabled);
-      setTotalTables(s.total_tables || 10);
+      setTotalTables(Number(s.total_tables) || 10);
     }
   }, [restaurantData]);
 
@@ -286,10 +287,10 @@ function ReservationSettings({ restaurantId }: { restaurantId?: string }) {
     if (!restaurantId) return;
     setSaving(true);
     try {
-      const currentSettings = restaurantData?.settings && typeof restaurantData.settings === "object" ? restaurantData.settings as any : {};
+      const currentSettings = parseSettings(restaurantData?.settings);
       const { error } = await supabase.from("restaurants").update({
-        settings: { ...currentSettings, reservation_enabled: reservationEnabled, total_tables: totalTables },
-      } as any).eq("id", restaurantId);
+        settings: { ...currentSettings, reservation_enabled: reservationEnabled, total_tables: totalTables } as Record<string, unknown>,
+      }).eq("id", restaurantId);
       if (error) throw error;
       toast({ title: "Saved", description: "Reservation settings updated." });
       qc.invalidateQueries({ queryKey: ["admin", "restaurant"] });

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { supabase } from "@/integrations/supabase/client";
+import { parseSettings } from "@/types/restaurant-settings";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
 import { useFeatureAccess } from "../hooks/useFeatureAccess";
@@ -63,8 +64,8 @@ function getPublicUrl(slug: string) {
   return `${window.location.origin}/r/${slug}`;
 }
 
-function normalizeSettings(settings: any | null) {
-  return (settings && typeof settings === "object" && !Array.isArray(settings)) ? settings : {};
+function normalizeSettings(settings: unknown) {
+  return parseSettings(settings as Parameters<typeof parseSettings>[0]);
 }
 
 export default function AdminBranding() {
@@ -262,7 +263,7 @@ export default function AdminBranding() {
         is_holiday_mode: isHolidayMode,
         holiday_mode_message: holidayMessage || null,
 
-      } as any).eq("id", restaurant!.id);
+      } as Record<string, unknown>).eq("id", restaurant!.id);
 
       if (error) throw error;
     },

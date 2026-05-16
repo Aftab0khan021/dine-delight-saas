@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
+import { parseSettings } from "@/types/restaurant-settings";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -136,23 +137,25 @@ function CouponsContent() {
                 .single();
             return data;
         },
-        onSuccess: (data: any) => {
-            const s = data?.settings || {};
+        select: (data) => {
+            const s = parseSettings(data?.settings);
             setLoyaltyEnabled(!!s.loyalty_config?.enabled);
-            setLoyaltyEarnRate(s.loyalty_config?.points_per_100_spent ?? 10);
-            setLoyaltyRedeemRate(s.loyalty_config?.points_to_currency ?? 10);
-            setLoyaltyMinRedeem(s.loyalty_config?.min_redeem_points ?? 100);
-            setReferralEnabled(!!s.referral_config?.enabled);
-            setReferrerReward(fromCents(s.referral_config?.referrer_reward_cents ?? 5000));
-            setRefereeReward(fromCents(s.referral_config?.referee_reward_cents ?? 2500));
+            setLoyaltyEarnRate(Number(s.loyalty_config?.points_per_100_spent) || 10);
+            setLoyaltyRedeemRate(Number(s.loyalty_config?.points_to_currency) || 10);
+            setLoyaltyMinRedeem(Number(s.loyalty_config?.min_redeem_points) || 100);
+            const rc = s.referral_config as Record<string, unknown> | undefined;
+            setReferralEnabled(!!rc?.enabled);
+            setReferrerReward(fromCents(Number(rc?.referrer_reward_cents) || 5000));
+            setRefereeReward(fromCents(Number(rc?.referee_reward_cents) || 2500));
+            return data;
         },
-    } as any);
+    });
 
     const handleSaveLoyalty = async () => {
         if (!restaurant?.id) return;
         setSavingLoyalty(true);
         try {
-            const currentSettings = (restaurantQuery.data as any)?.settings || {};
+            const currentSettings = parseSettings(restaurantQuery.data?.settings);
             const { error } = await supabase
                 .from("restaurants")
                 .update({
@@ -169,8 +172,8 @@ function CouponsContent() {
                             referrer_reward_cents: toCents(referrerReward),
                             referee_reward_cents: toCents(refereeReward),
                         },
-                    },
-                } as any)
+                    } as Record<string, unknown>,
+                })
                 .eq("id", restaurant.id);
             if (error) throw error;
             qc.invalidateQueries({ queryKey: ["admin", "restaurant-settings"] });
