@@ -1125,15 +1125,13 @@ export default function PublicMenu() {
         </div>
       )}
 
-      {/* ═══ Zomato-style "Menu" floating pill button ═══
-           Positioned bottom-left so it never conflicts with
-           Cart (bottom-right) or WhatsApp (right of cart).    */}
+      {/* ═══ Zomato-style "Menu" floating pill — bottom RIGHT, never overlaps WhatsApp ═══ */}
       {categoriesWithItems.length > 0 && (
         <button
           onClick={() => setCatSheetOpen(true)}
           className={`fixed ${
             activeCart.itemCount > 0 && !cartOpen ? 'bottom-[88px]' : 'bottom-6'
-          } left-4 z-40 flex items-center gap-2 px-4 h-12 bg-foreground text-background dark:bg-white dark:text-black rounded-full shadow-xl font-semibold text-sm transition-all duration-200 hover:scale-105 active:scale-95`}
+          } right-4 z-40 flex items-center gap-2 px-4 h-12 bg-foreground text-background dark:bg-white dark:text-black rounded-full shadow-xl font-semibold text-sm transition-all duration-200 hover:scale-105 active:scale-95`}
           aria-label="View menu categories"
         >
           <UtensilsCrossed className="h-4 w-4" />
@@ -1482,35 +1480,8 @@ export default function PublicMenu() {
         )}
       </div>
 
-      {/* Floating Cart */}
+      {/* Cart Drawer — controlled via cart bar + setCartOpen; no floating FAB needed */}
       <Drawer open={cartOpen} onOpenChange={setCartOpen}>
-        <DrawerTrigger asChild>
-          <button
-            ref={cartBtnRef}
-            type="button"
-            className={`fixed ${
-              activeCart.itemCount > 0 && !cartOpen
-                ? 'bottom-[88px]'  // clear the ~68px sticky cart bar
-                : 'bottom-6'
-            } right-4 z-40 transition-all duration-200 ${cartBounce ? 'scale-125' : 'scale-100'}`}
-            aria-label="Open cart"
-            onClick={() => setCartOpen(true)}
-          >
-            <div className="relative">
-              <Button size="lg" className="shadow-lg">
-                <ShoppingBag className="h-4 w-4" />
-                Cart
-              </Button>
-              {activeCart.itemCount > 0 ? (
-                <span className="absolute -top-2 -right-2">
-                  <Badge variant="secondary" className="min-w-6 justify-center">
-                    {activeCart.itemCount}
-                  </Badge>
-                </span>
-              ) : null}
-            </div>
-          </button>
-        </DrawerTrigger>
 
         <DrawerContent className="max-h-[85vh] flex flex-col">
           <DrawerHeader className="text-left shrink-0">
@@ -2158,9 +2129,9 @@ export default function PublicMenu() {
             rel="noopener noreferrer"
             className={`fixed ${
               activeCart.itemCount > 0 && !cartOpen
-                ? 'bottom-[88px]'  // above the cart bar, left of Cart FAB
+                ? 'bottom-[88px]'
                 : 'bottom-6'
-            } right-[92px] z-40 h-12 w-12 rounded-full bg-green-500 text-white shadow-lg flex items-center justify-center hover:bg-green-600 hover:scale-110 transition-all`}
+            } right-[120px] z-40 h-12 w-12 rounded-full bg-green-500 text-white shadow-lg flex items-center justify-center hover:bg-green-600 hover:scale-110 transition-all`}
             aria-label="Order via WhatsApp"
           >
             <MessageCircle className="h-6 w-6" />
