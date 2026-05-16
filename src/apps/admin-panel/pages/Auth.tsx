@@ -150,8 +150,8 @@ export default function AdminAuth() {
       }
 
       toast({
-        title: "Success",
-        description: "Account created successfully! You can now sign in.",
+        title: "Sign Up Successful! 🎉",
+        description: "Please check your email to accept the invitation link before signing in.",
       });
     } catch (error: any) {
       toast({
