@@ -1065,65 +1065,8 @@ export default function PublicMenu() {
         </details>
       </div>
 
-      {/* ─── Swiggy/Zomato-style Sticky Category Bar ─── */}
-      {categoriesWithItems.length > 0 && (
-        <div className="sticky top-[73px] z-[9] border-b bg-background/98 backdrop-blur shadow-sm">
-          <div className="w-full max-w-3xl mx-auto">
-            {searchOpen ? (
-              <div className="flex items-center gap-2 px-4 py-2.5">
-                <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-                <input
-                  autoFocus
-                  value={menuSearch}
-                  onChange={e => setMenuSearch(e.target.value)}
-                  placeholder="Search menu items..."
-                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                />
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setSearchOpen(false); setMenuSearch(""); }}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center" ref={categoryBarRef}>
-                {/* Search */}
-                <button
-                  onClick={() => setSearchOpen(true)}
-                  className="h-11 w-10 shrink-0 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors border-r"
-                >
-                  <Search className="h-4 w-4" />
-                </button>
 
-                {/* Horizontal scrollable pills — no Categories button; that's the floating Menu FAB */}
-                <div className="flex-1 overflow-x-auto scrollbar-hide">
-                  <div className="flex items-center px-2">
-                    {categoriesWithItems.map(cat => {
-                      const isActive = activeCategory === cat.id;
-                      return (
-                        <button
-                          key={cat.id}
-                          data-cat-pill={cat.id}
-                          onClick={() => scrollToCategory(cat.id)}
-                          className={`relative shrink-0 flex items-center gap-1.5 px-3 py-3 text-xs font-medium transition-all whitespace-nowrap ${
-                            isActive ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          {cat.name}
-                          <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full text-[10px] font-bold px-1 transition-colors ${
-                            isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                          }`}>
-                            {cat.items.length}
-                          </span>
-                          {isActive && <span className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full bg-primary" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+
 
       {/* ═══ Zomato-style "Menu" floating pill — bottom RIGHT, never overlaps WhatsApp ═══ */}
       {categoriesWithItems.length > 0 && (
