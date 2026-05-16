@@ -372,8 +372,13 @@ export default function RestaurantProfile() {
             <span className={`h-2 w-2 rounded-full ${openStatus.open ? 'bg-white animate-pulse' : 'bg-white/60'}`} />
             {openStatus.label}
           </div>
-          <Button size="lg" className="rounded-full px-8 h-12 text-base font-bold shadow-lg hover:scale-105 transition-transform" style={{ backgroundColor: themeColor, borderColor: themeColor }} asChild>
-            <Link to={`/r/${slug}/menu`}>View Menu <ArrowRight className="ml-2 h-5 w-5" /></Link>
+          <Button
+            size="lg"
+            className="rounded-full px-8 h-12 text-base font-bold shadow-xl hover:scale-105 transition-transform text-white border-0"
+            style={{ backgroundColor: themeColor }}
+            asChild
+          >
+            <Link to={`/r/${slug}/menu`} className="text-white!">View Menu <ArrowRight className="ml-2 h-5 w-5" /></Link>
           </Button>
         </div>
       </div>
@@ -775,8 +780,13 @@ export default function RestaurantProfile() {
                 <Link to={`/r/${slug}/reserve`}><CalendarDays className="mr-1 h-3.5 w-3.5 sm:h-4 sm:w-4" />Book</Link>
               </Button>
             )}
-            <Button size="sm" className="rounded-full px-4 sm:px-6 font-bold h-8 sm:h-9 text-xs sm:text-sm" style={{ backgroundColor: themeColor }} asChild>
-              <Link to={`/r/${slug}/menu`}>Order <ArrowRight className="ml-1 h-3.5 w-3.5 sm:h-4 sm:w-4" /></Link>
+            <Button
+              size="sm"
+              className="rounded-full px-4 sm:px-6 font-bold h-8 sm:h-9 text-xs sm:text-sm text-white border-0"
+              style={{ backgroundColor: themeColor }}
+              asChild
+            >
+              <Link to={`/r/${slug}/menu`} className="text-white!">Order <ArrowRight className="ml-1 h-3.5 w-3.5 sm:h-4 sm:w-4" /></Link>
             </Button>
           </div>
         </div>

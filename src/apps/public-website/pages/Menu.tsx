@@ -22,7 +22,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useSEO } from "@/hooks/useSEO";
 import { CopyButton } from "@/apps/admin-panel/components/qr/CopyButton";
-import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote, ShieldAlert, Moon, Sun, Truck, Store, User, Tag, CheckCircle2, Smartphone, Copy, Split, Home, Grid2x2, List, Share2, Wifi, WifiOff, Zap, Star } from "lucide-react";
+import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote, ShieldAlert, Moon, Sun, Truck, Store, User, Tag, CheckCircle2, Smartphone, Copy, Split, Home, Grid2x2, List, Share2, Wifi, WifiOff, Zap, Star, ChevronDown } from "lucide-react";
 import { useRestaurantCart } from "../hooks/useRestaurantCart";
 import { useCollaborativeCart } from "../hooks/useCollaborativeCart";
 import { MenuItemDialog } from "../components/MenuItemDialog";
@@ -1040,13 +1040,13 @@ export default function PublicMenu() {
         </details>
       </div>
 
-      {/* Category Jump Bar + Search */}
+      {/* ─── Swiggy/Zomato-style Category Jump Bar ─── */}
       {categoriesWithItems.length > 0 && (
-        <div className="sticky top-[73px] z-[9] border-b bg-background/95 backdrop-blur">
-          <div className="w-full max-w-3xl mx-auto px-4">
-            {/* Search toggle */}
+        <div className="sticky top-[73px] z-[9] border-b bg-background/98 backdrop-blur shadow-sm">
+          <div className="w-full max-w-3xl mx-auto">
+            {/* Search mode */}
             {searchOpen ? (
-              <div className="flex items-center gap-2 py-2">
+              <div className="flex items-center gap-2 px-4 py-2.5">
                 <Search className="h-4 w-4 text-muted-foreground shrink-0" />
                 <input
                   autoFocus
@@ -1060,28 +1060,108 @@ export default function PublicMenu() {
                 </Button>
               </div>
             ) : (
-              <div className="flex items-center gap-2 py-2" ref={categoryBarRef}>
-                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setSearchOpen(true)}>
+              <div className="flex items-center" ref={categoryBarRef}>
+                {/* Search icon */}
+                <button
+                  onClick={() => setSearchOpen(true)}
+                  className="h-11 w-10 shrink-0 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors border-r"
+                  title="Search"
+                >
                   <Search className="h-4 w-4" />
-                </Button>
-                <div className="flex gap-1.5 overflow-x-auto scrollbar-hide py-0.5">
-                  {categoriesWithItems.map(cat => (
-                    <button
-                      key={cat.id}
-                      onClick={() => {
-                        const el = document.getElementById(`section-${cat.id}`);
-                        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-                      }}
-                      className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                        activeCategory === cat.id
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : "bg-muted text-muted-foreground hover:bg-accent"
-                      }`}
-                    >
-                      {cat.name}
-                    </button>
-                  ))}
+                </button>
+
+                {/* Scrollable category pills */}
+                <div className="flex-1 overflow-x-auto scrollbar-hide">
+                  <div className="flex items-center gap-0 px-2">
+                    {categoriesWithItems.map(cat => {
+                      const isActive = activeCategory === cat.id;
+                      return (
+                        <button
+                          key={cat.id}
+                          onClick={() => {
+                            const el = document.getElementById(`section-${cat.id}`);
+                            if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                            setActiveCategory(cat.id);
+                          }}
+                          className={`relative shrink-0 flex items-center gap-1.5 px-3 py-3 text-xs font-medium transition-colors whitespace-nowrap ${
+                            isActive
+                              ? "text-primary font-semibold"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {cat.name}
+                          <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full text-[10px] font-bold px-1 transition-colors ${
+                            isActive
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground"
+                          }`}>
+                            {cat.items.length}
+                          </span>
+                          {/* Active underline indicator */}
+                          {isActive && (
+                            <span className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full bg-primary" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
+
+                {/* Categories drawer trigger */}
+                <Drawer>
+                  <DrawerTrigger asChild>
+                    <button
+                      className="h-11 shrink-0 flex items-center gap-1 px-3 text-xs font-medium text-muted-foreground hover:text-foreground border-l transition-colors"
+                      title="All Categories"
+                    >
+                      <Grid2x2 className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Categories</span>
+                      <ChevronDown className="h-3 w-3" />
+                    </button>
+                  </DrawerTrigger>
+                  <DrawerContent className="max-h-[70vh]">
+                    <DrawerHeader className="pb-2">
+                      <DrawerTitle className="text-lg font-bold">Menu Categories</DrawerTitle>
+                    </DrawerHeader>
+                    <div className="overflow-y-auto px-4 pb-2">
+                      {categoriesWithItems.map((cat, idx) => {
+                        const isActive = activeCategory === cat.id;
+                        return (
+                          <DrawerClose asChild key={cat.id}>
+                            <button
+                              onClick={() => {
+                                const el = document.getElementById(`section-${cat.id}`);
+                                if (el) { setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 150); }
+                                setActiveCategory(cat.id);
+                              }}
+                              className={`w-full flex items-center justify-between py-3.5 text-left border-b last:border-0 transition-colors ${
+                                isActive ? "text-primary" : "text-foreground hover:text-primary"
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                {/* Colored index dot */}
+                                <span className={`h-2 w-2 rounded-full shrink-0 ${
+                                  isActive ? "bg-primary" : "bg-muted-foreground/40"
+                                }`} />
+                                <span className={`text-sm font-medium ${isActive ? "font-semibold" : ""}`}>{cat.name}</span>
+                              </div>
+                              <span className={`text-sm tabular-nums ${
+                                isActive ? "text-primary font-bold" : "text-muted-foreground"
+                              }`}>
+                                {cat.items.length}
+                              </span>
+                            </button>
+                          </DrawerClose>
+                        );
+                      })}
+                    </div>
+                    <DrawerFooter className="pt-2">
+                      <DrawerClose asChild>
+                        <Button variant="outline" className="w-full">Close</Button>
+                      </DrawerClose>
+                    </DrawerFooter>
+                  </DrawerContent>
+                </Drawer>
               </div>
             )}
           </div>
