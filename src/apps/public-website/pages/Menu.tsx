@@ -342,17 +342,23 @@ export default function PublicMenu() {
     if (!s?.loyalty_config?.enabled) return null;
     return s.loyalty_config as { points_per_100_spent: number; points_to_currency: number; min_redeem_points: number };
   }, [restaurantQuery.data?.settings]);
+  // Loyalty points — H2: anon SELECT on loyalty_points is now blocked by RLS.
+  // Use the signed session token (from OTP login) to fetch via edge function.
   const [loyaltyPoints, setLoyaltyPoints] = useState<number | null>(null);
   useEffect(() => {
-    if (!loyaltyConfig || !customerPhone || customerPhone.length < 10 || !restaurantQuery.data?.id) return;
-    supabase
-      .from('loyalty_points')
-      .select('points')
-      .eq('customer_phone', customerPhone)
-      .eq('restaurant_id', restaurantQuery.data.id)
-      .maybeSingle()
-      .then(({ data }) => setLoyaltyPoints(data?.points ?? 0));
-  }, [loyaltyConfig, customerPhone, restaurantQuery.data?.id]);
+    if (!loyaltyConfig || !restaurantQuery.data?.id) return;
+    // Read session token from localStorage (set by CustomerDashboard after OTP login)
+    const sessionToken = localStorage.getItem(`customer_session_${restaurantQuery.data.id}`);
+    if (!sessionToken) {
+      setLoyaltyPoints(null);
+      return;
+    }
+    supabase.functions.invoke("customer-dashboard", {
+      body: { action: "get_dashboard", session_token: sessionToken, restaurant_id: restaurantQuery.data.id },
+    }).then(({ data }) => {
+      setLoyaltyPoints(data?.loyalty?.points ?? 0);
+    }).catch(() => setLoyaltyPoints(null));
+  }, [loyaltyConfig, restaurantQuery.data?.id]);
 
   const fetchUpsell = useCallback(async (itemId: string, restaurantId: string) => {
     try {
@@ -716,6 +722,10 @@ export default function PublicMenu() {
         const { data: cashData, error } = await supabase.functions.invoke("place-order", {
           body: orderPayload,
         });
+        // When place-order returns 4xx (e.g. coupon error), supabase.functions.invoke
+        // puts the JSON body in cashData and sets a generic FunctionsHttpError.
+        // Check cashData.error first to surface the actual human-readable message.
+        if (cashData?.error) throw new Error(cashData.error);
         if (error) throw error;
         data = cashData;
       }

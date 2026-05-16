@@ -399,8 +399,10 @@ export default function QuickOrder() {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
 
-      if (error) throw new Error(error.message);
+      // Check data.error first — on 4xx, supabase.functions.invoke may put
+      // the JSON body in data and a generic FunctionsHttpError in error.
       if (data?.error) throw new Error(data.error);
+      if (error) throw new Error(error.message);
       if (!data?.id) throw new Error("Order was not created");
 
       setSuccessToken(data.order_token ?? data.id.slice(0, 8).toUpperCase());

@@ -188,10 +188,10 @@ serve(async (req) => {
       return json({ error: `Total items in order cannot exceed ${MAX_TOTAL_ITEMS}` }, 400);
     }
 
-    // Validate Restaurant
+    // Validate Restaurant (also fetch settings for M6 server-side tax)
     const { data: restaurant, error: restaurantError } = await supabase
       .from('restaurants')
-      .select('is_accepting_orders, currency_code')
+      .select('is_accepting_orders, currency_code, settings')
       .eq('id', restaurant_id)
       .single();
 
@@ -203,15 +203,9 @@ serve(async (req) => {
       return json({ error: "Restaurant is not accepting orders at this time" }, 400);
     }
 
-    // M6 — Fetch restaurant settings to compute tax server-side
-    // Re-use the restaurant row already fetched above (add settings to the select)
-    const { data: restaurantFull } = await supabase
-      .from('restaurants')
-      .select('settings')
-      .eq('id', restaurant_id)
-      .single();
-    const rSettings = (restaurantFull?.settings && typeof restaurantFull.settings === 'object' && !Array.isArray(restaurantFull.settings))
-      ? restaurantFull.settings as Record<string, any>
+    // M6 — Extract tax config from restaurant settings for server-side computation
+    const rSettings = (restaurant.settings && typeof restaurant.settings === 'object' && !Array.isArray(restaurant.settings))
+      ? restaurant.settings as Record<string, any>
       : {};
     const taxConfig = rSettings.tax_config && typeof rSettings.tax_config === 'object' ? rSettings.tax_config as Record<string, any> : null;
 
