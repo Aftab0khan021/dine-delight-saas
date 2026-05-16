@@ -161,7 +161,12 @@ GRANT EXECUTE ON FUNCTION deduct_stock_for_accepted_order(UUID, UUID) TO service
 
 -- ============================================================
 -- 3. Update order_ingredient_preview view to show conversion info
+--    Must DROP first — PostgreSQL cannot rename view columns via
+--    CREATE OR REPLACE VIEW (ERROR 42P16). We rename "unit" → "storage_unit".
 -- ============================================================
+
+-- Drop existing view so we can recreate with renamed column
+DROP VIEW IF EXISTS order_ingredient_preview;
 
 CREATE OR REPLACE VIEW order_ingredient_preview AS
 SELECT
