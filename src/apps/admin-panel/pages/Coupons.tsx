@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { useRealtimeSync } from "@/hooks/useRealtimeSync";
@@ -137,19 +137,21 @@ function CouponsContent() {
                 .single();
             return data;
         },
-        select: (data) => {
-            const s = parseSettings(data?.settings);
-            setLoyaltyEnabled(!!s.loyalty_config?.enabled);
-            setLoyaltyEarnRate(Number(s.loyalty_config?.points_per_100_spent) || 10);
-            setLoyaltyRedeemRate(Number(s.loyalty_config?.points_to_currency) || 10);
-            setLoyaltyMinRedeem(Number(s.loyalty_config?.min_redeem_points) || 100);
-            const rc = s.referral_config as Record<string, unknown> | undefined;
-            setReferralEnabled(!!rc?.enabled);
-            setReferrerReward(fromCents(Number(rc?.referrer_reward_cents) || 5000));
-            setRefereeReward(fromCents(Number(rc?.referee_reward_cents) || 2500));
-            return data;
-        },
     });
+
+    // Sync loyalty/referral settings from query data to local state
+    useEffect(() => {
+        if (!restaurantQuery.data) return;
+        const s = parseSettings(restaurantQuery.data.settings);
+        setLoyaltyEnabled(!!s.loyalty_config?.enabled);
+        setLoyaltyEarnRate(Number(s.loyalty_config?.points_per_100_spent) || 10);
+        setLoyaltyRedeemRate(Number(s.loyalty_config?.points_to_currency) || 10);
+        setLoyaltyMinRedeem(Number(s.loyalty_config?.min_redeem_points) || 100);
+        const rc = s.referral_config as Record<string, unknown> | undefined;
+        setReferralEnabled(!!rc?.enabled);
+        setReferrerReward(fromCents(Number(rc?.referrer_reward_cents) || 5000));
+        setRefereeReward(fromCents(Number(rc?.referee_reward_cents) || 2500));
+    }, [restaurantQuery.data]);
 
     const handleSaveLoyalty = async () => {
         if (!restaurant?.id) return;

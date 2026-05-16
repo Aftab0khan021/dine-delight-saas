@@ -212,6 +212,11 @@ export function useRestaurantCart(restaurantSlug: string) {
 
       setItems((prev) => {
         const next = prev.map((ci) => {
+          // Only compare base-price items (no variant or addon overrides).
+          // Items with variants/addons have a composite price that differs
+          // from the base menu_item.price_cents — skip to avoid false alerts.
+          if (ci.variant_id || ci.addons.length > 0) return ci;
+
           const livePrice = priceMap.get(ci.menu_item_id);
           if (livePrice !== undefined && livePrice !== ci.price_cents) {
             changes.push({
