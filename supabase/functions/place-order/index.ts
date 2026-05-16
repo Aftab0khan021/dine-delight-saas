@@ -57,7 +57,7 @@ serve(async (req) => {
       return json({ error: "Invalid JSON" }, 400);
     }
 
-    const { restaurant_id, items, table_label, turnstileToken, customer_phone, customer_name, payment_method, payment_verified, order_type, delivery_address, tax_cents: clientTaxCents, tax_label: clientTaxLabel, tax_rate_pct: clientTaxRatePct, tip_cents: clientTipCents, extra_charges: clientExtraCharges } = payload;
+    const { restaurant_id, items, table_label, turnstileToken, customer_phone, customer_name, payment_method, payment_verified, via_staff, order_type, delivery_address, tax_cents: clientTaxCents, tax_label: clientTaxLabel, tax_rate_pct: clientTaxRatePct, tip_cents: clientTipCents, extra_charges: clientExtraCharges } = payload;
 
     // Resolve Turnstile secret key strictly from environment variables.
     // Prefer TURNSTILE_SECRET_KEY_PROD, fall back to TURNSTILE_SECRET_KEY_DEV.
@@ -73,6 +73,29 @@ serve(async (req) => {
     // Skip Turnstile for internal calls from verify-payment (already verified)
     if (payment_verified === true) {
       console.log('Skipping Turnstile — payment already verified by verify-payment');
+    } else if (via_staff === true) {
+      // Staff-placed orders: verify the caller is an authenticated user via JWT
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader) {
+        return json({ error: "Staff orders require authentication" }, 401);
+      }
+      const staffToken = authHeader.replace("Bearer ", "");
+      const { data: { user: staffUser }, error: staffAuthErr } = await supabase.auth.getUser(staffToken);
+      if (staffAuthErr || !staffUser) {
+        console.error("Staff auth failed:", staffAuthErr);
+        return json({ error: "Invalid staff authentication" }, 401);
+      }
+      // Verify staff has access to this restaurant
+      const { data: staffRole } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', staffUser.id)
+        .eq('restaurant_id', restaurant_id)
+        .maybeSingle();
+      if (!staffRole) {
+        return json({ error: "Staff not authorized for this restaurant" }, 403);
+      }
+      console.log(`Staff order placed by user: ${staffUser.id} (${staffUser.email}) for restaurant: ${restaurant_id}`);
     } else {
     // Verify Turnstile token with Cloudflare
     if (!turnstileToken) {

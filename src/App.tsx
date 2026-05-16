@@ -53,6 +53,7 @@ const AdminAnalytics = lazy(() => import("./apps/admin-panel/pages/Analytics"));
 const AdminDeliveryZones = lazy(() => import("./apps/admin-panel/pages/DeliveryZones"));
 const AdminExploreFeatures = lazy(() => import("./apps/admin-panel/pages/ExploreFeatures"));
 const AdminWhatsAppSettings = lazy(() => import("./apps/admin-panel/pages/WhatsAppSettings"));
+const AdminQuickOrder = lazy(() => import("./apps/admin-panel/pages/QuickOrder"));
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Super Admin — lazy-loaded (only super admins need these, very few users)
@@ -169,6 +170,7 @@ function SmartAdminRedirect() {
   const staffRoutes = [
     { path: "/admin/dashboard", perm: "view_dashboard" },
     { path: "/admin/orders", perm: "view_orders" },
+    { path: "/admin/quick-order", perm: "manage_orders" },
     { path: "/admin/kitchen", perm: "view_kitchen" },
     { path: "/admin/menu", perm: "view_menu" },
     { path: "/admin/qr", perm: "view_qr" },
@@ -218,6 +220,7 @@ const App = () => (
             <Route index element={<SmartAdminRedirect />} />
             <Route path="dashboard" element={<LazyPage><ProtectedRoute permission="view_dashboard"><AdminDashboard /></ProtectedRoute></LazyPage>} />
             <Route path="orders" element={<LazyPage><ProtectedRoute permission="view_orders"><AdminOrders /></ProtectedRoute></LazyPage>} />
+            <Route path="quick-order" element={<LazyPage><ProtectedRoute permission="manage_orders"><AdminQuickOrder /></ProtectedRoute></LazyPage>} />
             <Route path="menu" element={<LazyPage><ProtectedRoute permission="view_menu"><AdminMenu /></ProtectedRoute></LazyPage>} />
             <Route path="qr" element={<LazyPage><ProtectedRoute permission="view_qr"><AdminQrMenu /></ProtectedRoute></LazyPage>} />
             {/* Backwards compatible */}
