@@ -22,7 +22,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useSEO } from "@/hooks/useSEO";
 import { CopyButton } from "@/apps/admin-panel/components/qr/CopyButton";
-import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote, ShieldAlert, Moon, Sun, Truck, Store, User, Tag, CheckCircle2, Smartphone, Copy, Split, Home, Grid2x2, List, Share2, Wifi, WifiOff, Zap, Star, ChevronDown } from "lucide-react";
+import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote, ShieldAlert, Moon, Sun, Truck, Store, User, Tag, CheckCircle2, Smartphone, Copy, Split, Home, Grid2x2, List, Share2, Wifi, WifiOff, Zap, Star, ChevronDown, UtensilsCrossed } from "lucide-react";
 import { useRestaurantCart } from "../hooks/useRestaurantCart";
 import { useCollaborativeCart } from "../hooks/useCollaborativeCart";
 import { MenuItemDialog } from "../components/MenuItemDialog";
@@ -1093,7 +1093,7 @@ export default function PublicMenu() {
                   <Search className="h-4 w-4" />
                 </button>
 
-                {/* Horizontal scrollable pills */}
+                {/* Horizontal scrollable pills — no Categories button; that's the floating Menu FAB */}
                 <div className="flex-1 overflow-x-auto scrollbar-hide">
                   <div className="flex items-center px-2">
                     {categoriesWithItems.map(cat => {
@@ -1119,51 +1119,49 @@ export default function PublicMenu() {
                     })}
                   </div>
                 </div>
-
-                {/* Categories FAB trigger */}
-                <button
-                  onClick={() => setCatSheetOpen(true)}
-                  className="h-11 shrink-0 flex items-center gap-1 px-3 text-xs font-medium text-muted-foreground hover:text-foreground border-l transition-colors"
-                >
-                  <Grid2x2 className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Categories</span>
-                  <ChevronDown className="h-3 w-3" />
-                </button>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* ─── Category Bottom Sheet (Swiggy style) ─── */}
+      {/* ═══ Zomato-style "Menu" floating pill button ═══
+           Positioned bottom-left so it never conflicts with
+           Cart (bottom-right) or WhatsApp (right of cart).    */}
+      {categoriesWithItems.length > 0 && (
+        <button
+          onClick={() => setCatSheetOpen(true)}
+          className={`fixed ${
+            activeCart.itemCount > 0 && !cartOpen ? 'bottom-[88px]' : 'bottom-6'
+          } left-4 z-40 flex items-center gap-2 px-4 h-12 bg-foreground text-background dark:bg-white dark:text-black rounded-full shadow-xl font-semibold text-sm transition-all duration-200 hover:scale-105 active:scale-95`}
+          aria-label="View menu categories"
+        >
+          <UtensilsCrossed className="h-4 w-4" />
+          Menu
+        </button>
+      )}
+
+      {/* ═══ Zomato-style Category Bottom Sheet ═══ */}
       {catSheetOpen && (
         <div
-          className="fixed inset-0 z-50 flex flex-col justify-end"
+          className="fixed inset-0 z-[55] flex flex-col justify-end"
           onClick={() => setCatSheetOpen(false)}
         >
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/50" />
-          {/* Sheet */}
+          <div className="absolute inset-0 bg-black/60" />
+
+          {/* Sheet — white card matching Zomato style */}
           <div
-            className="relative bg-background rounded-t-2xl max-h-[75vh] flex flex-col"
+            className="relative bg-white dark:bg-zinc-900 rounded-t-2xl max-h-[78vh] flex flex-col shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
-            {/* Handle */}
+            {/* Drag handle */}
             <div className="flex justify-center pt-3 pb-1">
-              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+              <div className="w-10 h-1 rounded-full bg-zinc-200 dark:bg-zinc-700" />
             </div>
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-3 border-b">
-              <h2 className="text-base font-bold">Menu Categories</h2>
-              <button
-                onClick={() => setCatSheetOpen(false)}
-                className="h-8 w-8 rounded-full bg-muted flex items-center justify-center"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            {/* Category List */}
-            <div className="overflow-y-auto flex-1 px-2 pb-6">
+
+            {/* Scrollable category list */}
+            <div className="overflow-y-auto flex-1 px-4 pt-1 pb-2">
               {categoriesWithItems.map(cat => {
                 const isActive = activeCategory === cat.id;
                 return (
@@ -1171,29 +1169,36 @@ export default function PublicMenu() {
                     key={cat.id}
                     onClick={() => {
                       setCatSheetOpen(false);
-                      // scroll after sheet closes
                       setTimeout(() => scrollToCategory(cat.id), 250);
                     }}
-                    className={`w-full flex items-center justify-between px-3 py-4 rounded-xl text-left transition-colors ${
-                      isActive
-                        ? "bg-primary/10 text-primary"
-                        : "text-foreground hover:bg-muted"
-                    }`}
+                    className={`w-full flex items-center justify-between py-4 border-b border-zinc-100 dark:border-zinc-800 last:border-0 text-left transition-colors`}
                   >
-                    <div className="flex items-center gap-3">
-                      <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${
-                        isActive ? "bg-primary" : "bg-muted-foreground/30"
-                      }`} />
-                      <span className={`text-sm ${isActive ? "font-bold" : "font-medium"}`}>{cat.name}</span>
-                    </div>
-                    <span className={`text-sm font-semibold tabular-nums ${
-                      isActive ? "text-primary" : "text-muted-foreground"
+                    <span className={`text-base ${
+                      isActive
+                        ? 'text-primary font-bold'
+                        : 'text-zinc-800 dark:text-zinc-100 font-normal'
+                    }`}>
+                      {cat.name}
+                    </span>
+                    <span className={`text-base font-semibold tabular-nums ml-4 ${
+                      isActive ? 'text-primary' : 'text-zinc-400 dark:text-zinc-500'
                     }`}>
                       {cat.items.length}
                     </span>
                   </button>
                 );
               })}
+            </div>
+
+            {/* Close button — Zomato style */}
+            <div className="px-4 pt-2 pb-6">
+              <button
+                onClick={() => setCatSheetOpen(false)}
+                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 font-semibold text-sm hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+              >
+                <X className="h-4 w-4" />
+                Close
+              </button>
             </div>
           </div>
         </div>
@@ -1485,7 +1490,7 @@ export default function PublicMenu() {
             type="button"
             className={`fixed ${
               activeCart.itemCount > 0 && !cartOpen
-                ? 'bottom-[88px]'  // above the ~68px sticky cart bar
+                ? 'bottom-[88px]'  // clear the ~68px sticky cart bar
                 : 'bottom-6'
             } right-4 z-40 transition-all duration-200 ${cartBounce ? 'scale-125' : 'scale-100'}`}
             aria-label="Open cart"
@@ -2155,10 +2160,10 @@ export default function PublicMenu() {
               activeCart.itemCount > 0 && !cartOpen
                 ? 'bottom-[88px]'  // above the cart bar, left of Cart FAB
                 : 'bottom-6'
-            } right-20 z-40 h-14 w-14 rounded-full bg-green-500 text-white shadow-lg flex items-center justify-center hover:bg-green-600 hover:scale-110 transition-all`}
+            } right-[92px] z-40 h-12 w-12 rounded-full bg-green-500 text-white shadow-lg flex items-center justify-center hover:bg-green-600 hover:scale-110 transition-all`}
             aria-label="Order via WhatsApp"
           >
-            <MessageCircle className="h-7 w-7" />
+            <MessageCircle className="h-6 w-6" />
           </a>
         );
       })()}
