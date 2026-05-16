@@ -88,6 +88,7 @@ export default function PublicMenu() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const categoryBarRef = useRef<HTMLDivElement>(null);
+  const [catSheetOpen, setCatSheetOpen] = useState(false);
   const cartBtnRef = useRef<HTMLButtonElement>(null);
 
   // M1: Grid / List view mode
@@ -819,28 +820,40 @@ export default function PublicMenu() {
     if (sections.length === 0) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setActiveCategory(entry.target.getAttribute("data-category-id"));
-          }
+        // Find the top-most intersecting entry
+        const visible = entries
+          .filter(e => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible.length > 0) {
+          const id = visible[0].target.getAttribute("data-category-id");
+          if (id) setActiveCategory(id);
         }
       },
-      // rootMargin top must match the combined sticky bar height (~117px)
-      { rootMargin: "-120px 0px -55% 0px", threshold: 0 }
+      { rootMargin: "-130px 0px -50% 0px", threshold: 0 }
     );
     sections.forEach(s => observer.observe(s));
     return () => observer.disconnect();
   }, [categoriesWithItems]);
 
+  // Auto-scroll the active pill into view in the horizontal bar
+  useEffect(() => {
+    if (!activeCategory || !categoryBarRef.current) return;
+    const activePill = categoryBarRef.current.querySelector(`[data-cat-pill="${activeCategory}"]`) as HTMLElement | null;
+    if (activePill) activePill.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [activeCategory]);
+
   /**
-   * Scrolls to a category section.
-   * Each <section> has scrollMarginTop set so scrollIntoView automatically
-   * accounts for the sticky header + category bar heights.
+   * Scroll to a category section with a fixed offset for both sticky bars.
+   * Uses window.scrollTo which is more reliable than scrollIntoView.
    */
+  const STICKY_OFFSET = 130; // header (~73px) + category bar (~45px) + 12px gap
   const scrollToCategory = useCallback((catId: string) => {
-    const el = document.getElementById(`section-${catId}`);
+    const el = document.getElementById(`cat-section-${catId}`);
     if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    const rect = el.getBoundingClientRect();
+    const scrollTop = window.scrollY + rect.top - STICKY_OFFSET;
+    window.scrollTo({ top: scrollTop, behavior: "smooth" });
+    setActiveCategory(catId);
   }, []);
 
   return (
@@ -1052,11 +1065,10 @@ export default function PublicMenu() {
         </details>
       </div>
 
-      {/* ─── Swiggy/Zomato-style Category Jump Bar ─── */}
+      {/* ─── Swiggy/Zomato-style Sticky Category Bar ─── */}
       {categoriesWithItems.length > 0 && (
         <div className="sticky top-[73px] z-[9] border-b bg-background/98 backdrop-blur shadow-sm">
           <div className="w-full max-w-3xl mx-auto">
-            {/* Search mode */}
             {searchOpen ? (
               <div className="flex items-center gap-2 px-4 py-2.5">
                 <Search className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -1073,108 +1085,116 @@ export default function PublicMenu() {
               </div>
             ) : (
               <div className="flex items-center" ref={categoryBarRef}>
-                {/* Search icon */}
+                {/* Search */}
                 <button
                   onClick={() => setSearchOpen(true)}
                   className="h-11 w-10 shrink-0 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors border-r"
-                  title="Search"
                 >
                   <Search className="h-4 w-4" />
                 </button>
 
-                {/* Scrollable category pills */}
+                {/* Horizontal scrollable pills */}
                 <div className="flex-1 overflow-x-auto scrollbar-hide">
-                  <div className="flex items-center gap-0 px-2">
+                  <div className="flex items-center px-2">
                     {categoriesWithItems.map(cat => {
                       const isActive = activeCategory === cat.id;
                       return (
                         <button
                           key={cat.id}
-                          onClick={() => {
-                            scrollToCategory(cat.id);
-                            setActiveCategory(cat.id);
-                          }}
-                          className={`relative shrink-0 flex items-center gap-1.5 px-3 py-3 text-xs font-medium transition-colors whitespace-nowrap ${
-                            isActive
-                              ? "text-primary font-semibold"
-                              : "text-muted-foreground hover:text-foreground"
+                          data-cat-pill={cat.id}
+                          onClick={() => scrollToCategory(cat.id)}
+                          className={`relative shrink-0 flex items-center gap-1.5 px-3 py-3 text-xs font-medium transition-all whitespace-nowrap ${
+                            isActive ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"
                           }`}
                         >
                           {cat.name}
                           <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full text-[10px] font-bold px-1 transition-colors ${
-                            isActive
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-muted text-muted-foreground"
+                            isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
                           }`}>
                             {cat.items.length}
                           </span>
-                          {/* Active underline indicator */}
-                          {isActive && (
-                            <span className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full bg-primary" />
-                          )}
+                          {isActive && <span className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full bg-primary" />}
                         </button>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* Categories drawer trigger */}
-                <Drawer>
-                  <DrawerTrigger asChild>
-                    <button
-                      className="h-11 shrink-0 flex items-center gap-1 px-3 text-xs font-medium text-muted-foreground hover:text-foreground border-l transition-colors"
-                      title="All Categories"
-                    >
-                      <Grid2x2 className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Categories</span>
-                      <ChevronDown className="h-3 w-3" />
-                    </button>
-                  </DrawerTrigger>
-                  <DrawerContent className="max-h-[70vh]">
-                    <DrawerHeader className="pb-2">
-                      <DrawerTitle className="text-lg font-bold">Menu Categories</DrawerTitle>
-                    </DrawerHeader>
-                    <div className="overflow-y-auto px-4 pb-2">
-                      {categoriesWithItems.map((cat, idx) => {
-                        const isActive = activeCategory === cat.id;
-                        return (
-                          <DrawerClose asChild key={cat.id}>
-                            <button
-                              onClick={() => {
-                                setActiveCategory(cat.id);
-                                // Delay scroll until after the drawer close animation (~300ms)
-                                setTimeout(() => scrollToCategory(cat.id), 320);
-                              }}
-                              className={`w-full flex items-center justify-between py-3.5 text-left border-b last:border-0 transition-colors ${
-                                isActive ? "text-primary" : "text-foreground hover:text-primary"
-                              }`}
-                            >
-                              <div className="flex items-center gap-3">
-                                {/* Colored index dot */}
-                                <span className={`h-2 w-2 rounded-full shrink-0 ${
-                                  isActive ? "bg-primary" : "bg-muted-foreground/40"
-                                }`} />
-                                <span className={`text-sm font-medium ${isActive ? "font-semibold" : ""}`}>{cat.name}</span>
-                              </div>
-                              <span className={`text-sm tabular-nums ${
-                                isActive ? "text-primary font-bold" : "text-muted-foreground"
-                              }`}>
-                                {cat.items.length}
-                              </span>
-                            </button>
-                          </DrawerClose>
-                        );
-                      })}
-                    </div>
-                    <DrawerFooter className="pt-2">
-                      <DrawerClose asChild>
-                        <Button variant="outline" className="w-full">Close</Button>
-                      </DrawerClose>
-                    </DrawerFooter>
-                  </DrawerContent>
-                </Drawer>
+                {/* Categories FAB trigger */}
+                <button
+                  onClick={() => setCatSheetOpen(true)}
+                  className="h-11 shrink-0 flex items-center gap-1 px-3 text-xs font-medium text-muted-foreground hover:text-foreground border-l transition-colors"
+                >
+                  <Grid2x2 className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Categories</span>
+                  <ChevronDown className="h-3 w-3" />
+                </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Category Bottom Sheet (Swiggy style) ─── */}
+      {catSheetOpen && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col justify-end"
+          onClick={() => setCatSheetOpen(false)}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/50" />
+          {/* Sheet */}
+          <div
+            className="relative bg-background rounded-t-2xl max-h-[75vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+            </div>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b">
+              <h2 className="text-base font-bold">Menu Categories</h2>
+              <button
+                onClick={() => setCatSheetOpen(false)}
+                className="h-8 w-8 rounded-full bg-muted flex items-center justify-center"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {/* Category List */}
+            <div className="overflow-y-auto flex-1 px-2 pb-6">
+              {categoriesWithItems.map(cat => {
+                const isActive = activeCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => {
+                      setCatSheetOpen(false);
+                      // scroll after sheet closes
+                      setTimeout(() => scrollToCategory(cat.id), 250);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-4 rounded-xl text-left transition-colors ${
+                      isActive
+                        ? "bg-primary/10 text-primary"
+                        : "text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${
+                        isActive ? "bg-primary" : "bg-muted-foreground/30"
+                      }`} />
+                      <span className={`text-sm ${isActive ? "font-bold" : "font-medium"}`}>{cat.name}</span>
+                    </div>
+                    <span className={`text-sm font-semibold tabular-nums ${
+                      isActive ? "text-primary" : "text-muted-foreground"
+                    }`}>
+                      {cat.items.length}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
@@ -1267,10 +1287,9 @@ export default function PublicMenu() {
               return (
                 <section
                   key={category.id}
-                  id={`section-${category.id}`}
+                  id={`cat-section-${category.id}`}
                   data-category-id={category.id}
                   aria-labelledby={`cat-${category.id}`}
-                  style={{ scrollMarginTop: "130px" }}
                 >
                   <div className="flex items-baseline justify-between gap-3 mb-4">
                     <div className="min-w-0">
@@ -2124,7 +2143,13 @@ export default function PublicMenu() {
         const waNum = s && typeof s === 'object' ? s.whatsapp_number : null;
         if (!waNum) return null;
         return (
-          <a href={`https://wa.me/${waNum.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi! I'd like to place an order from ${restaurantQuery.data?.name || 'your restaurant'}`)}`} target="_blank" rel="noopener noreferrer" className={`fixed ${activeCart.itemCount > 0 && !cartOpen ? 'bottom-24' : 'bottom-6'} right-4 z-40 h-14 w-14 rounded-full bg-green-500 text-white shadow-lg flex items-center justify-center hover:bg-green-600 hover:scale-110 transition-all`} aria-label="Order via WhatsApp">
+          <a
+            href={`https://wa.me/${waNum.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi! I'd like to place an order from ${restaurantQuery.data?.name || 'your restaurant'}`)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="fixed bottom-4 right-20 z-40 h-14 w-14 rounded-full bg-green-500 text-white shadow-lg flex items-center justify-center hover:bg-green-600 hover:scale-110 transition-all"
+            aria-label="Order via WhatsApp"
+          >
             <MessageCircle className="h-7 w-7" />
           </a>
         );
