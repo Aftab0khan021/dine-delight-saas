@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Plus, Package, AlertTriangle, ArrowUpDown, RefreshCw, Link2, Unlink, History, MoreHorizontal, Pencil, Trash2, Lightbulb, X, Copy, Check, Search } from "lucide-react";
+import { Plus, Package, AlertTriangle, ArrowUpDown, RefreshCw, Link2, Unlink, History, MoreHorizontal, Pencil, Trash2, Lightbulb, X, Copy, Check, Search, UtensilsCrossed, ChevronRight } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -90,11 +90,22 @@ function InventoryContent() {
   const [bulkLinkRows, setBulkLinkRows] = useState<BulkLinkRow[]>([]);
   const [linkSearch, setLinkSearch] = useState("");
 
+  // ── Menu Items reverse view ──
+  type InventoryView = "ingredients" | "menu-items";
+  const [inventoryView, setInventoryView] = useState<InventoryView>("ingredients");
+  const [miLinkOpen, setMiLinkOpen] = useState(false);
+  const [selectedMenuItem, setSelectedMenuItem] = useState<{ id: string; name: string } | null>(null);
+  const [miSearch, setMiSearch] = useState("");
+  const [miIngSearch, setMiIngSearch] = useState("");
+  type MiIngRow = { ingredient_id: string; name: string; unit: string; qty: string; recipe_unit: string; factor: string };
+  const [miIngRows, setMiIngRows] = useState<MiIngRow[]>([]);
+
   // ── Real-time: invalidate inventory queries on any DB change ──
   useRealtimeSync(restaurant?.id, [
     { table: "ingredients",          queryKey: ["ingredients"] },
     { table: "stock_movements",       queryKey: ["stock-history"] },
     { table: "ingredient_menu_items", queryKey: ["ingredient-links"] },
+    { table: "menu_item_ingredients", queryKey: ["mi-ingredient-links"] },
   ]);
 
   // Queries
@@ -142,6 +153,64 @@ function InventoryContent() {
     },
   });
 
+  // ── Reverse view: ingredients for a specific menu item ──
+  const miLinksQuery = useQuery({
+    queryKey: ["mi-ingredient-links", selectedMenuItem?.id],
+    enabled: !!selectedMenuItem?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("menu_item_ingredients")
+        .select("*, ingredients(name, unit, current_stock)")
+        .eq("menu_item_id", selectedMenuItem!.id);
+      if (error) throw error;
+      return (data || []) as (MenuItemLink & { ingredients?: { name: string; unit: string; current_stock: number } })[];
+    },
+  });
+
+  // ── Reverse bulk link: link multiple ingredients to one menu item ──
+  const miLinkMutation = useMutation({
+    mutationFn: async () => {
+      if (miIngRows.length === 0) throw new Error("Select at least one ingredient");
+      const inserts = miIngRows.map(row => {
+        const ing = ingredients.find(i => i.id === row.ingredient_id);
+        const isSameUnit = !row.recipe_unit || row.recipe_unit === ing?.unit;
+        const factor = isSameUnit ? 1 : parseFloat(row.factor);
+        if (!isFinite(factor) || isNaN(factor) || factor <= 0) {
+          throw new Error(`Invalid conversion factor for ${row.name}`);
+        }
+        return {
+          menu_item_id: selectedMenuItem!.id,
+          ingredient_id: row.ingredient_id,
+          quantity_needed: parseFloat(row.qty) || 1,
+          restaurant_id: restaurant!.id,
+          recipe_unit: isSameUnit ? null : row.recipe_unit,
+          conversion_factor: factor,
+        };
+      });
+      const { error } = await supabase.from("menu_item_ingredients").insert(inserts);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["mi-ingredient-links"] });
+      qc.invalidateQueries({ queryKey: ["ingredient-links"] });
+      setMiIngRows([]);
+      setMiIngSearch("");
+      toast({ title: `Linked ${miIngRows.length} ingredient(s) to ${selectedMenuItem?.name}` });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  // ── Reverse unlink: remove one ingredient from a menu item ──
+  const miUnlinkMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("menu_item_ingredients").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["mi-ingredient-links"] });
+      qc.invalidateQueries({ queryKey: ["ingredient-links"] });
+      toast({ title: "Ingredient unlinked" });
+    },
+  });
   // Mutations
   const addMutation = useMutation({
     mutationFn: async () => {
@@ -340,7 +409,25 @@ function InventoryContent() {
           <h1 className="text-2xl font-bold flex items-center gap-2"><Package className="h-6 w-6" /> Inventory</h1>
           <p className="text-muted-foreground text-sm">Track ingredients and auto-manage menu item availability</p>
         </div>
-        <Button onClick={() => setAddOpen(true)}><Plus className="h-4 w-4 mr-2" /> Add Ingredient</Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setAddOpen(true)}><Plus className="h-4 w-4 mr-2" /> Add Ingredient</Button>
+        </div>
+      </div>
+
+      {/* View Tabs */}
+      <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+        <button
+          onClick={() => setInventoryView("ingredients")}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors ${inventoryView === "ingredients" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          <Package className="h-3.5 w-3.5" /> Ingredients
+        </button>
+        <button
+          onClick={() => setInventoryView("menu-items")}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors ${inventoryView === "menu-items" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          <UtensilsCrossed className="h-3.5 w-3.5" /> Menu Items
+        </button>
       </div>
 
       {/* Alerts */}
@@ -363,6 +450,7 @@ function InventoryContent() {
         </Alert>
       )}
 
+      {inventoryView === "ingredients" && (<>
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{ingredients.length}</p><p className="text-xs text-muted-foreground">Total Ingredients</p></CardContent></Card>
@@ -448,6 +536,248 @@ function InventoryContent() {
           </Table>
         </CardContent>
       </Card>
+      </>)}
+
+      {/* ═══ MENU ITEMS VIEW — Reverse Linking ═══ */}
+      {inventoryView === "menu-items" && (() => {
+        const allMenuItems = menuItemsQuery.data || [];
+        const filteredMi = miSearch.trim()
+          ? allMenuItems.filter(m => m.name.toLowerCase().includes(miSearch.toLowerCase()))
+          : allMenuItems;
+        return (
+          <>
+            <Input placeholder="Search menu items..." value={miSearch} onChange={e => setMiSearch(e.target.value)} className="max-w-sm" />
+            <Card>
+              <CardHeader>
+                <CardTitle>Menu Items</CardTitle>
+                <CardDescription>Select a menu item to view or link ingredients. {allMenuItems.length} item(s) total.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {filteredMi.length === 0 && (
+                  <p className="text-center text-muted-foreground py-8">No menu items found.</p>
+                )}
+                {filteredMi.map(mi => {
+                  const isSelected = selectedMenuItem?.id === mi.id;
+                  const links = isSelected ? (miLinksQuery.data || []) : [];
+                  return (
+                    <div key={mi.id} className="rounded-lg border">
+                      {/* Menu item header row */}
+                      <button
+                        onClick={() => setSelectedMenuItem(isSelected ? null : mi)}
+                        className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors hover:bg-muted/50 ${
+                          isSelected ? 'bg-muted/30' : ''
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <UtensilsCrossed className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="font-medium text-sm truncate">{mi.name}</span>
+                        </div>
+                        <ChevronRight className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${isSelected ? 'rotate-90' : ''}`} />
+                      </button>
+
+                      {/* Expanded: show linked ingredients */}
+                      {isSelected && (
+                        <div className="border-t px-4 py-3 space-y-3">
+                          {/* Linked ingredients list */}
+                          {links.length > 0 ? (
+                            <div className="space-y-2">
+                              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Linked Ingredients</p>
+                              {links.map(link => {
+                                const ing = link.ingredients;
+                                const hasConversion = link.recipe_unit && link.recipe_unit !== ing?.unit;
+                                return (
+                                  <div key={link.id} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-medium">{ing?.name || 'Unknown'}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {hasConversion ? (
+                                          <>{link.quantity_needed} {link.recipe_unit} → {formatFactor(link.quantity_needed * (link.conversion_factor ?? 1))} {ing?.unit} per item</>
+                                        ) : (
+                                          <>{link.quantity_needed} {ing?.unit} per item</>
+                                        )}
+                                      </p>
+                                    </div>
+                                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                                      onClick={() => miUnlinkMutation.mutate(link.id)}>
+                                      <Unlink className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground text-center py-2">No ingredients linked yet.</p>
+                          )}
+
+                          {/* Add ingredients button */}
+                          <Button size="sm" variant="outline" className="w-full" onClick={() => {
+                            setMiLinkOpen(true);
+                            setMiIngRows([]);
+                            setMiIngSearch("");
+                          }}>
+                            <Plus className="h-3 w-3 mr-1" /> Link Ingredients
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          </>
+        );
+      })()}
+
+      {/* ═══ Reverse Link Dialog — Link Ingredients to Menu Item ═══ */}
+      <Dialog open={miLinkOpen} onOpenChange={(open) => { if (!open) { setMiLinkOpen(false); setMiIngRows([]); setMiIngSearch(""); } else setMiLinkOpen(true); }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Link Ingredients: {selectedMenuItem?.name}</DialogTitle>
+            <DialogDescription>Select ingredients and configure how much of each is used per order.</DialogDescription>
+          </DialogHeader>
+
+          {/* Ingredient selector */}
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Select Ingredients to Link</p>
+            <div className="relative mb-2">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              <Input placeholder="Search ingredients..." value={miIngSearch} onChange={e => setMiIngSearch(e.target.value)} className="pl-8 h-9 text-sm" />
+            </div>
+            <div className="max-h-40 overflow-y-auto border rounded-lg divide-y">
+              {(() => {
+                const existingIds = new Set((miLinksQuery.data || []).map(l => l.ingredient_id));
+                const selectedIds = new Set(miIngRows.map(r => r.ingredient_id));
+                const allIngs = ingredients.filter(i => !existingIds.has(i.id));
+                const filteredIngs = miIngSearch.trim()
+                  ? allIngs.filter(i => i.name.toLowerCase().includes(miIngSearch.toLowerCase()))
+                  : allIngs;
+
+                if (filteredIngs.length === 0) {
+                  return <p className="text-xs text-muted-foreground text-center py-3">No unlinked ingredients found.</p>;
+                }
+
+                return filteredIngs.map(ing => {
+                  const checked = selectedIds.has(ing.id);
+                  return (
+                    <label key={ing.id} className="flex items-center gap-2.5 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50 transition-colors">
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(v) => {
+                          if (v) {
+                            const smallerUnit = ing.unit === "kg" ? "g" : ing.unit === "L" ? "ml" : ing.unit;
+                            const autoFactor = smallerUnit !== ing.unit
+                              ? convertSameCategory(1, smallerUnit, ing.unit)
+                              : 1;
+                            setMiIngRows(prev => [...prev, {
+                              ingredient_id: ing.id,
+                              name: ing.name,
+                              unit: ing.unit,
+                              qty: ing.unit === "kg" ? "100" : ing.unit === "L" ? "100" : "1",
+                              recipe_unit: smallerUnit,
+                              factor: autoFactor !== null ? String(parseFloat(autoFactor.toFixed(6))) : "1",
+                            }]);
+                          } else {
+                            setMiIngRows(prev => prev.filter(r => r.ingredient_id !== ing.id));
+                          }
+                        }}
+                      />
+                      <span className="truncate">{ing.name}</span>
+                      <span className="ml-auto text-xs text-muted-foreground">{ing.unit}</span>
+                    </label>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+
+          {/* Per-ingredient configuration */}
+          {miIngRows.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Configure Each Ingredient <Badge variant="secondary" className="ml-1.5">{miIngRows.length}</Badge>
+                </p>
+                <button onClick={() => setMiIngRows([])} className="text-[10px] text-muted-foreground hover:text-foreground">Clear all</button>
+              </div>
+
+              <div className="space-y-2">
+                {/* Header */}
+                <div className="grid grid-cols-[1fr_60px_70px_60px_28px] gap-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-0.5">
+                  <span>Ingredient</span><span>Qty</span><span>Unit</span><span>Factor</span><span></span>
+                </div>
+                {miIngRows.map((row, idx) => {
+                  const ing = ingredients.find(i => i.id === row.ingredient_id);
+                  const storageUnit = ing?.unit || "pcs";
+                  const isDiffUnit = row.recipe_unit !== storageUnit;
+                  return (
+                    <div key={row.ingredient_id} className="space-y-1">
+                      <div className="grid grid-cols-[1fr_60px_70px_60px_28px] gap-1.5 items-center">
+                        <span className="text-sm truncate" title={row.name}>{row.name}</span>
+                        <Input type="number" value={row.qty} onChange={e => {
+                          const next = [...miIngRows]; next[idx] = { ...next[idx], qty: e.target.value }; setMiIngRows(next);
+                        }} className="h-7 text-xs" min="0.001" step="0.001" />
+                        <Select value={row.recipe_unit} onValueChange={v => {
+                          const next = [...miIngRows];
+                          let newFactor = "1";
+                          if (v !== storageUnit) {
+                            const hint = getSuggestedConversion(ing?.name ?? "", v, storageUnit);
+                            if (hint) { newFactor = String(hint.factor); }
+                            else { const auto = convertSameCategory(1, v, storageUnit); newFactor = auto !== null ? String(parseFloat(auto.toFixed(6))) : next[idx].factor; }
+                          }
+                          next[idx] = { ...next[idx], recipe_unit: v, factor: newFactor };
+                          setMiIngRows(next);
+                        }}>
+                          <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent position="popper" className="max-h-[200px]">
+                            {ALL_UNIT_SYMBOLS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <Input type="number" value={row.factor} onChange={e => {
+                          const next = [...miIngRows]; next[idx] = { ...next[idx], factor: e.target.value }; setMiIngRows(next);
+                        }} className="h-7 text-xs" min="0.000001" step="0.000001" disabled={!isDiffUnit} />
+                        <button onClick={() => setMiIngRows(prev => prev.filter(r => r.ingredient_id !== row.ingredient_id))}
+                          className="h-7 w-7 rounded flex items-center justify-center hover:bg-destructive/10 hover:text-destructive text-muted-foreground">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+
+                      {/* Conversion detail panel */}
+                      {isDiffUnit && (
+                        <div className="ml-0 rounded-lg border border-dashed bg-muted/20 px-3 py-2 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-muted-foreground font-medium">1 {row.recipe_unit} = {row.factor} {storageUnit}</span>
+                            <Button type="button" size="sm" variant="outline" className="h-6 text-[10px] gap-1 px-2"
+                              onClick={() => {
+                                const hint = getSuggestedConversion(ing?.name ?? "", row.recipe_unit, storageUnit);
+                                const next = [...miIngRows];
+                                if (hint) { next[idx] = { ...next[idx], factor: String(hint.factor) }; setMiIngRows(next); toast({ title: `💡 ${hint.label}`, description: hint.note || undefined }); }
+                                else { toast({ title: "No suggestion found", description: "Enter conversion factor manually", variant: "destructive" }); }
+                              }}>
+                              <Lightbulb className="h-2.5 w-2.5" /> Suggest
+                            </Button>
+                          </div>
+                          {parseFloat(row.qty) > 0 && parseFloat(row.factor) > 0 && (
+                            <div className="rounded bg-primary/10 px-2.5 py-1.5 text-[10px] font-medium text-primary">
+                              {row.qty} {row.recipe_unit} × {row.factor} = <strong>{formatFactor(parseFloat(row.qty) * parseFloat(row.factor))} {storageUnit}</strong> deducted per order
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setMiLinkOpen(false); setMiIngRows([]); }}>Cancel</Button>
+            <Button onClick={() => miLinkMutation.mutate()} disabled={miIngRows.length === 0 || miLinkMutation.isPending}>
+              {miLinkMutation.isPending ? "Linking..." : `Link ${miIngRows.length} ingredient(s)`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Ingredient Dialog — Single or Bulk mode */}
       <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) { setBulkMode(false); } }}>
