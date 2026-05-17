@@ -802,60 +802,115 @@ function InventoryContent() {
                     <span>Factor</span>
                     <span></span>
                   </div>
-                  {bulkLinkRows.map((row, idx) => (
-                    <div key={row.menu_item_id} className="grid grid-cols-[1fr_70px_80px_70px_28px] gap-1.5 items-center">
-                      <span className="text-sm truncate" title={row.name}>{row.name}</span>
-                      <Input
-                        type="number"
-                        value={row.qty}
-                        onChange={e => {
-                          const next = [...bulkLinkRows];
-                          next[idx] = { ...next[idx], qty: e.target.value };
-                          setBulkLinkRows(next);
-                        }}
-                        className="h-7 text-xs"
-                        min="0.001" step="0.001"
-                      />
-                      <Select
-                        value={row.recipe_unit}
-                        onValueChange={v => {
-                          const next = [...bulkLinkRows];
-                          // Auto-calculate factor when changing unit
-                          let newFactor = "1";
-                          if (v !== selected?.unit) {
-                            const auto = convertSameCategory(1, v, selected?.unit || "pcs");
-                            newFactor = auto !== null ? String(parseFloat(auto.toFixed(6))) : next[idx].factor;
-                          }
-                          next[idx] = { ...next[idx], recipe_unit: v, factor: newFactor };
-                          setBulkLinkRows(next);
-                        }}
-                      >
-                        <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent position="popper" className="max-h-[200px]">
-                          {UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        type="number"
-                        value={row.factor}
-                        onChange={e => {
-                          const next = [...bulkLinkRows];
-                          next[idx] = { ...next[idx], factor: e.target.value };
-                          setBulkLinkRows(next);
-                        }}
-                        className="h-7 text-xs"
-                        min="0.000001" step="0.000001"
-                        disabled={row.recipe_unit === selected?.unit}
-                        title={row.recipe_unit === selected?.unit ? "No conversion needed" : `1 ${row.recipe_unit} = ? ${selected?.unit}`}
-                      />
-                      <button
-                        onClick={() => setBulkLinkRows(prev => prev.filter(r => r.menu_item_id !== row.menu_item_id))}
-                        className="h-7 w-7 rounded flex items-center justify-center hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  ))}
+                  {bulkLinkRows.map((row, idx) => {
+                    const isDiffUnit = row.recipe_unit !== selected?.unit;
+                    return (
+                      <div key={row.menu_item_id} className="space-y-1">
+                        {/* Main row */}
+                        <div className="grid grid-cols-[1fr_70px_80px_70px_28px] gap-1.5 items-center">
+                          <span className="text-sm truncate" title={row.name}>{row.name}</span>
+                          <Input
+                            type="number"
+                            value={row.qty}
+                            onChange={e => {
+                              const next = [...bulkLinkRows];
+                              next[idx] = { ...next[idx], qty: e.target.value };
+                              setBulkLinkRows(next);
+                            }}
+                            className="h-7 text-xs"
+                            min="0.001" step="0.001"
+                          />
+                          <Select
+                            value={row.recipe_unit}
+                            onValueChange={v => {
+                              const next = [...bulkLinkRows];
+                              // Auto-calculate factor when changing unit
+                              let newFactor = "1";
+                              if (v !== selected?.unit) {
+                                // Try ingredient-specific suggestion first
+                                const hint = getSuggestedConversion(selected?.name ?? "", v, selected?.unit ?? "");
+                                if (hint) {
+                                  newFactor = String(hint.factor);
+                                } else {
+                                  const auto = convertSameCategory(1, v, selected?.unit || "pcs");
+                                  newFactor = auto !== null ? String(parseFloat(auto.toFixed(6))) : next[idx].factor;
+                                }
+                              }
+                              next[idx] = { ...next[idx], recipe_unit: v, factor: newFactor };
+                              setBulkLinkRows(next);
+                            }}
+                          >
+                            <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent position="popper" className="max-h-[200px]">
+                              {UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            type="number"
+                            value={row.factor}
+                            onChange={e => {
+                              const next = [...bulkLinkRows];
+                              next[idx] = { ...next[idx], factor: e.target.value };
+                              setBulkLinkRows(next);
+                            }}
+                            className="h-7 text-xs"
+                            min="0.000001" step="0.000001"
+                            disabled={!isDiffUnit}
+                            title={!isDiffUnit ? "No conversion needed" : `1 ${row.recipe_unit} = ? ${selected?.unit}`}
+                          />
+                          <button
+                            onClick={() => setBulkLinkRows(prev => prev.filter(r => r.menu_item_id !== row.menu_item_id))}
+                            className="h-7 w-7 rounded flex items-center justify-center hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+
+                        {/* Conversion detail panel — shown when recipe unit ≠ storage unit */}
+                        {isDiffUnit && (
+                          <div className="ml-0 rounded-lg border border-dashed bg-muted/20 px-3 py-2 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-muted-foreground font-medium">
+                                1 {row.recipe_unit} = {row.factor} {selected?.unit}
+                              </span>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-6 text-[10px] gap-1 px-2"
+                                onClick={() => {
+                                  const hint = getSuggestedConversion(
+                                    selected?.name ?? "",
+                                    row.recipe_unit,
+                                    selected?.unit ?? "",
+                                  );
+                                  const next = [...bulkLinkRows];
+                                  if (hint) {
+                                    next[idx] = { ...next[idx], factor: String(hint.factor) };
+                                    setBulkLinkRows(next);
+                                    toast({ title: `💡 ${hint.label}`, description: hint.note || undefined });
+                                  } else {
+                                    toast({ title: "No suggestion found", description: "Enter conversion factor manually", variant: "destructive" });
+                                  }
+                                }}
+                              >
+                                <Lightbulb className="h-2.5 w-2.5" /> Suggest
+                              </Button>
+                            </div>
+
+                            {/* Live deduction preview */}
+                            {parseFloat(row.qty) > 0 && parseFloat(row.factor) > 0 && (
+                              <div className="rounded bg-primary/10 px-2.5 py-1.5 text-[10px] font-medium text-primary">
+                                {row.qty} {row.recipe_unit} × {row.factor} ={" "}
+                                <strong>{formatFactor(parseFloat(row.qty) * parseFloat(row.factor))} {selected?.unit}</strong>
+                                {" "}deducted per order
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
