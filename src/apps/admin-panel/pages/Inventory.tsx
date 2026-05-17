@@ -85,8 +85,9 @@ function InventoryContent() {
   const [bulkRows, setBulkRows] = useState<BulkRow[]>([emptyBulkRow(), emptyBulkRow(), emptyBulkRow()]);
   const [bulkAdding, setBulkAdding] = useState(false);
 
-  // ── Bulk link state ──
-  const [bulkLinkItems, setBulkLinkItems] = useState<string[]>([]);
+  // ── Bulk link state — per-item qty/unit/factor ──
+  type BulkLinkRow = { menu_item_id: string; name: string; qty: string; recipe_unit: string; factor: string };
+  const [bulkLinkRows, setBulkLinkRows] = useState<BulkLinkRow[]>([]);
   const [linkSearch, setLinkSearch] = useState("");
 
   // ── Real-time: invalidate inventory queries on any DB change ──
@@ -288,31 +289,33 @@ function InventoryContent() {
     }
   }
 
-  // ── Bulk link mutation — link multiple menu items to one ingredient ──
+  // ── Bulk link mutation — link multiple menu items with per-item config ──
   const bulkLinkMutation = useMutation({
     mutationFn: async () => {
-      if (bulkLinkItems.length === 0) throw new Error("Select at least one menu item");
-      const factor = parseFloat(linkFactor);
-      if (!isFinite(factor) || isNaN(factor) || factor <= 0) {
-        throw new Error("Conversion factor must be a positive number.");
-      }
-      const recipeUnit = linkRecipeUnit && linkRecipeUnit !== selected?.unit ? linkRecipeUnit : null;
-      const inserts = bulkLinkItems.map(menuItemId => ({
-        menu_item_id: menuItemId,
-        ingredient_id: selected!.id,
-        quantity_needed: parseFloat(linkQty) || 1,
-        restaurant_id: restaurant!.id,
-        recipe_unit: recipeUnit,
-        conversion_factor: factor,
-      }));
+      if (bulkLinkRows.length === 0) throw new Error("Select at least one menu item");
+      const inserts = bulkLinkRows.map(row => {
+        const factor = parseFloat(row.factor);
+        if (!isFinite(factor) || isNaN(factor) || factor <= 0) {
+          throw new Error(`Invalid factor for ${row.name}`);
+        }
+        const recipeUnit = row.recipe_unit && row.recipe_unit !== selected?.unit ? row.recipe_unit : null;
+        return {
+          menu_item_id: row.menu_item_id,
+          ingredient_id: selected!.id,
+          quantity_needed: parseFloat(row.qty) || 1,
+          restaurant_id: restaurant!.id,
+          recipe_unit: recipeUnit,
+          conversion_factor: factor,
+        };
+      });
       const { error } = await supabase.from("menu_item_ingredients").insert(inserts);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ingredient-links"] });
-      setBulkLinkItems([]);
+      setBulkLinkRows([]);
       setLinkItemId(""); setLinkQty("1"); setLinkRecipeUnit(""); setLinkFactor("1"); setLinkSuggestion(null);
-      toast({ title: `Linked to menu items` });
+      toast({ title: `Linked ${bulkLinkRows.length} menu items` });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -448,7 +451,7 @@ function InventoryContent() {
 
       {/* Add Ingredient Dialog — Single or Bulk mode */}
       <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) { setBulkMode(false); } }}>
-        <DialogContent className={bulkMode ? "max-w-2xl" : ""}>
+        <DialogContent className={bulkMode ? "max-w-2xl max-h-[85vh] overflow-y-auto" : ""}>
           <DialogHeader>
             <DialogTitle>Add Ingredient{bulkMode ? "s" : ""}</DialogTitle>
             <DialogDescription>
@@ -483,7 +486,7 @@ function InventoryContent() {
                   <div><Label>Unit</Label>
                     <Select value={form.unit} onValueChange={v => setForm(p => ({ ...p, unit: v }))}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>{UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                      <SelectContent position="popper" className="max-h-[200px]">{UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div><Label>Initial Stock</Label><Input type="number" value={form.current_stock} onChange={e => setForm(p => ({ ...p, current_stock: e.target.value }))} /></div>
@@ -530,7 +533,7 @@ function InventoryContent() {
                       }}
                     >
                       <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>{UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                      <SelectContent position="popper" className="max-h-[200px]">{UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
                     </Select>
                     <Input
                       type="number"
@@ -604,230 +607,258 @@ function InventoryContent() {
         </DialogContent>
       </Dialog>
 
-      {/* Link Menu Items Dialog — M1: reset link state on close */}
+      {/* Link Menu Items Dialog */}
       <Dialog open={linkOpen} onOpenChange={(open) => {
         setLinkOpen(open);
         if (!open) {
           setLinkItemId(""); setLinkQty("1");
           setLinkRecipeUnit(""); setLinkFactor("1"); setLinkSuggestion(null);
-          setBulkLinkItems([]); setLinkSearch("");
+          setBulkLinkRows([]); setLinkSearch("");
         }
       }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader className="shrink-0">
             <DialogTitle>Link Menu Items: {selected?.name}</DialogTitle>
             <DialogDescription>
-              Stored in <strong>{selected?.unit}</strong>. Set how much each menu item uses, in any unit.
+              Stored in <strong>{selected?.unit}</strong>. Select menu items and set how much each uses.
             </DialogDescription>
           </DialogHeader>
 
-          {/* Existing links */}
-          <div className="space-y-2 max-h-44 overflow-y-auto">
-            {(linksQuery.data || []).map(link => {
-              const hasConversion = link.recipe_unit && link.recipe_unit !== selected?.unit;
-              return (
-                <div key={link.id} className="flex items-center justify-between border rounded-lg px-3 py-2 gap-2">
-                  <div className="min-w-0">
-                    <span className="font-medium text-sm">{(link as any).menu_items?.name || "Unknown"}</span>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {hasConversion ? (
-                        <>
-                          <span className="text-primary font-medium">
-                            {link.quantity_needed} {link.recipe_unit}
-                          </span>
-                          {" → "}
-                          <span>
-                            {formatFactor(link.quantity_needed * (link.conversion_factor ?? 1))} {selected?.unit} per item
-                          </span>
-                        </>
-                      ) : (
-                        <span>{link.quantity_needed} {selected?.unit} per item</span>
-                      )}
-                    </div>
-                  </div>
-                  <Button size="sm" variant="ghost" onClick={() => unlinkMutation.mutate(link.id)}>
-                    <Unlink className="h-3 w-3" />
-                  </Button>
+          <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+            {/* Existing links */}
+            {(linksQuery.data || []).length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">Currently Linked</Label>
+                <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                  {(linksQuery.data || []).map(link => {
+                    const hasConversion = link.recipe_unit && link.recipe_unit !== selected?.unit;
+                    return (
+                      <div key={link.id} className="flex items-center justify-between border rounded-lg px-3 py-2 gap-2">
+                        <div className="min-w-0">
+                          <span className="font-medium text-sm">{(link as any).menu_items?.name || "Unknown"}</span>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {hasConversion ? (
+                              <>
+                                <span className="text-primary font-medium">
+                                  {link.quantity_needed} {link.recipe_unit}
+                                </span>
+                                {" → "}
+                                <span>
+                                  {formatFactor(link.quantity_needed * (link.conversion_factor ?? 1))} {selected?.unit} per item
+                                </span>
+                              </>
+                            ) : (
+                              <span>{link.quantity_needed} {selected?.unit} per item</span>
+                            )}
+                          </div>
+                        </div>
+                        <Button size="sm" variant="ghost" onClick={() => unlinkMutation.mutate(link.id)}>
+                          <Unlink className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
-            {(linksQuery.data || []).length === 0 && (
+              </div>
+            )}
+
+            {(linksQuery.data || []).length === 0 && bulkLinkRows.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-4">No menu items linked yet.</p>
+            )}
+
+            {/* Add new links */}
+            <div className="border-t pt-4 space-y-3">
+              <Label>Select Menu Items to Link</Label>
+
+              {/* Search filter */}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                <Input
+                  value={linkSearch}
+                  onChange={e => setLinkSearch(e.target.value)}
+                  placeholder="Search menu items…"
+                  className="h-8 text-sm pl-8"
+                />
+              </div>
+
+              {/* Checkbox list of menu items */}
+              <div className="max-h-36 overflow-y-auto border rounded-lg divide-y">
+                {(() => {
+                  const existingIds = new Set((linksQuery.data || []).map(l => l.menu_item_id));
+                  const selectedIds = new Set(bulkLinkRows.map(r => r.menu_item_id));
+                  const allMenuItems = (menuItemsQuery.data || []).filter(m => !existingIds.has(m.id));
+                  const filtered = linkSearch.trim()
+                    ? allMenuItems.filter(m => m.name.toLowerCase().includes(linkSearch.toLowerCase()))
+                    : allMenuItems;
+
+                  if (filtered.length === 0) {
+                    return <p className="text-xs text-muted-foreground text-center py-3">No unlinked menu items found.</p>;
+                  }
+
+                  return filtered.map(m => {
+                    const checked = selectedIds.has(m.id);
+                    return (
+                      <label
+                        key={m.id}
+                        className="flex items-center gap-2.5 px-3 py-1.5 text-sm cursor-pointer hover:bg-muted/50 transition-colors"
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(v) => {
+                            if (v) {
+                              setBulkLinkRows(prev => [...prev, {
+                                menu_item_id: m.id,
+                                name: m.name,
+                                qty: "1",
+                                recipe_unit: selected?.unit || "pcs",
+                                factor: "1",
+                              }]);
+                            } else {
+                              setBulkLinkRows(prev => prev.filter(r => r.menu_item_id !== m.id));
+                            }
+                          }}
+                        />
+                        <span className="truncate">{m.name}</span>
+                      </label>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+
+            {/* Per-item configuration */}
+            {bulkLinkRows.length > 0 && (
+              <div className="border-t pt-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Configure Each Item <Badge variant="secondary" className="ml-1 text-[10px]">{bulkLinkRows.length}</Badge></Label>
+                  <button
+                    onClick={() => setBulkLinkRows([])}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Clear all
+                  </button>
+                </div>
+
+                {/* Quick-fill row */}
+                <div className="rounded-lg border border-dashed bg-muted/30 p-2.5 space-y-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Quick fill — apply to all</p>
+                  <div className="grid grid-cols-[80px_90px_32px] gap-2 items-center">
+                    <Input
+                      type="number"
+                      placeholder="Qty"
+                      className="h-7 text-xs"
+                      id="quick-fill-qty"
+                      min="0.001" step="0.001"
+                    />
+                    <Select
+                      onValueChange={(unit) => {
+                        const qtyEl = document.getElementById("quick-fill-qty") as HTMLInputElement;
+                        const qty = qtyEl?.value || "";
+                        if (qty || unit) {
+                          setBulkLinkRows(prev => prev.map(r => ({
+                            ...r,
+                            ...(qty ? { qty } : {}),
+                            ...(unit ? { recipe_unit: unit, factor: unit === selected?.unit ? "1" : r.factor } : {}),
+                          })));
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Unit" /></SelectTrigger>
+                      <SelectContent position="popper" className="max-h-[200px]">
+                        {UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 w-7 p-0"
+                      onClick={() => {
+                        const qtyEl = document.getElementById("quick-fill-qty") as HTMLInputElement;
+                        const qty = qtyEl?.value;
+                        if (qty) {
+                          setBulkLinkRows(prev => prev.map(r => ({ ...r, qty })));
+                        }
+                      }}
+                      title="Apply qty to all"
+                    >
+                      <Check className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Per-item rows */}
+                <div className="space-y-2">
+                  {/* Header */}
+                  <div className="grid grid-cols-[1fr_70px_80px_70px_28px] gap-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-0.5">
+                    <span>Menu Item</span>
+                    <span>Qty</span>
+                    <span>Unit</span>
+                    <span>Factor</span>
+                    <span></span>
+                  </div>
+                  {bulkLinkRows.map((row, idx) => (
+                    <div key={row.menu_item_id} className="grid grid-cols-[1fr_70px_80px_70px_28px] gap-1.5 items-center">
+                      <span className="text-sm truncate" title={row.name}>{row.name}</span>
+                      <Input
+                        type="number"
+                        value={row.qty}
+                        onChange={e => {
+                          const next = [...bulkLinkRows];
+                          next[idx] = { ...next[idx], qty: e.target.value };
+                          setBulkLinkRows(next);
+                        }}
+                        className="h-7 text-xs"
+                        min="0.001" step="0.001"
+                      />
+                      <Select
+                        value={row.recipe_unit}
+                        onValueChange={v => {
+                          const next = [...bulkLinkRows];
+                          next[idx] = { ...next[idx], recipe_unit: v, factor: v === selected?.unit ? "1" : next[idx].factor };
+                          setBulkLinkRows(next);
+                        }}
+                      >
+                        <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent position="popper" className="max-h-[200px]">
+                          {UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        value={row.factor}
+                        onChange={e => {
+                          const next = [...bulkLinkRows];
+                          next[idx] = { ...next[idx], factor: e.target.value };
+                          setBulkLinkRows(next);
+                        }}
+                        className="h-7 text-xs"
+                        min="0.000001" step="0.000001"
+                        disabled={row.recipe_unit === selected?.unit}
+                        title={row.recipe_unit === selected?.unit ? "No conversion needed" : `1 ${row.recipe_unit} = ? ${selected?.unit}`}
+                      />
+                      <button
+                        onClick={() => setBulkLinkRows(prev => prev.filter(r => r.menu_item_id !== row.menu_item_id))}
+                        className="h-7 w-7 rounded flex items-center justify-center hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
 
-          {/* Add new links — multi-select */}
-          <div className="border-t pt-4 space-y-3">
-            <Label>Link Menu Items <Badge variant="secondary" className="ml-1 text-[10px]">{bulkLinkItems.length} selected</Badge></Label>
-
-            {/* Search filter */}
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <Input
-                value={linkSearch}
-                onChange={e => setLinkSearch(e.target.value)}
-                placeholder="Search menu items…"
-                className="h-8 text-sm pl-8"
-              />
-            </div>
-
-            {/* Checkbox list of menu items */}
-            <div className="max-h-40 overflow-y-auto border rounded-lg divide-y">
-              {(() => {
-                const existingIds = new Set((linksQuery.data || []).map(l => l.menu_item_id));
-                const allMenuItems = (menuItemsQuery.data || []).filter(m => !existingIds.has(m.id));
-                const filtered = linkSearch.trim()
-                  ? allMenuItems.filter(m => m.name.toLowerCase().includes(linkSearch.toLowerCase()))
-                  : allMenuItems;
-
-                if (filtered.length === 0) {
-                  return <p className="text-xs text-muted-foreground text-center py-4">No unlinked menu items found.</p>;
-                }
-
-                return filtered.map(m => {
-                  const checked = bulkLinkItems.includes(m.id);
-                  return (
-                    <label
-                      key={m.id}
-                      className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer hover:bg-muted/50 transition-colors"
-                    >
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={(v) => {
-                          if (v) {
-                            setBulkLinkItems(prev => [...prev, m.id]);
-                          } else {
-                            setBulkLinkItems(prev => prev.filter(id => id !== m.id));
-                          }
-                        }}
-                      />
-                      <span className="truncate">{m.name}</span>
-                    </label>
-                  );
-                });
-              })()}
-            </div>
-
-            {bulkLinkItems.length > 0 && (
-              <button
-                onClick={() => setBulkLinkItems([])}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Clear selection
-              </button>
-            )}
-
-            {/* Quantity + Recipe unit */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Quantity in recipe</Label>
-                <Input
-                  type="number"
-                  value={linkQty}
-                  onChange={e => setLinkQty(e.target.value)}
-                  placeholder="e.g. 2"
-                  min="0.001" step="0.001"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Recipe unit</Label>
-                <Select
-                  value={linkRecipeUnit || selected?.unit || ""}
-                  onValueChange={v => {
-                    setLinkRecipeUnit(v);
-                    setLinkSuggestion(null);
-                    if (v === selected?.unit) { setLinkFactor("1"); }
-                  }}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(getUnitsByCategory()).map(([cat, units]) => (
-                      units.length === 0 ? null : (
-                        <div key={cat}>
-                          <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                            {UNIT_CATEGORIES[cat as UnitCategory]}
-                          </div>
-                          {units.map(u => (
-                            <SelectItem key={u.symbol} value={u.symbol}>{u.label}</SelectItem>
-                          ))}
-                        </div>
-                      )
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Conversion factor — shown when recipe unit ≠ storage unit */}
-            {linkRecipeUnit && linkRecipeUnit !== selected?.unit && (
-              <div className="space-y-2 rounded-lg border border-dashed bg-muted/30 p-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs text-muted-foreground">
-                    1 {linkRecipeUnit} = ? {selected?.unit}
-                  </Label>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs gap-1"
-                    onClick={() => {
-                      const hint = getSuggestedConversion(
-                        selected?.name ?? "",
-                        linkRecipeUnit,
-                        selected?.unit ?? "",
-                      );
-                      if (hint) {
-                        setLinkFactor(String(hint.factor));
-                        setLinkSuggestion({ label: hint.label, note: hint.note });
-                      } else {
-                        setLinkSuggestion({ label: "No suggestion found — enter manually", note: undefined });
-                      }
-                    }}
-                  >
-                    <Lightbulb className="h-3 w-3" /> Suggest
-                  </Button>
-                </div>
-
-                <Input
-                  type="number"
-                  value={linkFactor}
-                  onChange={e => { setLinkFactor(e.target.value); setLinkSuggestion(null); }}
-                  placeholder="Conversion factor"
-                  min="0.000001" step="0.000001"
-                />
-
-                {linkSuggestion && (
-                  <p className={`text-xs ${linkSuggestion.note ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600'}`}>
-                    {linkSuggestion.note
-                      ? `💡 ${linkSuggestion.label} — ${linkSuggestion.note}`
-                      : `⚠️ ${linkSuggestion.label}`
-                    }
-                  </p>
-                )}
-
-                {/* Live preview */}
-                {parseFloat(linkQty) > 0 && parseFloat(linkFactor) > 0 && (
-                  <div className="rounded bg-primary/10 px-3 py-2 text-xs font-medium text-primary">
-                    Preview: {linkQty} {linkRecipeUnit} × {linkFactor} = {" "}
-                    <strong>
-                      {formatFactor(parseFloat(linkQty) * parseFloat(linkFactor))} {selected?.unit}
-                    </strong>
-                    {" "} deducted from stock per item ordered
-                  </div>
-                )}
-              </div>
-            )}
-
+          {/* Footer — sticky at bottom */}
+          <div className="shrink-0 border-t pt-3">
             <Button
               onClick={() => bulkLinkMutation.mutate()}
-              disabled={bulkLinkItems.length === 0 || !linkQty || parseFloat(linkQty) <= 0 || bulkLinkMutation.isPending}
+              disabled={bulkLinkRows.length === 0 || bulkLinkMutation.isPending}
               className="w-full"
             >
               {bulkLinkMutation.isPending
                 ? "Linking..."
-                : linkRecipeUnit && linkRecipeUnit !== selected?.unit
-                  ? `Link ${bulkLinkItems.length} item(s) — uses ${linkQty} ${linkRecipeUnit} (= ${formatFactor(parseFloat(linkQty) * (parseFloat(linkFactor) || 1))} ${selected?.unit}) each`
-                  : `Link ${bulkLinkItems.length} item(s) — uses ${linkQty || "?"} ${selected?.unit} each`
+                : `Link ${bulkLinkRows.length} item(s)`
               }
             </Button>
           </div>
@@ -866,7 +897,7 @@ function InventoryContent() {
               <div><Label>Unit</Label>
                 <Select value={form.unit} onValueChange={v => setForm(p => ({ ...p, unit: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                  <SelectContent position="popper" className="max-h-[200px]">{UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div><Label>Current Stock</Label><Input type="number" value={form.current_stock} onChange={e => setForm(p => ({ ...p, current_stock: e.target.value }))} /></div>
