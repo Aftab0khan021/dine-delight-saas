@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { startOfDay, subDays, subMonths } from "date-fns";
-import { Search, Lock, Bell, BellOff, Printer, ChevronLeft, ChevronRight, Store, Truck, ShoppingBag, Star, RefreshCw, Plus, Clock, StickyNote, UserCheck, XCircle } from "lucide-react";
+import { Search, Lock, Bell, BellOff, Printer, ChevronLeft, ChevronRight, Store, Truck, ShoppingBag, Star, RefreshCw, Plus, Clock, StickyNote, XCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -83,7 +83,7 @@ type OrderData = {
   rating: number | null;
   delivery_address: string | null;
   bill_breakdown: any;
-  metadata: Record<string, unknown> | null;
+  restaurant_id?: string;
   dailyToken?: number;
 };
 
@@ -168,12 +168,7 @@ function OrderCard({
             ) : (
               <Badge variant="outline" className="text-[10px] px-1.5 capitalize">{order.payment_method || 'Cash'}</Badge>
             )}
-            {/* Staff order badge */}
-            {!!(order.metadata as any)?.via_staff && (
-              <Badge variant="secondary" className="text-[10px] h-5 px-1.5 gap-0.5 bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300">
-                <UserCheck className="h-3 w-3" /> Staff
-              </Badge>
-            )}
+
           </div>
           <div className="mt-1 flex items-center gap-1 text-xs">
             <Clock className="h-3 w-3" />
@@ -493,15 +488,11 @@ export default function AdminOrders() {
       }
 
       const ids = allRestaurantIds;
-      console.log("[Orders DEBUG] restaurant?.id:", restaurant?.id);
-      console.log("[Orders DEBUG] allRestaurantIds:", ids);
-      console.log("[Orders DEBUG] timeFilter:", timeFilter, "from:", timeStart.toISOString(), "to:", timeEnd?.toISOString() ?? "none");
-      console.log("[Orders DEBUG] page:", page, "range:", page * ORDERS_PER_PAGE, "-", (page + 1) * ORDERS_PER_PAGE - 1);
 
       // Fetch Orders with pagination — include child brands
       let q = supabase
         .from("orders")
-        .select("id, status, placed_at, table_label, customer_name, customer_phone, notes, subtotal_cents, tax_cents, tip_cents, discount_cents, discount_type, discount_reason, payment_method, payment_status, total_cents, order_type, rating, delivery_address, bill_breakdown, metadata", { count: 'exact' })
+        .select("id, status, placed_at, table_label, customer_name, customer_phone, notes, subtotal_cents, tax_cents, tip_cents, discount_cents, discount_type, discount_reason, payment_method, payment_status, total_cents, order_type, rating, delivery_address, bill_breakdown, restaurant_id", { count: 'exact' })
         .in("restaurant_id", ids)
         .gte("placed_at", timeStart.toISOString())
         .order("placed_at", { ascending: false })
@@ -511,11 +502,6 @@ export default function AdminOrders() {
       if (timeEnd) q = q.lt("placed_at", timeEnd.toISOString());
 
       const { data: orders, error, count } = await q;
-
-      console.log("[Orders DEBUG] Query result — count:", count, "orders:", orders?.length, "error:", error);
-      if (orders && orders.length > 0) {
-        console.log("[Orders DEBUG] First order:", { id: orders[0].id, status: orders[0].status, placed_at: orders[0].placed_at });
-      }
 
       if (error) throw error;
 
