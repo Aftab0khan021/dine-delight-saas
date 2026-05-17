@@ -187,27 +187,29 @@ export default function PublicMenu() {
     // 2. Holiday mode is on
     if (r.is_holiday_mode === true) return false;
     // 3. Check operating hours for current day
+    // Format: { monday: [{ open: "09:00", close: "22:00" }], ... }
+    // Empty array = closed that day
     const hours = r.operating_hours;
     if (hours && typeof hours === 'object' && !Array.isArray(hours)) {
       const days = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
       const now = new Date();
       const dayKey = days[now.getDay()];
-      const dayHours = (hours as Record<string, any>)[dayKey];
-      if (dayHours) {
-        if (dayHours.closed === true) return false;
-        if (dayHours.open && dayHours.close) {
-          const currentMinutes = now.getHours() * 60 + now.getMinutes();
-          const [openH, openM] = dayHours.open.split(':').map(Number);
-          const [closeH, closeM] = dayHours.close.split(':').map(Number);
-          const openMinutes = openH * 60 + openM;
-          const closeMinutes = closeH * 60 + closeM;
-          if (closeMinutes > openMinutes) {
-            // Normal hours (e.g. 09:00 - 23:00)
-            if (currentMinutes < openMinutes || currentMinutes > closeMinutes) return false;
-          } else {
-            // Overnight hours (e.g. 20:00 - 02:00)
-            if (currentMinutes < openMinutes && currentMinutes > closeMinutes) return false;
-          }
+      const slots = (hours as Record<string, any>)[dayKey];
+      // If slots is null/undefined/empty array → closed today
+      if (!slots || (Array.isArray(slots) && slots.length === 0)) return false;
+      // If it's an array of { open, close } objects → check each slot
+      if (Array.isArray(slots)) {
+        const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        const isInAnySlot = slots.some((slot: any) =>
+          slot.open && slot.close && currentTime >= slot.open && currentTime <= slot.close
+        );
+        if (!isInAnySlot) return false;
+      } else if (typeof slots === 'object') {
+        // Legacy flat format: { open: "09:00", close: "22:00", closed?: true }
+        if (slots.closed === true) return false;
+        if (slots.open && slots.close) {
+          const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+          if (currentTime < slots.open || currentTime > slots.close) return false;
         }
       }
     }
