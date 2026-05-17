@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { startOfDay, subDays, subMonths } from "date-fns";
-import { Search, Lock, Bell, BellOff, Printer, ChevronLeft, ChevronRight, Store, Truck, ShoppingBag, Star, RefreshCw } from "lucide-react";
+import { Search, Lock, Bell, BellOff, Printer, ChevronLeft, ChevronRight, Store, Truck, ShoppingBag, Star, RefreshCw, Plus, Clock, StickyNote, UserCheck, XCircle } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
@@ -28,15 +29,18 @@ import {
 import { cn } from "@/lib/utils";
 
 // --- Types & Helpers ---
-type OrderStatus = "pending" | "in_progress" | "ready" | "completed";
+type OrderStatus = "pending" | "accepted" | "in_progress" | "ready" | "completed" | "cancelled";
 type TimeFilter = "daily" | "weekly" | "monthly";
 
-// Mapping DB status to UI Labels
-const STATUS_MAP: Record<OrderStatus, string> = {
+// Mapping DB status to UI column labels
+// Both accepted & in_progress map to "Preparing" column
+const STATUS_MAP: Record<string, string> = {
   pending: "New",
+  accepted: "Preparing",
   in_progress: "Preparing",
   ready: "Ready",
   completed: "Completed",
+  cancelled: "Cancelled",
 };
 
 // The Kanban Columns (UI Labels)
@@ -61,6 +65,9 @@ type OrderData = {
   status: string;
   placed_at: string;
   table_label: string | null;
+  customer_name: string | null;
+  customer_phone: string | null;
+  notes: string | null;
   subtotal_cents: number;
   tax_cents: number;
   tip_cents: number;
@@ -76,24 +83,40 @@ type OrderData = {
   rating: number | null;
   delivery_address: string | null;
   bill_breakdown: any;
+  metadata: Record<string, unknown> | null;
+  dailyToken?: number;
 };
 
-// --- Subcomponent: Order Card (Repo A Style) ---
+// --- Subcomponent: Order Card ---
 function OrderCard({
   order,
   onAdvance,
+  onCancel,
   loadingId,
   currencyCode,
   restaurantName,
 }: {
   order: OrderData;
   onAdvance: (id: string, currentStatus: OrderStatus) => void;
+  onCancel?: (id: string) => void;
   loadingId: string | null;
   currencyCode: string;
   restaurantName: string;
 }) {
-  const uiStatus = STATUS_MAP[order.status as OrderStatus];
+  const uiStatus = STATUS_MAP[order.status] ?? order.status;
   const isLoading = loadingId === order.id;
+
+  // OR-3: Time elapsed badge with SLA coloring
+  const minutesAgo = Math.floor((Date.now() - new Date(order.placed_at).getTime()) / 60_000);
+  const isActive = ["pending", "accepted", "in_progress"].includes(order.status);
+  const timeColor = !isActive ? "text-muted-foreground"
+    : minutesAgo >= 25 ? "text-red-600 font-bold"
+    : minutesAgo >= 15 ? "text-amber-600 font-semibold"
+    : "text-muted-foreground";
+  const timeUrgent = isActive && minutesAgo >= 25;
+
+  // OR-5: Staff-placed detection
+  const isStaffOrder = !!(order.metadata as any)?.via_staff;
 
   // Order type display label
   const orderTypeLabel = order.order_type === 'dine_in'
@@ -103,10 +126,13 @@ function OrderCard({
     : (order.table_label || 'Walk-in');
 
   return (
-    <div className="rounded-xl border border-border bg-background p-3 shadow-sm transition-all hover:shadow-md">
+    <div className={cn(
+      "rounded-xl border border-border bg-background p-3 shadow-sm transition-all hover:shadow-md",
+      timeUrgent && "ring-2 ring-red-400 animate-pulse"
+    )}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="text-sm font-semibold">
               {order.dailyToken ? `Token #${order.dailyToken}` : order.status === 'pending' ? 'NEW' : shortId(order.id)}
             </div>
@@ -116,13 +142,29 @@ function OrderCard({
             ) : order.payment_method === 'online' || order.payment_method === 'upi' ? (
               <Badge variant="destructive" className="text-[10px] px-1.5">Unpaid</Badge>
             ) : (
-              <Badge variant="outline" className="text-[10px] px-1.5">Cash</Badge>
+              <Badge variant="outline" className="text-[10px] px-1.5 capitalize">{order.payment_method || 'Cash'}</Badge>
+            )}
+            {/* OR-5: Staff order badge */}
+            {isStaffOrder && (
+              <Badge variant="secondary" className="text-[10px] h-5 px-1.5 gap-0.5 bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300">
+                <UserCheck className="h-3 w-3" /> Staff
+              </Badge>
             )}
           </div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            {formatTime(order.placed_at)} • {orderTypeLabel}
+          <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+            <span>{formatTime(order.placed_at)} • {orderTypeLabel}</span>
+            {/* OR-3: Time elapsed */}
+            <span className={cn("flex items-center gap-0.5", timeColor)}>
+              <Clock className="h-3 w-3" /> {minutesAgo}m
+            </span>
           </div>
-          {/* Order Type Badge */}
+          {/* OR-7: Customer name */}
+          {order.customer_name && (
+            <div className="mt-0.5 text-xs font-medium text-foreground">
+              👤 {order.customer_name}{order.customer_phone ? ` · ${order.customer_phone}` : ''}
+            </div>
+          )}
+          {/* Order Type Badge row */}
           <div className="mt-1 flex items-center gap-1.5 flex-wrap">
             {order.order_type === 'dine_in' && (
               <Badge variant="outline" className="text-[10px] h-5 px-1.5 gap-0.5"><Store className="h-3 w-3" /> Dine-In</Badge>
@@ -152,7 +194,6 @@ function OrderCard({
               w.document.write(html);
               w.document.close();
             } else {
-              // Fallback if popup blocked
               const blob = new Blob([html], { type: 'text/html' });
               const url = URL.createObjectURL(blob);
               window.open(url, '_blank');
@@ -167,6 +208,14 @@ function OrderCard({
       <div className="mt-2 text-sm line-clamp-2">
         {order.items_summary || "Loading items..."}
       </div>
+
+      {/* OR-4: Order-level notes */}
+      {order.notes && (
+        <div className="mt-1.5 flex items-start gap-1.5 text-xs bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-2 py-1">
+          <StickyNote className="h-3 w-3 text-amber-600 shrink-0 mt-0.5" />
+          <span className="text-amber-800 dark:text-amber-300">{order.notes}</span>
+        </div>
+      )}
 
       {/* Payment & Discount Info */}
       <div className="mt-2 flex flex-wrap gap-2 text-xs">
@@ -225,10 +274,16 @@ function OrderCard({
         </div>
       )}
 
+      {/* Action buttons — unified status flow */}
       <div className="mt-3 grid gap-2">
         {order.status === "pending" && (
           <Button className="w-full" size="sm" onClick={() => onAdvance(order.id, "pending")} disabled={isLoading}>
-            Start Preparing
+            Accept Order
+          </Button>
+        )}
+        {order.status === "accepted" && (
+          <Button className="w-full" size="sm" onClick={() => onAdvance(order.id, "accepted")} disabled={isLoading}>
+            Start Cooking
           </Button>
         )}
         {order.status === "in_progress" && (
@@ -247,8 +302,15 @@ function OrderCard({
           </Button>
         )}
 
+        {/* OR-10: Cancel button (only for non-completed/non-cancelled) */}
+        {onCancel && !['completed', 'cancelled'].includes(order.status) && (
+          <Button variant="destructive" size="sm" className="w-full" onClick={() => onCancel(order.id)} disabled={isLoading}>
+            <XCircle className="h-3.5 w-3.5 mr-1" /> Cancel
+          </Button>
+        )}
+
         {/* Manual Discount Action - Only if no discount yet and not completed */}
-        {order.status !== "completed" && order.discount_cents === 0 && (
+        {order.status !== "completed" && order.status !== "cancelled" && order.discount_cents === 0 && (
           <ManualDiscountDialog orderId={order.id} orderTotalCents={order.total_cents} />
         )}
 
@@ -399,7 +461,7 @@ export default function AdminOrders() {
       // Fetch Orders with pagination
       const { data: orders, error, count } = await supabase
         .from("orders")
-        .select("id, status, placed_at, table_label, subtotal_cents, tax_cents, tip_cents, discount_cents, discount_type, discount_reason, payment_method, payment_status, total_cents, order_type, rating, delivery_address, bill_breakdown", { count: 'exact' })
+        .select("id, status, placed_at, table_label, customer_name, customer_phone, notes, subtotal_cents, tax_cents, tip_cents, discount_cents, discount_type, discount_reason, payment_method, payment_status, total_cents, order_type, rating, delivery_address, bill_breakdown, metadata", { count: 'exact' })
         .eq("restaurant_id", restaurant!.id)
         .gte("placed_at", startISO)
         .lt("placed_at", endISO)
@@ -462,23 +524,25 @@ export default function AdminOrders() {
   });
 
 
-  // --- 3. Mutation (Advance Order) ---
+  // --- 3. Mutation (Advance Order) — unified flow matching Kitchen ---
   const advanceMutation = useMutation({
     mutationFn: async ({ id, currentStatus }: { id: string, currentStatus: OrderStatus }) => {
       setAdvancingId(id);
 
-      // Determine next status (existing logic preserved)
-      let next: OrderStatus | null = null;
-      if (currentStatus === "pending") next = "in_progress";
-      else if (currentStatus === "in_progress") next = "ready";
-      else if (currentStatus === "ready") next = "completed";
+      // Unified status flow: pending → accepted → in_progress → ready → completed
+      const NEXT_STATUS: Record<string, OrderStatus> = {
+        pending: "accepted",
+        accepted: "in_progress",
+        in_progress: "ready",
+        ready: "completed",
+      };
+      const next = NEXT_STATUS[currentStatus];
 
-      // Validate transition
       if (!next) {
         throw new Error("Cannot advance order from this status");
       }
 
-      // Update order with error checking
+      // Update order with error checking — restaurant_id filter for security
       const { data, error } = await supabase
         .from("orders")
         .update({
@@ -486,12 +550,34 @@ export default function AdminOrders() {
           completed_at: next === "completed" ? new Date().toISOString() : null
         })
         .eq("id", id)
-        .eq("restaurant_id", restaurant!.id) // Security: ensure same restaurant
+        .eq("restaurant_id", restaurant!.id)
         .select()
         .single();
 
       if (error) throw error;
       if (!data) throw new Error("Order not found");
+
+      // Deduct inventory when order moves to 'accepted' (same as Kitchen)
+      if (next === "accepted") {
+        try {
+          const { data: rpcResult, error: rpcError } = await supabase.rpc("deduct_stock_for_accepted_order", {
+            p_order_id: id,
+            p_restaurant_id: restaurant!.id,
+          }) as any;
+          if (!rpcError && rpcResult) {
+            const lowAlerts = rpcResult?.low_stock_alerts || [];
+            const disabled = rpcResult?.disabled_items || [];
+            if (disabled.length > 0) {
+              toast({ title: "⚠️ Items auto-disabled", description: disabled.join(", "), variant: "destructive" });
+            } else if (lowAlerts.length > 0) {
+              toast({ title: "📦 Low Stock Alert", description: lowAlerts.join(", ") });
+            }
+            qc.invalidateQueries({ queryKey: ["ingredients"] });
+          }
+        } catch {
+          // Non-blocking — inventory deduction failure shouldn't block order advance
+        }
+      }
 
       // Log activity
       try {
@@ -510,7 +596,6 @@ export default function AdminOrders() {
           }
         });
       } catch (logError) {
-        // Don't fail the mutation if logging fails
         console.error("Failed to log activity:", logError);
       }
 
@@ -518,10 +603,11 @@ export default function AdminOrders() {
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["admin", "orders"] });
+      qc.invalidateQueries({ queryKey: ["kitchen-orders"] }); // Cross-page sync
       setAdvancingId(null);
       toast({
         title: "Order updated",
-        description: `Order moved to ${STATUS_MAP[data.status]}`
+        description: `Order moved to ${STATUS_MAP[data.status] ?? data.status}`
       });
     },
     onError: (error: Error) => {
@@ -535,6 +621,57 @@ export default function AdminOrders() {
     }
   });
 
+  // --- OR-10: Cancel order with reason ---
+  const cancelMutation = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      setAdvancingId(id);
+      const { error } = await supabase
+        .from("orders")
+        .update({ status: "cancelled" })
+        .eq("id", id)
+        .eq("restaurant_id", restaurant!.id);
+      if (error) throw error;
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        await supabase.from("activity_logs").insert({
+          restaurant_id: restaurant!.id, entity_type: "order", entity_id: id,
+          action: "order_cancelled",
+          message: `Order ${shortId(id)} cancelled: ${reason}`,
+          actor_user_id: user?.id, metadata: { order_id: id, reason }
+        });
+      } catch { /* non-blocking */ }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "orders"] });
+      qc.invalidateQueries({ queryKey: ["kitchen-orders"] });
+      setAdvancingId(null);
+      toast({ title: "Order cancelled" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to cancel", description: err.message, variant: "destructive" });
+      setAdvancingId(null);
+    }
+  });
+
+  // --- OR-11: CSV Export ---
+  function exportCSV() {
+    const rows = orders.filter(o => o.status !== "cancelled");
+    if (rows.length === 0) { toast({ title: "No orders to export", variant: "destructive" }); return; }
+    const header = "Order ID,Token,Status,Placed At,Type,Table,Customer,Payment,Subtotal,Tax,Tip,Discount,Total\n";
+    const csv = header + rows.map(o => [
+      shortId(o.id), o.dailyToken ?? "", o.status, new Date(o.placed_at).toLocaleString(),
+      o.order_type ?? "", o.table_label ?? "", o.customer_name ?? "", o.payment_method ?? "cash",
+      (o.subtotal_cents / 100).toFixed(2), (o.tax_cents / 100).toFixed(2),
+      (o.tip_cents / 100).toFixed(2), (o.discount_cents / 100).toFixed(2), (o.total_cents / 100).toFixed(2),
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url;
+    a.download = `orders_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+    toast({ title: "CSV exported" });
+  }
+
   // --- 4. Filtering & Grouping ---
   const orders = ordersQuery.data?.orders || [];
   const totalCount = ordersQuery.data?.totalCount || 0;
@@ -545,31 +682,40 @@ export default function AdminOrders() {
       const matchesSearch = search
         ? (() => {
             const q = search.toLowerCase();
-            // Match against token number (e.g. "token 1", "#1", "1")
             const tokenStr = o.dailyToken ? `token #${o.dailyToken}` : '';
             if (tokenStr && tokenStr.includes(q)) return true;
             if (o.dailyToken && String(o.dailyToken) === q.replace(/[^0-9]/g, '')) return true;
-            // Match against short order ID
             if (shortId(o.id).toLowerCase().includes(q)) return true;
-            // Match against table label
             if (o.table_label?.toLowerCase().includes(q)) return true;
-            // Match against items summary
             if (o.items_summary?.toLowerCase().includes(q)) return true;
-            // Match against order type (dine_in, delivery, takeaway)
             if (o.order_type?.toLowerCase().includes(q)) return true;
+            // OR-7: Search by customer name
+            if (o.customer_name?.toLowerCase().includes(q)) return true;
             return false;
           })()
         : true;
-      const uiStatus = STATUS_MAP[o.status as OrderStatus];
-      const matchesStatus = statusFilter === "all" ? true : uiStatus === statusFilter;
+      const uiStatus = STATUS_MAP[o.status] ?? o.status;
+      const matchesStatus = statusFilter === "all"
+        ? o.status !== "cancelled" // "all" hides cancelled by default
+        : statusFilter === "Cancelled"
+        ? o.status === "cancelled"
+        : uiStatus === statusFilter;
       return matchesSearch && matchesStatus;
     });
   }, [orders, search, statusFilter]);
 
+  // OR-2: Order count summary
+  const orderSummary = useMemo(() => {
+    const nonCancelled = orders.filter(o => o.status !== "cancelled");
+    const pending = nonCancelled.filter(o => o.status === "pending").length;
+    const revenue = nonCancelled.reduce((s, o) => s + (o.total_cents || 0), 0);
+    return { total: nonCancelled.length, pending, revenue };
+  }, [orders]);
+
   const byColumn = useMemo(() => {
     const map: Record<string, any[]> = { "New": [], "Preparing": [], "Ready": [], "Completed": [] };
     filteredOrders.forEach(o => {
-      const label = STATUS_MAP[o.status as OrderStatus];
+      const label = STATUS_MAP[o.status] ?? o.status;
       if (map[label]) map[label].push(o);
     });
     return map;
@@ -578,10 +724,11 @@ export default function AdminOrders() {
   // When a specific status is selected, show only that column
   const visibleColumns = useMemo(() => {
     if (statusFilter === "all") return UI_COLUMNS;
+    if (statusFilter === "Cancelled") return []; // Cancelled shows as list, not kanban
     return UI_COLUMNS.filter(col => col === statusFilter);
   }, [statusFilter]);
 
-  // --- 5. Render (Repo A Design) ---
+  // --- 5. Render ---
   return (
     <div className="flex flex-col gap-4 w-full">
       <header className="flex flex-col gap-3 w-full">
@@ -589,11 +736,21 @@ export default function AdminOrders() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Orders</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Real-time kitchen display system.
+              Real-time order management &amp; kitchen display.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* OR-1: New Order button */}
+            <Button asChild size="sm" className="gap-1.5">
+              <Link to="/admin/quick-order">
+                <Plus className="h-4 w-4" /> New Order
+              </Link>
+            </Button>
+            {/* OR-11: CSV Export */}
+            <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5">
+              📥 Export CSV
+            </Button>
             <div className="inline-flex items-center gap-2 self-start rounded-full border border-border bg-background px-3 py-1.5 text-sm shadow-sm">
               <span className="relative inline-flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/40 motion-reduce:hidden" />
@@ -629,6 +786,23 @@ export default function AdminOrders() {
         </div>
 
         {/* Top Toolbar (Filters) */}
+        {/* OR-2: Order count summary bar */}
+        <div className="flex gap-4 flex-wrap text-sm">
+          <div className="flex items-center gap-1.5 bg-muted rounded-full px-3 py-1">
+            <span className="text-muted-foreground">Today:</span>
+            <span className="font-semibold">{orderSummary.total} orders</span>
+          </div>
+          <div className="flex items-center gap-1.5 bg-muted rounded-full px-3 py-1">
+            <span className="text-muted-foreground">Revenue:</span>
+            <span className="font-semibold">{formatMoney(orderSummary.revenue, restaurant?.currency_code || 'INR')}</span>
+          </div>
+          {orderSummary.pending > 0 && (
+            <div className="flex items-center gap-1.5 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 rounded-full px-3 py-1">
+              <span className="font-semibold">{orderSummary.pending} pending</span>
+            </div>
+          )}
+        </div>
+
         <Card className="shadow-sm">
           <CardContent className="grid gap-2 p-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -640,6 +814,7 @@ export default function AdminOrders() {
                 {UI_COLUMNS.map((s) => (
                   <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
+                <SelectItem value="Cancelled">Cancelled</SelectItem>
               </SelectContent>
             </Select>
 
@@ -701,6 +876,10 @@ export default function AdminOrders() {
                     key={o.id}
                     order={o}
                     onAdvance={(id, status) => advanceMutation.mutate({ id, currentStatus: status })}
+                    onCancel={(id) => {
+                      const reason = prompt('Cancel reason:', 'Customer requested cancellation');
+                      if (reason) cancelMutation.mutate({ id, reason });
+                    }}
                     loadingId={advancingId}
                     currencyCode={restaurant?.currency_code || "INR"}
                     restaurantName={restaurant?.name || "Restaurant"}
@@ -717,6 +896,31 @@ export default function AdminOrders() {
           ))}
         </section>
       </div>
+
+      {/* OR-13: Cancelled orders view */}
+      {statusFilter === "Cancelled" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {filteredOrders.length === 0 ? (
+            <div className="col-span-full rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
+              <XCircle className="h-8 w-8 mx-auto mb-2 opacity-40" />
+              No cancelled orders found.
+            </div>
+          ) : filteredOrders.map((o) => (
+            <OrderCard
+              key={o.id}
+              order={o}
+              onAdvance={(id, status) => advanceMutation.mutate({ id, currentStatus: status })}
+              onCancel={(id) => {
+                const reason = prompt('Cancel reason:', 'Customer requested cancellation');
+                if (reason) cancelMutation.mutate({ id, reason });
+              }}
+              loadingId={advancingId}
+              currencyCode={restaurant?.currency_code || "INR"}
+              restaurantName={restaurant?.name || "Restaurant"}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Pagination Controls */}
       {totalPages > 1 && (

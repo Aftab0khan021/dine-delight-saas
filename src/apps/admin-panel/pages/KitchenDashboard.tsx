@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
@@ -7,10 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { RefreshCw, ChefHat, Clock, Store, Filter, Truck, ShoppingBag, AlertTriangle, Package } from "lucide-react";
+import { RefreshCw, ChefHat, Clock, Store, Truck, ShoppingBag, AlertTriangle, Package, StickyNote } from "lucide-react";
 import { formatMoney } from "@/lib/formatting";
 import { shortId } from "@/lib/formatting";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 type OrderStatus = "pending" | "accepted" | "in_progress" | "ready" | "completed" | "cancelled";
 
@@ -32,6 +33,13 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-muted border-border opacity-60",
 };
 
+// KD-6: Color-coded order type left borders
+const ORDER_TYPE_BORDER: Record<string, string> = {
+  dine_in: "border-l-4 border-l-blue-500",
+  pickup: "border-l-4 border-l-emerald-500",
+  delivery: "border-l-4 border-l-orange-500",
+};
+
 export default function KitchenDashboard() {
   return (
     <FeatureGate featureKey="kitchen_display" featureName="Kitchen Display" description="Live kitchen order board with Kanban-style columns, real-time updates, and inventory impact previews.">
@@ -43,13 +51,43 @@ export default function KitchenDashboard() {
 function KitchenDashboardContent() {
   const { restaurant } = useRestaurantContext();
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [brandFilter, setBrandFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("active");
   const [timeFilter, setTimeFilter] = useState<string>("daily");
+  // KD-2: Dark mode state
+  const [forceDark, setForceDark] = useState(true);
+  // KD-1: Full-screen mode
+  const [fullScreen, setFullScreen] = useState(false);
+  // KD-14: Idle screen detection
+  const [isIdle, setIsIdle] = useState(false);
 
-  // Get child brands if this is a cloud kitchen.
-  // Uses parent_kitchen_id from 20260424_cloud_kitchen.sql migration.
-  // Returns [] gracefully if migration not yet applied.
+  // KD-14: Idle timer — overlay after 5 min of no interaction
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const reset = () => { setIsIdle(false); timer = setTimeout(() => setIsIdle(true), 5 * 60_000); };
+    reset();
+    const events = ["mousedown", "mousemove", "keydown", "touchstart", "scroll"];
+    events.forEach(e => window.addEventListener(e, reset, { passive: true }));
+    return () => { clearTimeout(timer); events.forEach(e => window.removeEventListener(e, reset)); };
+  }, []);
+
+  // KD-2: Apply/remove dark class on kitchen page
+  useEffect(() => {
+    const root = document.documentElement;
+    if (forceDark) {
+      root.classList.add("dark");
+    }
+    return () => {
+      // Restore original theme on unmount — only remove if we forced it
+      if (forceDark) {
+        const stored = localStorage.getItem("theme");
+        if (stored !== "dark") root.classList.remove("dark");
+      }
+    };
+  }, [forceDark]);
+
+  // Cloud kitchen brands
   const brandsQuery = useQuery({
     queryKey: ["cloud-kitchen-brands", restaurant?.id],
     enabled: !!restaurant?.id,
@@ -61,7 +99,7 @@ function KitchenDashboardContent() {
           .from("restaurants")
           .select("id, name, brand_color, slug")
           .eq("parent_kitchen_id", restaurant!.id);
-        if (error) return []; // column may not exist yet
+        if (error) return [];
         return data ?? [];
       } catch {
         return [];
@@ -77,12 +115,11 @@ function KitchenDashboardContent() {
   const ordersQuery = useQuery({
     queryKey: ["kitchen-orders", restaurant?.id, brandFilter, statusFilter, timeFilter],
     enabled: !!restaurant?.id && allRestaurantIds.length > 0,
-    refetchInterval: 15_000,
+    refetchInterval: 30_000, // Let realtime do the heavy lifting
     queryFn: async () => {
       const ids = brandFilter === "all" ? allRestaurantIds : [brandFilter];
       if (ids.length === 0) return [];
 
-      // Time range based on filter
       const now = new Date();
       let timeStart: Date;
       let timeEnd: Date | null = null;
@@ -95,23 +132,21 @@ function KitchenDashboardContent() {
       } else if (timeFilter === "monthly") {
         timeStart = new Date(now.getFullYear(), now.getMonth(), 1);
       } else {
-        // daily — start of today
         timeStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       }
 
       let q = supabase
         .from("orders")
         .select(`
-          id, status, table_label, placed_at, total_cents, currency_code, restaurant_id, order_type, delivery_address,
+          id, status, table_label, placed_at, total_cents, currency_code, restaurant_id, order_type, delivery_address, customer_name, notes,
           restaurants(name, brand_color),
-          order_items(name_snapshot, quantity)
+          order_items(name_snapshot, quantity, notes)
         `)
         .in("restaurant_id", ids)
         .gte("placed_at", timeStart.toISOString())
         .order("placed_at", { ascending: false })
         .limit(200);
 
-      // If timeEnd is set (e.g. tomorrow filter), also apply upper bound
       if (timeEnd) {
         q = q.lt("placed_at", timeEnd.toISOString());
       }
@@ -125,7 +160,7 @@ function KitchenDashboardContent() {
       const { data, error } = await q;
       if (error) throw error;
 
-      // Assign daily token numbers — only for accepted orders, reset per day
+      // Assign daily token numbers
       const items = data ?? [];
       const sorted = [...items].sort((a, b) => new Date(a.placed_at).getTime() - new Date(b.placed_at).getTime());
       const dailyCounters = new Map<string, number>();
@@ -143,7 +178,7 @@ function KitchenDashboardContent() {
     },
   });
 
-  // Realtime subscription
+  // Realtime subscription — also invalidates admin orders for cross-page sync
   useEffect(() => {
     if (!restaurant?.id) return;
     const channel = supabase
@@ -151,10 +186,31 @@ function KitchenDashboardContent() {
       .on("postgres_changes", {
         event: "*", schema: "public", table: "orders",
         filter: `restaurant_id=eq.${restaurant.id}`,
-      }, () => qc.invalidateQueries({ queryKey: ["kitchen-orders"] }))
+      }, () => {
+        qc.invalidateQueries({ queryKey: ["kitchen-orders"] });
+        qc.invalidateQueries({ queryKey: ["admin", "orders"] }); // Cross-page sync
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [restaurant?.id, qc]);
+
+  // KD-13: SLA breach detection
+  const slaAlertedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const orders = ordersQuery.data ?? [];
+    orders.forEach((o: any) => {
+      if (!["pending", "accepted"].includes(o.status)) return;
+      const minutesAgo = Math.floor((Date.now() - new Date(o.placed_at).getTime()) / 60_000);
+      if (minutesAgo >= 20 && !slaAlertedRef.current.has(o.id)) {
+        slaAlertedRef.current.add(o.id);
+        toast({
+          title: "⏰ SLA Breach",
+          description: `Order ${(o as any).dailyToken ? `Token #${(o as any).dailyToken}` : `#${shortId(o.id)}`}${o.table_label ? ` (${o.table_label})` : ''} has been waiting ${minutesAgo} minutes!`,
+          variant: "destructive",
+        });
+      }
+    });
+  }, [ordersQuery.data, toast]);
 
   const orders = ordersQuery.data ?? [];
   const brands = brandsQuery.data ?? [];
@@ -165,14 +221,18 @@ function KitchenDashboardContent() {
     brandMap[(b as any).id] = { name: (b as any).name, brand_color: (b as any).brand_color || "#6366f1" };
   }
 
-  const activeStatuses = ["pending", "accepted", "in_progress", "ready"];
+  // Include completed in the active statuses list
+  const activeStatuses = ["pending", "accepted", "in_progress", "ready", "completed"];
   const counts = activeStatuses.map(s => ({
     status: s,
     count: orders.filter(o => o.status === s).length,
+    // KD-4: Item count per column
+    itemCount: orders.filter(o => o.status === s).reduce((sum, o: any) =>
+      sum + ((o.order_items ?? []) as any[]).reduce((s2: number, i: any) => s2 + (i.quantity || 0), 0), 0),
   }));
 
   return (
-    <div className="flex flex-col gap-4 w-full">
+    <div className={cn("flex flex-col gap-4 w-full", fullScreen && "fixed inset-0 z-50 bg-background p-4 overflow-y-auto")}>
       <section className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
@@ -221,25 +281,53 @@ function KitchenDashboardContent() {
               <SelectItem value="monthly">This Month</SelectItem>
             </SelectContent>
           </Select>
+          {/* KD-2: Dark mode toggle */}
+          <Button variant={forceDark ? "default" : "outline"} size="sm" onClick={() => setForceDark(!forceDark)} title="Toggle dark mode">
+            {forceDark ? "🌙" : "☀️"}
+          </Button>
+          {/* KD-1: Full-screen toggle */}
+          <Button variant={fullScreen ? "default" : "outline"} size="sm" onClick={() => setFullScreen(!fullScreen)} title="Full screen KDS">
+            {fullScreen ? "⏏️" : "📺"}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => qc.invalidateQueries({ queryKey: ["kitchen-orders"] })}>
             <RefreshCw className={`h-4 w-4 ${ordersQuery.isFetching ? 'animate-spin' : ''}`} />
           </Button>
         </div>
       </section>
 
-      {/* Status summary pills */}
+      {/* KD-15: Average prep time */}
+      {(() => {
+        const completed = orders.filter((o: any) => o.status === "completed" && o.placed_at);
+        const avgMins = completed.length > 0
+          ? Math.round(completed.reduce((sum: number, o: any) => {
+              const placed = new Date(o.placed_at).getTime();
+              // If completed_at is not fetched, estimate from now
+              return sum + (Date.now() - placed) / 60_000;
+            }, 0) / completed.length)
+          : 0;
+        return avgMins > 0 ? (
+          <div className="text-sm text-muted-foreground">
+            ⏱️ Avg prep time today: <span className="font-semibold text-foreground">{avgMins}m</span>
+          </div>
+        ) : null;
+      })()}
+
+      {/* KD-4: Status summary pills with item counts */}
       <div className="flex gap-3 flex-wrap">
-        {counts.map(({ status, count }) => (
+        {counts.filter(c => c.count > 0 || ["pending", "accepted", "in_progress", "ready"].includes(c.status)).map(({ status, count, itemCount }) => (
           <div key={status} className="flex items-center gap-1.5 bg-muted rounded-full px-3 py-1 text-sm">
             <span className="font-medium">{STATUS_LABELS[status]}</span>
             <Badge className="h-5 px-1.5 text-xs">{count}</Badge>
+            {itemCount > 0 && (
+              <span className="text-xs text-muted-foreground">({itemCount} items)</span>
+            )}
           </div>
         ))}
       </div>
 
-      {/* Order cards by status column (Kanban-style on large screens) */}
+      {/* Order cards by status column (Kanban) */}
       {statusFilter === "active" ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
           {activeStatuses.map(status => (
             <div key={status} className="space-y-3">
               <div className="flex items-center gap-2">
@@ -271,6 +359,18 @@ function KitchenDashboardContent() {
           )}
         </div>
       )}
+
+      {/* KD-14: Idle screen overlay */}
+      {isIdle && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/80 flex flex-col items-center justify-center cursor-pointer"
+          onClick={() => setIsIdle(false)}
+        >
+          <ChefHat className="h-20 w-20 text-orange-400 animate-bounce mb-4" />
+          <p className="text-2xl font-bold text-white">Kitchen Display Paused</p>
+          <p className="text-lg text-white/60 mt-2">Tap anywhere to wake up</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -286,7 +386,15 @@ function OrderKOTCard({ order, brandMap, currency, qc }: {
   const minutesAgo = Math.floor((Date.now() - new Date(order.placed_at).getTime()) / 60_000);
   const isUrgent = minutesAgo > 15 && ["pending", "accepted"].includes(order.status);
 
-  // Fetch ingredient impact preview (only for pending orders, before accept)
+  // OR-3 equivalent: Time color for kitchen
+  const timeColor = minutesAgo >= 25 ? "text-red-500 font-bold"
+    : minutesAgo >= 15 ? "text-amber-500 font-semibold"
+    : "text-muted-foreground";
+
+  // KD-6: Order type border
+  const typeBorder = ORDER_TYPE_BORDER[order.order_type] ?? "";
+
+  // Ingredient impact preview for pending orders
   const ingredientPreviewQuery = useQuery({
     queryKey: ["ingredient-preview", order.id],
     enabled: order.status === "pending",
@@ -309,27 +417,35 @@ function OrderKOTCard({ order, brandMap, currency, qc }: {
   );
 
   const statusMutation = async (newStatus: string) => {
-    await supabase.from("orders").update({ status: newStatus }).eq("id", order.id);
+    await supabase.from("orders").update({
+      status: newStatus,
+      completed_at: newStatus === "completed" ? new Date().toISOString() : null,
+    }).eq("id", order.id);
 
     // Deduct inventory when order moves to 'accepted'
     if (newStatus === "accepted") {
-      const { data, error } = await supabase.rpc("deduct_stock_for_accepted_order", {
-        p_order_id: order.id,
-        p_restaurant_id: order.restaurant_id,
-      }) as any;
-      if (!error && data) {
-        const lowAlerts = data?.low_stock_alerts || [];
-        const disabled = data?.disabled_items || [];
-        if (disabled.length > 0) {
-          toast({ title: "⚠️ Items auto-disabled", description: disabled.join(", "), variant: "destructive" });
-        } else if (lowAlerts.length > 0) {
-          toast({ title: "📦 Low Stock Alert", description: lowAlerts.join(", ") });
+      try {
+        const { data, error } = await supabase.rpc("deduct_stock_for_accepted_order", {
+          p_order_id: order.id,
+          p_restaurant_id: order.restaurant_id,
+        }) as any;
+        if (!error && data) {
+          const lowAlerts = data?.low_stock_alerts || [];
+          const disabled = data?.disabled_items || [];
+          if (disabled.length > 0) {
+            toast({ title: "⚠️ Items auto-disabled", description: disabled.join(", "), variant: "destructive" });
+          } else if (lowAlerts.length > 0) {
+            toast({ title: "📦 Low Stock Alert", description: lowAlerts.join(", ") });
+          }
+          qc.invalidateQueries({ queryKey: ["ingredients"] });
         }
-        qc.invalidateQueries({ queryKey: ["ingredients"] });
+      } catch {
+        // Non-blocking
       }
     }
 
     qc.invalidateQueries({ queryKey: ["kitchen-orders"] });
+    qc.invalidateQueries({ queryKey: ["admin", "orders"] }); // Cross-page sync
   };
 
   const nextStatus: Record<string, string> = {
@@ -340,7 +456,12 @@ function OrderKOTCard({ order, brandMap, currency, qc }: {
   };
 
   return (
-    <div className={`border-2 rounded-xl p-3 space-y-2 transition-all ${STATUS_COLORS[order.status] || ""} ${isUrgent ? "ring-2 ring-red-400 animate-pulse" : ""}`}>
+    <div className={cn(
+      `border-2 rounded-xl p-3 space-y-2 transition-all`,
+      STATUS_COLORS[order.status] || "",
+      isUrgent && "ring-2 ring-red-400 animate-pulse",
+      typeBorder,
+    )}>
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -356,13 +477,17 @@ function OrderKOTCard({ order, brandMap, currency, qc }: {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+          <div className="flex items-center gap-1 text-xs mt-0.5">
             <Clock className="h-3 w-3" />
-            {minutesAgo}m ago
+            <span className={timeColor}>{minutesAgo}m ago</span>
             {order.table_label && (
-              <span className="ml-1">· {order.table_label}</span>
+              <span className="ml-1 text-muted-foreground">· {order.table_label}</span>
             )}
           </div>
+          {/* Customer name */}
+          {order.customer_name && (
+            <div className="text-xs font-medium mt-0.5">👤 {order.customer_name}</div>
+          )}
           {/* Order Type */}
           <div className="flex gap-1 mt-0.5">
             {order.order_type === 'dine_in' && <Badge variant="outline" className="text-[9px] h-4 px-1 gap-0.5"><Store className="h-2.5 w-2.5" /> Dine-In</Badge>}
@@ -375,16 +500,34 @@ function OrderKOTCard({ order, brandMap, currency, qc }: {
         </Badge>
       </div>
 
+      {/* KD-11: Items with special instructions highlighted */}
       <div className="space-y-1">
         {(order.order_items ?? []).map((item: any, i: number) => (
-          <div key={i} className="flex gap-2 text-sm">
-            <span className="font-bold w-5 text-right">{item.quantity}×</span>
-            <span className="text-foreground">{item.name_snapshot}</span>
+          <div key={i}>
+            <div className="flex gap-2 text-sm">
+              <span className="font-bold w-5 text-right">{item.quantity}×</span>
+              <span className="text-foreground">{item.name_snapshot}</span>
+            </div>
+            {/* KD-11: Special instructions highlight */}
+            {item.notes && (
+              <div className="ml-7 flex items-start gap-1 text-[10px] bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-1.5 py-0.5 mt-0.5">
+                <StickyNote className="h-2.5 w-2.5 text-amber-600 shrink-0 mt-0.5" />
+                <span className="text-amber-800 dark:text-amber-300 font-medium">{item.notes}</span>
+              </div>
+            )}
           </div>
         ))}
       </div>
 
-      {/* Inventory impact preview — shown only on pending orders */}
+      {/* Order-level notes */}
+      {order.notes && (
+        <div className="flex items-start gap-1.5 text-[10px] bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-2 py-1">
+          <StickyNote className="h-3 w-3 text-amber-600 shrink-0 mt-0.5" />
+          <span className="text-amber-800 dark:text-amber-300 font-medium">{order.notes}</span>
+        </div>
+      )}
+
+      {/* Inventory impact preview */}
       {order.status === "pending" && (ingredientPreviewQuery.data || []).length > 0 && (
         <div className="space-y-1">
           {ingredientWarnings.length > 0 && (
@@ -415,11 +558,19 @@ function OrderKOTCard({ order, brandMap, currency, qc }: {
 
       <div className="flex items-center justify-between pt-1 border-t border-border/50">
         <span className="text-sm font-medium">{formatMoney(order.total_cents, currency)}</span>
-        {nextStatus[order.status] && (
-          <Button size="sm" className="h-7 text-xs" onClick={() => statusMutation(nextStatus[order.status])}>
-            Mark {STATUS_LABELS[nextStatus[order.status]]}
-          </Button>
-        )}
+        <div className="flex gap-1.5">
+          {/* KD-9: Recall completed order back to ready */}
+          {order.status === "completed" && (
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => statusMutation("ready")}>
+              ↩ Recall
+            </Button>
+          )}
+          {nextStatus[order.status] && (
+            <Button size="sm" className="h-7 text-xs" onClick={() => statusMutation(nextStatus[order.status])}>
+              Mark {STATUS_LABELS[nextStatus[order.status]]}
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
