@@ -1153,27 +1153,24 @@ export default function PublicMenu() {
         </button>
       )}
 
-      {/* ═══ Zomato-style Category Bottom Sheet ═══ */}
+      {/* ═══ Compact Category Popup — Swiggy / Zomato style ═══ */}
       {catSheetOpen && (
         <div
-          className="fixed inset-0 z-[55] flex flex-col justify-end"
+          className="fixed inset-0 z-[55]"
           onClick={() => setCatSheetOpen(false)}
         >
-          {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/60" />
+          {/* Light backdrop */}
+          <div className="absolute inset-0 bg-black/30" />
 
-          {/* Sheet — white card matching Zomato style */}
+          {/* Compact floating card — anchored bottom-right near the Menu pill */}
           <div
-            className="relative bg-white dark:bg-zinc-900 rounded-t-2xl max-h-[78vh] flex flex-col shadow-2xl"
+            className={`absolute z-10 ${
+              activeCart.itemCount > 0 && !cartOpen ? 'bottom-[140px]' : 'bottom-[76px]'
+            } right-4 w-[280px] max-w-[calc(100vw-32px)] bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-700 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200`}
             onClick={e => e.stopPropagation()}
           >
-            {/* Drag handle */}
-            <div className="flex justify-center pt-3 pb-1">
-              <div className="w-10 h-1 rounded-full bg-zinc-200 dark:bg-zinc-700" />
-            </div>
-
             {/* Scrollable category list */}
-            <div className="overflow-y-auto flex-1 px-4 pt-1 pb-2">
+            <div className="overflow-y-auto max-h-[50vh] py-2">
               {categoriesWithItems.map(cat => {
                 const isActive = activeCategory === cat.id;
                 return (
@@ -1181,19 +1178,23 @@ export default function PublicMenu() {
                     key={cat.id}
                     onClick={() => {
                       setCatSheetOpen(false);
-                      setTimeout(() => scrollToCategory(cat.id), 250);
+                      setTimeout(() => scrollToCategory(cat.id), 200);
                     }}
-                    className={`w-full flex items-center justify-between py-4 border-b border-zinc-100 dark:border-zinc-800 last:border-0 text-left transition-colors`}
-                  >
-                    <span className={`text-base ${
+                    className={`w-full flex items-center justify-between px-4 py-2.5 text-left transition-colors ${
                       isActive
-                        ? 'text-primary font-bold'
-                        : 'text-zinc-800 dark:text-zinc-100 font-normal'
+                        ? 'bg-primary/5'
+                        : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
+                    }`}
+                  >
+                    <span className={`text-sm ${
+                      isActive
+                        ? 'text-primary font-semibold'
+                        : 'text-zinc-700 dark:text-zinc-200 font-normal'
                     }`}>
                       {cat.name}
                     </span>
-                    <span className={`text-base font-semibold tabular-nums ml-4 ${
-                      isActive ? 'text-primary' : 'text-zinc-400 dark:text-zinc-500'
+                    <span className={`text-xs tabular-nums ml-3 ${
+                      isActive ? 'text-primary font-semibold' : 'text-zinc-400 dark:text-zinc-500'
                     }`}>
                       {cat.items.length}
                     </span>
@@ -1202,13 +1203,13 @@ export default function PublicMenu() {
               })}
             </div>
 
-            {/* Close button — Zomato style */}
-            <div className="px-4 pt-2 pb-6">
+            {/* Close button */}
+            <div className="border-t border-zinc-100 dark:border-zinc-800 px-3 py-2">
               <button
                 onClick={() => setCatSheetOpen(false)}
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 font-semibold text-sm hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-medium text-xs hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
               >
-                <X className="h-4 w-4" />
+                <X className="h-3 w-3" />
                 Close
               </button>
             </div>
