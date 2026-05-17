@@ -25,7 +25,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useSEO } from "@/hooks/useSEO";
 import { CopyButton } from "@/apps/admin-panel/components/qr/CopyButton";
-import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote, ShieldAlert, Moon, Sun, Truck, Store, User, Tag, CheckCircle2, Smartphone, Copy, Split, Home, Grid2x2, List, Share2, Wifi, WifiOff, Zap, Star, ChevronDown, UtensilsCrossed } from "lucide-react";
+import { Minus, Plus, ShoppingBag, Flame, Users, MessageCircle, Leaf, Drumstick, Search, X, CreditCard, Banknote, ShieldAlert, Moon, Sun, Truck, Store, User, Tag, CheckCircle2, Smartphone, Copy, Split, Home, Grid2x2, List, Share2, Wifi, WifiOff, Zap, Star, ChevronDown, UtensilsCrossed, Clock } from "lucide-react";
 import { useRestaurantCart } from "../hooks/useRestaurantCart";
 import { useCollaborativeCart } from "../hooks/useCollaborativeCart";
 import { MenuItemDialog } from "../components/MenuItemDialog";
@@ -177,6 +177,50 @@ export default function PublicMenu() {
     description: restaurantQuery.data ? `Browse the menu and order from ${restaurantQuery.data.name}. Fresh food, easy ordering.` : undefined,
     ogImage: restaurantQuery.data?.logo_url || undefined,
   });
+
+  // ── Restaurant open/closed status ──
+  const isRestaurantOpen = useMemo(() => {
+    const r = restaurantQuery.data;
+    if (!r) return true; // Assume open while loading
+    // 1. Admin manually disabled ordering
+    if (r.is_accepting_orders === false) return false;
+    // 2. Holiday mode is on
+    if (r.is_holiday_mode === true) return false;
+    // 3. Check operating hours for current day
+    const hours = r.operating_hours;
+    if (hours && typeof hours === 'object' && !Array.isArray(hours)) {
+      const days = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+      const now = new Date();
+      const dayKey = days[now.getDay()];
+      const dayHours = (hours as Record<string, any>)[dayKey];
+      if (dayHours) {
+        if (dayHours.closed === true) return false;
+        if (dayHours.open && dayHours.close) {
+          const currentMinutes = now.getHours() * 60 + now.getMinutes();
+          const [openH, openM] = dayHours.open.split(':').map(Number);
+          const [closeH, closeM] = dayHours.close.split(':').map(Number);
+          const openMinutes = openH * 60 + openM;
+          const closeMinutes = closeH * 60 + closeM;
+          if (closeMinutes > openMinutes) {
+            // Normal hours (e.g. 09:00 - 23:00)
+            if (currentMinutes < openMinutes || currentMinutes > closeMinutes) return false;
+          } else {
+            // Overnight hours (e.g. 20:00 - 02:00)
+            if (currentMinutes < openMinutes && currentMinutes > closeMinutes) return false;
+          }
+        }
+      }
+    }
+    return true;
+  }, [restaurantQuery.data, nowTime]);
+
+  const closedMessage = useMemo(() => {
+    const r = restaurantQuery.data;
+    if (!r) return '';
+    if (r.is_holiday_mode && r.holiday_mode_message) return r.holiday_mode_message;
+    if (r.is_accepting_orders === false) return 'This restaurant is currently not accepting orders.';
+    return 'This restaurant is currently closed. You can browse the menu but ordering is unavailable.';
+  }, [restaurantQuery.data]);
 
   // Payment method
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online' | 'upi'>('cash');
@@ -1010,6 +1054,43 @@ export default function PublicMenu() {
         </div>
       </header>
 
+      {/* ═══ RESTAURANT CLOSED BANNER ═══ */}
+      {!isRestaurantOpen && (
+        <div className="w-full bg-amber-500/10 border-b border-amber-500/20">
+          <div className="w-full max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+              <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">Restaurant Closed</p>
+              <p className="text-xs text-amber-600/80 dark:text-amber-400/80 line-clamp-2">{closedMessage}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ SEARCH BAR ═══ */}
+      <div className="w-full max-w-3xl mx-auto px-4 pt-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            value={menuSearch}
+            onChange={e => setMenuSearch(e.target.value)}
+            placeholder="Search menu items..."
+            className="w-full h-10 pl-9 pr-9 rounded-xl border bg-muted/50 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all"
+          />
+          {menuSearch && (
+            <button
+              onClick={() => setMenuSearch('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 rounded-full bg-muted flex items-center justify-center hover:bg-muted-foreground/20 transition-colors"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      </div>
+
 
       {/* M6: Prep/Delivery time */}
       {(() => {
@@ -1327,6 +1408,10 @@ export default function PublicMenu() {
                       const hasVariants = !!(item as MenuItemExtended).variants?.length || !!(item as MenuItemExtended).addons?.length;
 
                       const handleAdd = (e: React.MouseEvent) => {
+                        if (!isRestaurantOpen) {
+                          toast({ title: "Restaurant Closed", description: "Ordering is currently unavailable. Please check back during operating hours.", variant: "destructive" });
+                          return;
+                        }
                         navigator.vibrate?.(30); // M14 haptic
                         flyToCart(e, item.image_url); // M3 fly animation
                         if (!hasVariants) {
@@ -1409,7 +1494,7 @@ export default function PublicMenu() {
                                     <button onClick={handleAdd} className="h-7 w-7 rounded-full border flex items-center justify-center text-sm font-bold hover:bg-muted"><Plus className="h-3 w-3" /></button>
                                   </div>
                                 ) : (
-                                  <button onClick={handleAdd} className="h-8 px-3 rounded-full bg-primary text-primary-foreground text-xs font-bold hover:opacity-90 transition-opacity">+ Add</button>
+                                  <button onClick={handleAdd} disabled={!isRestaurantOpen} className={`h-8 px-3 rounded-full text-xs font-bold transition-opacity ${isRestaurantOpen ? 'bg-primary text-primary-foreground hover:opacity-90' : 'bg-muted text-muted-foreground cursor-not-allowed'}`}>+ Add</button>
                                 )}
                               </div>
                             </div>
@@ -1479,7 +1564,7 @@ export default function PublicMenu() {
                                     <button onClick={handleAdd} className="h-8 w-8 rounded-full border flex items-center justify-center hover:bg-muted"><Plus className="h-4 w-4" /></button>
                                   </div>
                                 ) : (
-                                  <Button size="sm" variant="secondary" onClick={handleAdd}>Add</Button>
+                                  <Button size="sm" variant="secondary" onClick={handleAdd} disabled={!isRestaurantOpen}>{isRestaurantOpen ? 'Add' : 'Closed'}</Button>
                                 )}
                               </div>
                             </div>
@@ -2055,10 +2140,12 @@ export default function PublicMenu() {
                 <Button
                   disabled={activeCart.items.length === 0 || placingOrder || !restaurantQuery.data?.id
                     || !turnstileToken
+                    || !isRestaurantOpen
                     || (useCollabCart && !collabCart.isLeader)}
                   onClick={placeOrder}
                 >
-                  {placingOrder ? "Processing…" :
+                  {!isRestaurantOpen ? "Restaurant Closed" :
+                    placingOrder ? "Processing…" :
                     useCollabCart && !collabCart.isLeader ? "Waiting for table leader…" :
                     !turnstileToken ? "Verifying…" :
                     paymentMethod === 'upi' && canUseOnlinePayments ? `Pay ${formatMoney(activeCart.totalCents + gstCents + totalExtraChargesCents + tipCents, currencyCode)} via UPI` :
