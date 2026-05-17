@@ -32,19 +32,18 @@ import { cn } from "@/lib/utils";
 type OrderStatus = "pending" | "accepted" | "in_progress" | "ready" | "completed" | "cancelled";
 type TimeFilter = "daily" | "weekly" | "monthly";
 
-// Mapping DB status to UI column labels
-// Both accepted & in_progress map to "Preparing" column
+// Mapping DB status to UI column labels — matches Kitchen Dashboard
 const STATUS_MAP: Record<string, string> = {
   pending: "New",
-  accepted: "Preparing",
-  in_progress: "Preparing",
+  accepted: "Accepted",
+  in_progress: "Cooking",
   ready: "Ready",
   completed: "Completed",
   cancelled: "Cancelled",
 };
 
-// The Kanban Columns (UI Labels)
-const UI_COLUMNS = ["New", "Preparing", "Ready", "Completed"];
+// The Kanban Columns (UI Labels) — 4 active columns
+const UI_COLUMNS = ["New", "Accepted", "Cooking", "Ready"];
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -53,7 +52,8 @@ function formatTime(iso: string) {
 const statusVariant = (s: string) => {
   switch (s) {
     case "New": return "default";
-    case "Preparing": return "secondary";
+    case "Accepted": return "secondary";
+    case "Cooking": return "secondary";
     case "Ready": return "outline";
     default: return "secondary";
   }
@@ -349,6 +349,28 @@ export default function AdminOrders() {
   // OR-8: Bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  // Fetch child brands so orders across all brands are shown
+  const brandsQuery = useQuery({
+    queryKey: ["orders-brands", restaurant?.id],
+    enabled: !!restaurant?.id,
+    retry: false,
+    throwOnError: false,
+    queryFn: async () => {
+      try {
+        const { data } = await supabase
+          .from("restaurants")
+          .select("id")
+          .eq("parent_kitchen_id", restaurant!.id);
+        return data ?? [];
+      } catch { return []; }
+    },
+  });
+
+  const allRestaurantIds = [
+    restaurant?.id,
+    ...(brandsQuery.data?.map((b: any) => b.id) ?? [])
+  ].filter(Boolean) as string[];
+
   // Notification state
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
@@ -469,13 +491,14 @@ export default function AdminOrders() {
   // --- 2. Data Fetching ---
   const ordersQuery = useQuery({
     queryKey: ["admin", "orders", restaurant?.id, timeFilter],
-    enabled: !!restaurant?.id,
+    enabled: !!restaurant?.id && allRestaurantIds.length > 0,
+    refetchInterval: 15_000, // Auto-refresh every 15 seconds for live feed
     queryFn: async () => {
-      // Fetch Orders with pagination
+      // Fetch Orders with pagination — include child brands
       let q = supabase
         .from("orders")
         .select("id, status, placed_at, table_label, customer_name, customer_phone, notes, subtotal_cents, tax_cents, tip_cents, discount_cents, discount_type, discount_reason, payment_method, payment_status, total_cents, order_type, rating, delivery_address, bill_breakdown, metadata", { count: 'exact' })
-        .eq("restaurant_id", restaurant!.id)
+        .in("restaurant_id", allRestaurantIds)
         .gte("placed_at", startISO)
         .order("placed_at", { ascending: false })
         .range(page * ORDERS_PER_PAGE, (page + 1) * ORDERS_PER_PAGE - 1);
@@ -768,7 +791,7 @@ export default function AdminOrders() {
   }, [orders]);
 
   const byColumn = useMemo(() => {
-    const map: Record<string, any[]> = { "New": [], "Preparing": [], "Ready": [], "Completed": [] };
+    const map: Record<string, any[]> = { "New": [], "Accepted": [], "Cooking": [], "Ready": [] };
     filteredOrders.forEach(o => {
       const label = STATUS_MAP[o.status] ?? o.status;
       if (map[label]) map[label].push(o);
@@ -779,7 +802,7 @@ export default function AdminOrders() {
   // When a specific status is selected, show only that column
   const visibleColumns = useMemo(() => {
     if (statusFilter === "all") return UI_COLUMNS;
-    if (statusFilter === "Cancelled") return []; // Cancelled shows as list, not kanban
+    if (statusFilter === "Cancelled" || statusFilter === "Completed") return []; // Shows as list, not kanban
     return UI_COLUMNS.filter(col => col === statusFilter);
   }, [statusFilter]);
 
@@ -875,6 +898,7 @@ export default function AdminOrders() {
                 {UI_COLUMNS.map((s) => (
                   <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
+                <SelectItem value="Completed">Completed</SelectItem>
                 <SelectItem value="Cancelled">Cancelled</SelectItem>
               </SelectContent>
             </Select>
@@ -960,13 +984,13 @@ export default function AdminOrders() {
         </section>
       </div>
 
-      {/* OR-13: Cancelled orders view */}
-      {statusFilter === "Cancelled" && (
+      {/* OR-13: Completed/Cancelled orders list view */}
+      {(statusFilter === "Cancelled" || statusFilter === "Completed") && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {filteredOrders.length === 0 ? (
             <div className="col-span-full rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
               <XCircle className="h-8 w-8 mx-auto mb-2 opacity-40" />
-              No cancelled orders found.
+              No {statusFilter.toLowerCase()} orders found.
             </div>
           ) : filteredOrders.map((o) => (
             <OrderCard

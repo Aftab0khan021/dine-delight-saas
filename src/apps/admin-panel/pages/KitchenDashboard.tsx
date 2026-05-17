@@ -245,8 +245,8 @@ function KitchenDashboardContent() {
     brandMap[(b as any).id] = { name: (b as any).name, brand_color: (b as any).brand_color || "#6366f1" };
   }
 
-  // Include completed in the active statuses list
-  const activeStatuses = ["pending", "accepted", "in_progress", "ready", "completed"];
+  // 4 active columns: New, Accepted, Cooking, Ready (matches Orders page)
+  const activeStatuses = ["pending", "accepted", "in_progress", "ready"];
   const counts = activeStatuses.map(s => ({
     status: s,
     count: orders.filter(o => o.status === s).length,
@@ -399,7 +399,7 @@ function KitchenDashboardContent() {
 
       {/* Order cards by status column (Kanban) */}
       {statusFilter === "active" ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {activeStatuses.map(status => (
             <div key={status} className="space-y-3">
               <div className="flex items-center gap-2">
