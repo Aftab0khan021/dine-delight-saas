@@ -16,7 +16,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Plus, Package, AlertTriangle, ArrowUpDown, RefreshCw, Link2, Unlink, History, MoreHorizontal, Pencil, Trash2, Lightbulb } from "lucide-react";
+import { Plus, Package, AlertTriangle, ArrowUpDown, RefreshCw, Link2, Unlink, History, MoreHorizontal, Pencil, Trash2, Lightbulb, X, Copy, Check, Search } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toCents } from "@/lib/formatting";
@@ -76,6 +77,17 @@ function InventoryContent() {
   const [linkFactor, setLinkFactor] = useState("1");          // conversion factor
   const [linkSuggestion, setLinkSuggestion] = useState<{ label: string; note?: string } | null>(null);
   const [search, setSearch] = useState("");
+
+  // ── Bulk add ingredients state ──
+  type BulkRow = { name: string; unit: string; current_stock: string; low_stock_threshold: string };
+  const emptyBulkRow = (): BulkRow => ({ name: "", unit: "pcs", current_stock: "0", low_stock_threshold: "5" });
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkRows, setBulkRows] = useState<BulkRow[]>([emptyBulkRow(), emptyBulkRow(), emptyBulkRow()]);
+  const [bulkAdding, setBulkAdding] = useState(false);
+
+  // ── Bulk link state ──
+  const [bulkLinkItems, setBulkLinkItems] = useState<string[]>([]);
+  const [linkSearch, setLinkSearch] = useState("");
 
   // ── Real-time: invalidate inventory queries on any DB change ──
   useRealtimeSync(restaurant?.id, [
@@ -248,6 +260,63 @@ function InventoryContent() {
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  // ── Bulk add ingredients ──
+  async function bulkAddIngredients() {
+    const validRows = bulkRows.filter(r => r.name.trim());
+    if (validRows.length === 0) return;
+    setBulkAdding(true);
+    try {
+      const inserts = validRows.map(r => ({
+        restaurant_id: restaurant!.id,
+        name: r.name.trim(),
+        unit: r.unit,
+        current_stock: parseFloat(r.current_stock) || 0,
+        low_stock_threshold: parseFloat(r.low_stock_threshold) || 0,
+        cost_per_unit_cents: 0,
+      }));
+      const { error } = await supabase.from("ingredients").insert(inserts);
+      if (error) throw error;
+      qc.invalidateQueries({ queryKey: ["ingredients"] });
+      setAddOpen(false);
+      setBulkMode(false);
+      setBulkRows([emptyBulkRow(), emptyBulkRow(), emptyBulkRow()]);
+      toast({ title: `${validRows.length} ingredient(s) added` });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setBulkAdding(false);
+    }
+  }
+
+  // ── Bulk link mutation — link multiple menu items to one ingredient ──
+  const bulkLinkMutation = useMutation({
+    mutationFn: async () => {
+      if (bulkLinkItems.length === 0) throw new Error("Select at least one menu item");
+      const factor = parseFloat(linkFactor);
+      if (!isFinite(factor) || isNaN(factor) || factor <= 0) {
+        throw new Error("Conversion factor must be a positive number.");
+      }
+      const recipeUnit = linkRecipeUnit && linkRecipeUnit !== selected?.unit ? linkRecipeUnit : null;
+      const inserts = bulkLinkItems.map(menuItemId => ({
+        menu_item_id: menuItemId,
+        ingredient_id: selected!.id,
+        quantity_needed: parseFloat(linkQty) || 1,
+        restaurant_id: restaurant!.id,
+        recipe_unit: recipeUnit,
+        conversion_factor: factor,
+      }));
+      const { error } = await supabase.from("menu_item_ingredients").insert(inserts);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ingredient-links"] });
+      setBulkLinkItems([]);
+      setLinkItemId(""); setLinkQty("1"); setLinkRecipeUnit(""); setLinkFactor("1"); setLinkSuggestion(null);
+      toast({ title: `Linked to menu items` });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   const ingredients = ingredientsQuery.data || [];
   const filtered = ingredients.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
   const lowStockItems = ingredients.filter(i => i.is_tracked && i.current_stock <= i.low_stock_threshold && i.current_stock > 0);
@@ -377,29 +446,144 @@ function InventoryContent() {
         </CardContent>
       </Card>
 
-      {/* Add Ingredient Dialog */}
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Add Ingredient</DialogTitle><DialogDescription>Track a new ingredient in your inventory.</DialogDescription></DialogHeader>
-          <div className="space-y-4">
-            <div><Label>Name</Label><Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Chicken Breast" /></div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><Label>Unit</Label>
-                <Select value={form.unit} onValueChange={v => setForm(p => ({ ...p, unit: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div><Label>Initial Stock</Label><Input type="number" value={form.current_stock} onChange={e => setForm(p => ({ ...p, current_stock: e.target.value }))} /></div>
-            </div>
-            <div><Label>Low Stock Threshold</Label><Input type="number" value={form.low_stock_threshold} onChange={e => setForm(p => ({ ...p, low_stock_threshold: e.target.value }))} /></div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
-            <Button onClick={() => addMutation.mutate()} disabled={!form.name.trim() || addMutation.isPending}>
-              {addMutation.isPending ? "Adding..." : "Add Ingredient"}
+      {/* Add Ingredient Dialog — Single or Bulk mode */}
+      <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) { setBulkMode(false); } }}>
+        <DialogContent className={bulkMode ? "max-w-2xl" : ""}>
+          <DialogHeader>
+            <DialogTitle>Add Ingredient{bulkMode ? "s" : ""}</DialogTitle>
+            <DialogDescription>
+              {bulkMode ? "Add multiple ingredients at once." : "Track a new ingredient in your inventory."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Mode toggle */}
+          <div className="flex items-center gap-2 border-b pb-3">
+            <Button
+              variant={bulkMode ? "outline" : "default"}
+              size="sm"
+              onClick={() => setBulkMode(false)}
+            >
+              Single
             </Button>
-          </DialogFooter>
+            <Button
+              variant={bulkMode ? "default" : "outline"}
+              size="sm"
+              onClick={() => setBulkMode(true)}
+            >
+              <Copy className="h-3 w-3 mr-1" /> Bulk Add
+            </Button>
+          </div>
+
+          {!bulkMode ? (
+            /* ── Single mode (original flow) ── */
+            <>
+              <div className="space-y-4">
+                <div><Label>Name</Label><Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Chicken Breast" /></div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div><Label>Unit</Label>
+                    <Select value={form.unit} onValueChange={v => setForm(p => ({ ...p, unit: v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>{UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div><Label>Initial Stock</Label><Input type="number" value={form.current_stock} onChange={e => setForm(p => ({ ...p, current_stock: e.target.value }))} /></div>
+                </div>
+                <div><Label>Low Stock Threshold</Label><Input type="number" value={form.low_stock_threshold} onChange={e => setForm(p => ({ ...p, low_stock_threshold: e.target.value }))} /></div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+                <Button onClick={() => addMutation.mutate()} disabled={!form.name.trim() || addMutation.isPending}>
+                  {addMutation.isPending ? "Adding..." : "Add Ingredient"}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            /* ── Bulk mode ── */
+            <>
+              <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+                {/* Header row */}
+                <div className="grid grid-cols-[1fr_80px_80px_80px_32px] gap-2 text-xs font-semibold text-muted-foreground px-1">
+                  <span>Name</span>
+                  <span>Unit</span>
+                  <span>Stock</span>
+                  <span>Threshold</span>
+                  <span></span>
+                </div>
+                {bulkRows.map((row, idx) => (
+                  <div key={idx} className="grid grid-cols-[1fr_80px_80px_80px_32px] gap-2 items-center">
+                    <Input
+                      value={row.name}
+                      onChange={e => {
+                        const next = [...bulkRows];
+                        next[idx] = { ...next[idx], name: e.target.value };
+                        setBulkRows(next);
+                      }}
+                      placeholder={`Ingredient ${idx + 1}`}
+                      className="h-8 text-sm"
+                    />
+                    <Select
+                      value={row.unit}
+                      onValueChange={v => {
+                        const next = [...bulkRows];
+                        next[idx] = { ...next[idx], unit: v };
+                        setBulkRows(next);
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>{UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Input
+                      type="number"
+                      value={row.current_stock}
+                      onChange={e => {
+                        const next = [...bulkRows];
+                        next[idx] = { ...next[idx], current_stock: e.target.value };
+                        setBulkRows(next);
+                      }}
+                      className="h-8 text-sm"
+                    />
+                    <Input
+                      type="number"
+                      value={row.low_stock_threshold}
+                      onChange={e => {
+                        const next = [...bulkRows];
+                        next[idx] = { ...next[idx], low_stock_threshold: e.target.value };
+                        setBulkRows(next);
+                      }}
+                      className="h-8 text-sm"
+                    />
+                    <button
+                      onClick={() => {
+                        if (bulkRows.length <= 1) return;
+                        setBulkRows(bulkRows.filter((_, i) => i !== idx));
+                      }}
+                      className="h-8 w-8 rounded flex items-center justify-center hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
+                      disabled={bulkRows.length <= 1}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setBulkRows([...bulkRows, emptyBulkRow()])}
+                className="w-full"
+              >
+                <Plus className="h-3 w-3 mr-1" /> Add Row
+              </Button>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+                <Button
+                  onClick={bulkAddIngredients}
+                  disabled={bulkAdding || bulkRows.filter(r => r.name.trim()).length === 0}
+                >
+                  {bulkAdding ? "Adding..." : `Add ${bulkRows.filter(r => r.name.trim()).length} Ingredient(s)`}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -426,6 +610,7 @@ function InventoryContent() {
         if (!open) {
           setLinkItemId(""); setLinkQty("1");
           setLinkRecipeUnit(""); setLinkFactor("1"); setLinkSuggestion(null);
+          setBulkLinkItems([]); setLinkSearch("");
         }
       }}>
         <DialogContent className="max-w-lg">
@@ -471,19 +656,66 @@ function InventoryContent() {
             )}
           </div>
 
-          {/* Add new link */}
+          {/* Add new links — multi-select */}
           <div className="border-t pt-4 space-y-3">
-            <Label>Link New Menu Item</Label>
+            <Label>Link Menu Items <Badge variant="secondary" className="ml-1 text-[10px]">{bulkLinkItems.length} selected</Badge></Label>
 
-            {/* Menu item picker */}
-            <Select value={linkItemId} onValueChange={setLinkItemId}>
-              <SelectTrigger><SelectValue placeholder="Select menu item..." /></SelectTrigger>
-              <SelectContent>
-                {(menuItemsQuery.data || []).map(m => (
-                  <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Search filter */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <Input
+                value={linkSearch}
+                onChange={e => setLinkSearch(e.target.value)}
+                placeholder="Search menu items…"
+                className="h-8 text-sm pl-8"
+              />
+            </div>
+
+            {/* Checkbox list of menu items */}
+            <div className="max-h-40 overflow-y-auto border rounded-lg divide-y">
+              {(() => {
+                const existingIds = new Set((linksQuery.data || []).map(l => l.menu_item_id));
+                const allMenuItems = (menuItemsQuery.data || []).filter(m => !existingIds.has(m.id));
+                const filtered = linkSearch.trim()
+                  ? allMenuItems.filter(m => m.name.toLowerCase().includes(linkSearch.toLowerCase()))
+                  : allMenuItems;
+
+                if (filtered.length === 0) {
+                  return <p className="text-xs text-muted-foreground text-center py-4">No unlinked menu items found.</p>;
+                }
+
+                return filtered.map(m => {
+                  const checked = bulkLinkItems.includes(m.id);
+                  return (
+                    <label
+                      key={m.id}
+                      className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer hover:bg-muted/50 transition-colors"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(v) => {
+                          if (v) {
+                            setBulkLinkItems(prev => [...prev, m.id]);
+                          } else {
+                            setBulkLinkItems(prev => prev.filter(id => id !== m.id));
+                          }
+                        }}
+                      />
+                      <span className="truncate">{m.name}</span>
+                    </label>
+                  );
+                });
+              })()}
+            </div>
+
+            {bulkLinkItems.length > 0 && (
+              <button
+                onClick={() => setBulkLinkItems([])}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Clear selection
+              </button>
+            )}
 
             {/* Quantity + Recipe unit */}
             <div className="grid grid-cols-2 gap-2">
@@ -504,7 +736,6 @@ function InventoryContent() {
                   onValueChange={v => {
                     setLinkRecipeUnit(v);
                     setLinkSuggestion(null);
-                    // Auto-reset factor if unit matches storage
                     if (v === selected?.unit) { setLinkFactor("1"); }
                   }}
                 >
@@ -588,15 +819,15 @@ function InventoryContent() {
             )}
 
             <Button
-              onClick={() => linkMutation.mutate()}
-              disabled={!linkItemId || !linkQty || parseFloat(linkQty) <= 0 || linkMutation.isPending}
+              onClick={() => bulkLinkMutation.mutate()}
+              disabled={bulkLinkItems.length === 0 || !linkQty || parseFloat(linkQty) <= 0 || bulkLinkMutation.isPending}
               className="w-full"
             >
-              {linkMutation.isPending
+              {bulkLinkMutation.isPending
                 ? "Linking..."
                 : linkRecipeUnit && linkRecipeUnit !== selected?.unit
-                  ? `Link — uses ${linkQty} ${linkRecipeUnit} (= ${formatFactor(parseFloat(linkQty) * (parseFloat(linkFactor) || 1))} ${selected?.unit}) per item`
-                  : `Link — uses ${linkQty || "?"} ${selected?.unit} per item`
+                  ? `Link ${bulkLinkItems.length} item(s) — uses ${linkQty} ${linkRecipeUnit} (= ${formatFactor(parseFloat(linkQty) * (parseFloat(linkFactor) || 1))} ${selected?.unit}) each`
+                  : `Link ${bulkLinkItems.length} item(s) — uses ${linkQty || "?"} ${selected?.unit} each`
               }
             </Button>
           </div>
