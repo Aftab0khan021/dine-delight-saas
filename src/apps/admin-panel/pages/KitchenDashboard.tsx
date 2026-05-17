@@ -56,8 +56,10 @@ function KitchenDashboardContent() {
   const [brandFilter, setBrandFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("active");
   const [timeFilter, setTimeFilter] = useState<string>("daily");
-  // KD-2: Dark mode state
-  const [forceDark, setForceDark] = useState(true);
+  // KD-2: Dark mode — sync with admin-wide dark mode (from AdminShell)
+  const [forceDark, setForceDark] = useState(() => {
+    return localStorage.getItem('admin-theme') === 'dark';
+  });
   // KD-1: Full-screen mode
   const [fullScreen, setFullScreen] = useState(false);
   // KD-14: Idle screen detection
@@ -73,19 +75,16 @@ function KitchenDashboardContent() {
     return () => { clearTimeout(timer); events.forEach(e => window.removeEventListener(e, reset)); };
   }, []);
 
-  // KD-2: Apply/remove dark class on kitchen page
+  // KD-2: Apply/remove dark class — syncs both admin-wide and kitchen-local toggle
   useEffect(() => {
     const root = document.documentElement;
     if (forceDark) {
       root.classList.add("dark");
+      localStorage.setItem("admin-theme", "dark");
+    } else {
+      root.classList.remove("dark");
+      localStorage.setItem("admin-theme", "light");
     }
-    return () => {
-      // Restore original theme on unmount — only remove if we forced it
-      if (forceDark) {
-        const stored = localStorage.getItem("theme");
-        if (stored !== "dark") root.classList.remove("dark");
-      }
-    };
   }, [forceDark]);
 
   // Cloud kitchen brands

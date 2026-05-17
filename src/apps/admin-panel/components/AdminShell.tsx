@@ -9,7 +9,9 @@ import {
   Settings,
   User,
   Menu,
-  X
+  X,
+  Moon,
+  Sun
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -77,6 +79,25 @@ export function AdminShell({ children }: PropsWithChildren) {
   const [creating, setCreating] = useState(false);
   const [notificationsRead, setNotificationsRead] = useState(false);
   const { toast } = useToast();
+
+  // Admin-wide dark mode — persisted to localStorage
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('admin-theme') === 'dark';
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+      localStorage.setItem('admin-theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      localStorage.setItem('admin-theme', 'light');
+    }
+  }, [darkMode]);
 
   // Fetch sibling brands for cloud kitchen brand-switcher.
   // IMPORTANT: Always use originalRestaurantId (from user_roles) so the query
@@ -506,6 +527,18 @@ export function AdminShell({ children }: PropsWithChildren) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Dark Mode Toggle */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 shrink-0"
+            onClick={() => setDarkMode(!darkMode)}
+            title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {darkMode ? <Sun className="h-5 w-5 text-yellow-400" /> : <Moon className="h-5 w-5 text-muted-foreground" />}
+            <span className="sr-only">{darkMode ? "Light mode" : "Dark mode"}</span>
+          </Button>
 
           {/* Account Menu */}
           <DropdownMenu>

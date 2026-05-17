@@ -392,27 +392,24 @@ export default function AdminOrders() {
   const { startISO, endISO } = useMemo(() => {
     const now = new Date();
     let start: Date;
-    let end: Date;
+    let end: Date | null = null; // null = no upper bound (include new orders)
 
     switch (timeFilter) {
       case "yesterday":
         start = subDays(startOfDay(now), 1);
-        end = startOfDay(now);
+        end = startOfDay(now); // Fixed range: only yesterday
         break;
       case "weekly":
         start = subDays(now, 7);
-        end = now;
         break;
       case "monthly":
         start = subMonths(now, 1);
-        end = now;
         break;
-      default: // daily — start of today
+      default: // daily — start of today, no upper bound
         start = startOfDay(now);
-        end = now;
     }
 
-    return { startISO: start.toISOString(), endISO: end.toISOString() };
+    return { startISO: start.toISOString(), endISO: end?.toISOString() ?? null };
   }, [timeFilter]);
 
   // Reset page when filters change
@@ -475,14 +472,18 @@ export default function AdminOrders() {
     enabled: !!restaurant?.id,
     queryFn: async () => {
       // Fetch Orders with pagination
-      const { data: orders, error, count } = await supabase
+      let q = supabase
         .from("orders")
         .select("id, status, placed_at, table_label, customer_name, customer_phone, notes, subtotal_cents, tax_cents, tip_cents, discount_cents, discount_type, discount_reason, payment_method, payment_status, total_cents, order_type, rating, delivery_address, bill_breakdown, metadata", { count: 'exact' })
         .eq("restaurant_id", restaurant!.id)
         .gte("placed_at", startISO)
-        .lt("placed_at", endISO)
         .order("placed_at", { ascending: false })
         .range(page * ORDERS_PER_PAGE, (page + 1) * ORDERS_PER_PAGE - 1);
+
+      // Only apply upper bound for fixed ranges (e.g. yesterday)
+      if (endISO) q = q.lt("placed_at", endISO);
+
+      const { data: orders, error, count } = await q;
 
       if (error) throw error;
 
@@ -619,9 +620,10 @@ export default function AdminOrders() {
     },
     // OR-15: Optimistic update
     onMutate: async ({ id, currentStatus }) => {
-      await qc.cancelQueries({ queryKey: ["admin", "orders"] });
-      const prev = qc.getQueryData(["admin", "orders", restaurant?.id, statusFilter, timeFilter, search, page]);
-      qc.setQueryData(["admin", "orders", restaurant?.id, statusFilter, timeFilter, search, page], (old: any) => {
+      const queryKey = ["admin", "orders", restaurant?.id, timeFilter];
+      await qc.cancelQueries({ queryKey });
+      const prev = qc.getQueryData(queryKey);
+      qc.setQueryData(queryKey, (old: any) => {
         if (!old?.orders) return old;
         const NEXT: Record<string, string> = { pending: "accepted", accepted: "in_progress", in_progress: "ready", ready: "completed" };
         return {
@@ -629,7 +631,7 @@ export default function AdminOrders() {
           orders: old.orders.map((o: any) => o.id === id ? { ...o, status: NEXT[currentStatus] ?? o.status } : o),
         };
       });
-      return { prev };
+      return { prev, queryKey };
     },
     onSuccess: (_data) => {
       qc.invalidateQueries({ queryKey: ["admin", "orders"] });
@@ -642,8 +644,8 @@ export default function AdminOrders() {
     },
     onError: (error: Error, _vars, context) => {
       // Rollback optimistic update
-      if (context?.prev) {
-        qc.setQueryData(["admin", "orders", restaurant?.id, statusFilter, timeFilter, search, page], context.prev);
+      if (context?.prev && context?.queryKey) {
+        qc.setQueryData(context.queryKey, context.prev);
       }
       console.error("Order status update failed:", error);
       toast({
