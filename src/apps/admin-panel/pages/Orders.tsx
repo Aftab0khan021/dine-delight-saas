@@ -493,7 +493,10 @@ export default function AdminOrders() {
       }
 
       const ids = allRestaurantIds;
-      if (import.meta.env.DEV) console.log("[Orders] Fetching — IDs:", ids, "timeFilter:", timeFilter, "from:", timeStart.toISOString());
+      console.log("[Orders DEBUG] restaurant?.id:", restaurant?.id);
+      console.log("[Orders DEBUG] allRestaurantIds:", ids);
+      console.log("[Orders DEBUG] timeFilter:", timeFilter, "from:", timeStart.toISOString(), "to:", timeEnd?.toISOString() ?? "none");
+      console.log("[Orders DEBUG] page:", page, "range:", page * ORDERS_PER_PAGE, "-", (page + 1) * ORDERS_PER_PAGE - 1);
 
       // Fetch Orders with pagination — include child brands
       let q = supabase
@@ -508,6 +511,11 @@ export default function AdminOrders() {
       if (timeEnd) q = q.lt("placed_at", timeEnd.toISOString());
 
       const { data: orders, error, count } = await q;
+
+      console.log("[Orders DEBUG] Query result — count:", count, "orders:", orders?.length, "error:", error);
+      if (orders && orders.length > 0) {
+        console.log("[Orders DEBUG] First order:", { id: orders[0].id, status: orders[0].status, placed_at: orders[0].placed_at });
+      }
 
       if (error) throw error;
 
