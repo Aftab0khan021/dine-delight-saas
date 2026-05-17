@@ -536,7 +536,7 @@ export default function Home() {
                   Start Free — No Credit Card <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
-              <Link to="/r/vrindavan">
+              <Link to="/r/golden-spoon">
                 <Button size="lg" variant="outline" className="text-base px-8 border-white/20 text-white hover:bg-white/10">
                   See Live Demo <ChevronRight className="ml-1 h-4 w-4" />
                 </Button>
