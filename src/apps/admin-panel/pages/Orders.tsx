@@ -119,19 +119,30 @@ function OrderCard({
     : "text-muted-foreground";
   const timeUrgent = isActive && minutesAgo >= 25;
 
-  // OR-5: Staff-placed detection
-  const isStaffOrder = !!(order.metadata as any)?.via_staff;
+  // Status colors matching Kitchen Dashboard
+  const STATUS_COLORS: Record<string, string> = {
+    pending: "bg-amber-50 border-amber-300 dark:bg-amber-950 dark:border-amber-700",
+    accepted: "bg-blue-50 border-blue-300 dark:bg-blue-950 dark:border-blue-700",
+    in_progress: "bg-orange-50 border-orange-300 dark:bg-orange-950 dark:border-orange-700",
+    ready: "bg-green-50 border-green-300 dark:bg-green-950 dark:border-green-700",
+    completed: "bg-muted border-border",
+    cancelled: "bg-muted border-border opacity-60",
+  };
 
-  // Order type display label
-  const orderTypeLabel = order.order_type === 'dine_in'
-    ? (order.table_label ? `Table ${order.table_label}` : 'Dine-In')
-    : order.order_type === 'pickup' ? 'Pickup'
-    : order.order_type === 'delivery' ? 'Delivery'
-    : (order.table_label || 'Walk-in');
+  // Order type left border (matching KD)
+  const ORDER_TYPE_BORDER: Record<string, string> = {
+    dine_in: "border-l-4 border-l-blue-500",
+    pickup: "border-l-4 border-l-emerald-500",
+    delivery: "border-l-4 border-l-orange-500",
+  };
+
+  const typeBorder = ORDER_TYPE_BORDER[order.order_type ?? ""] ?? "";
 
   return (
     <div className={cn(
-      "rounded-xl border border-border bg-background p-3 shadow-sm transition-all hover:shadow-md",
+      "border-2 rounded-xl p-3 shadow-sm transition-all hover:shadow-md",
+      STATUS_COLORS[order.status] || "bg-background border-border",
+      typeBorder,
       timeUrgent && "ring-2 ring-red-400 animate-pulse",
       selected && "ring-2 ring-primary bg-primary/5"
     )}>
@@ -145,12 +156,11 @@ function OrderCard({
             className="mt-1 h-4 w-4 rounded border-border accent-primary shrink-0 cursor-pointer"
           />
         )}
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="text-sm font-semibold">
+            <span className="font-bold text-sm">
               {order.dailyToken ? `Token #${order.dailyToken}` : order.status === 'pending' ? 'NEW' : shortId(order.id)}
-            </div>
-            <Badge variant={statusVariant(uiStatus)}>{uiStatus}</Badge>
+            </span>
             {order.payment_status === 'paid' ? (
               <Badge variant="default" className="bg-green-600 text-white text-[10px] px-1.5">Paid</Badge>
             ) : order.payment_method === 'online' || order.payment_method === 'upi' ? (
@@ -158,42 +168,36 @@ function OrderCard({
             ) : (
               <Badge variant="outline" className="text-[10px] px-1.5 capitalize">{order.payment_method || 'Cash'}</Badge>
             )}
-            {/* OR-5: Staff order badge */}
-            {isStaffOrder && (
+            {/* Staff order badge */}
+            {!!(order.metadata as any)?.via_staff && (
               <Badge variant="secondary" className="text-[10px] h-5 px-1.5 gap-0.5 bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300">
                 <UserCheck className="h-3 w-3" /> Staff
               </Badge>
             )}
           </div>
-          <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-            <span>{formatTime(order.placed_at)} • {orderTypeLabel}</span>
-            {/* OR-3: Time elapsed */}
-            <span className={cn("flex items-center gap-0.5", timeColor)}>
-              <Clock className="h-3 w-3" /> {minutesAgo}m
-            </span>
+          <div className="mt-1 flex items-center gap-1 text-xs">
+            <Clock className="h-3 w-3" />
+            <span className={timeColor}>{minutesAgo}m ago</span>
+            {order.table_label && (
+              <span className="ml-1 text-muted-foreground">· {order.table_label}</span>
+            )}
           </div>
-          {/* OR-7: Customer name */}
+          {/* Customer name */}
           {order.customer_name && (
-            <div className="mt-0.5 text-xs font-medium text-foreground">
+            <div className="mt-0.5 text-xs font-medium">
               👤 {order.customer_name}{order.customer_phone ? ` · ${order.customer_phone}` : ''}
             </div>
           )}
-          {/* Order Type Badge row */}
-          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-            {order.order_type === 'dine_in' && (
-              <Badge variant="outline" className="text-[10px] h-5 px-1.5 gap-0.5"><Store className="h-3 w-3" /> Dine-In</Badge>
-            )}
-            {order.order_type === 'pickup' && (
-              <Badge variant="outline" className="text-[10px] h-5 px-1.5 gap-0.5"><ShoppingBag className="h-3 w-3" /> Pickup</Badge>
-            )}
-            {order.order_type === 'delivery' && (
-              <Badge variant="outline" className="text-[10px] h-5 px-1.5 gap-0.5"><Truck className="h-3 w-3" /> Delivery</Badge>
-            )}
-            {order.rating && (
-              <Badge variant="secondary" className="text-[10px] h-5 px-1.5 gap-0.5"><Star className="h-3 w-3 text-amber-500" /> {order.rating}/5</Badge>
-            )}
+          {/* Order Type Badges */}
+          <div className="mt-1 flex items-center gap-1 flex-wrap">
+            {order.order_type === 'dine_in' && <Badge variant="outline" className="text-[9px] h-4 px-1 gap-0.5"><Store className="h-2.5 w-2.5" /> Dine-In</Badge>}
+            {order.order_type === 'pickup' && <Badge variant="outline" className="text-[9px] h-4 px-1 gap-0.5"><ShoppingBag className="h-2.5 w-2.5" /> Pickup</Badge>}
+            {order.order_type === 'delivery' && <Badge variant="outline" className="text-[9px] h-4 px-1 gap-0.5"><Truck className="h-2.5 w-2.5" /> Delivery</Badge>}
+            {order.rating && <Badge variant="secondary" className="text-[10px] h-5 px-1.5 gap-0.5"><Star className="h-3 w-3 text-amber-500" /> {order.rating}/5</Badge>}
           </div>
         </div>
+        {/* Status badge on right (matching KD) */}
+        <Badge variant="outline" className="text-xs shrink-0">{uiStatus}</Badge>
 
         <Button
           variant="ghost"
@@ -410,29 +414,6 @@ export default function AdminOrders() {
     }
   };
 
-  // Time Range Logic
-  const { startISO, endISO } = useMemo(() => {
-    const now = new Date();
-    let start: Date;
-    let end: Date | null = null; // null = no upper bound (include new orders)
-
-    switch (timeFilter) {
-      case "yesterday":
-        start = subDays(startOfDay(now), 1);
-        end = startOfDay(now); // Fixed range: only yesterday
-        break;
-      case "weekly":
-        start = subDays(now, 7);
-        break;
-      case "monthly":
-        start = subMonths(now, 1);
-        break;
-      default: // daily — start of today, no upper bound
-        start = startOfDay(now);
-    }
-
-    return { startISO: start.toISOString(), endISO: end?.toISOString() ?? null };
-  }, [timeFilter]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -490,21 +471,41 @@ export default function AdminOrders() {
 
   // --- 2. Data Fetching ---
   const ordersQuery = useQuery({
-    queryKey: ["admin", "orders", restaurant?.id, timeFilter],
+    queryKey: ["admin", "orders", allRestaurantIds, timeFilter, page],
     enabled: !!restaurant?.id && allRestaurantIds.length > 0,
     refetchInterval: 15_000, // Auto-refresh every 15 seconds for live feed
     queryFn: async () => {
+      // Compute time range INSIDE queryFn (fresh on every fetch — matches KD pattern)
+      const now = new Date();
+      let timeStart: Date;
+      let timeEnd: Date | null = null;
+
+      if (timeFilter === "yesterday") {
+        timeStart = subDays(startOfDay(now), 1);
+        timeEnd = startOfDay(now);
+      } else if (timeFilter === "weekly") {
+        timeStart = subDays(now, 7);
+      } else if (timeFilter === "monthly") {
+        timeStart = subMonths(now, 1);
+      } else {
+        // daily — start of today, no upper bound
+        timeStart = startOfDay(now);
+      }
+
+      const ids = allRestaurantIds;
+      if (import.meta.env.DEV) console.log("[Orders] Fetching — IDs:", ids, "timeFilter:", timeFilter, "from:", timeStart.toISOString());
+
       // Fetch Orders with pagination — include child brands
       let q = supabase
         .from("orders")
         .select("id, status, placed_at, table_label, customer_name, customer_phone, notes, subtotal_cents, tax_cents, tip_cents, discount_cents, discount_type, discount_reason, payment_method, payment_status, total_cents, order_type, rating, delivery_address, bill_breakdown, metadata", { count: 'exact' })
-        .in("restaurant_id", allRestaurantIds)
-        .gte("placed_at", startISO)
+        .in("restaurant_id", ids)
+        .gte("placed_at", timeStart.toISOString())
         .order("placed_at", { ascending: false })
         .range(page * ORDERS_PER_PAGE, (page + 1) * ORDERS_PER_PAGE - 1);
 
       // Only apply upper bound for fixed ranges (e.g. yesterday)
-      if (endISO) q = q.lt("placed_at", endISO);
+      if (timeEnd) q = q.lt("placed_at", timeEnd.toISOString());
 
       const { data: orders, error, count } = await q;
 
@@ -643,7 +644,7 @@ export default function AdminOrders() {
     },
     // OR-15: Optimistic update
     onMutate: async ({ id, currentStatus }) => {
-      const queryKey = ["admin", "orders", restaurant?.id, timeFilter];
+      const queryKey = ["admin", "orders", allRestaurantIds, timeFilter, page];
       await qc.cancelQueries({ queryKey });
       const prev = qc.getQueryData(queryKey);
       qc.setQueryData(queryKey, (old: any) => {
