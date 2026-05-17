@@ -95,6 +95,8 @@ function OrderCard({
   loadingId,
   currencyCode,
   restaurantName,
+  selected,
+  onToggle,
 }: {
   order: OrderData;
   onAdvance: (id: string, currentStatus: OrderStatus) => void;
@@ -102,6 +104,8 @@ function OrderCard({
   loadingId: string | null;
   currencyCode: string;
   restaurantName: string;
+  selected?: boolean;
+  onToggle?: (id: string) => void;
 }) {
   const uiStatus = STATUS_MAP[order.status] ?? order.status;
   const isLoading = loadingId === order.id;
@@ -128,9 +132,19 @@ function OrderCard({
   return (
     <div className={cn(
       "rounded-xl border border-border bg-background p-3 shadow-sm transition-all hover:shadow-md",
-      timeUrgent && "ring-2 ring-red-400 animate-pulse"
+      timeUrgent && "ring-2 ring-red-400 animate-pulse",
+      selected && "ring-2 ring-primary bg-primary/5"
     )}>
       <div className="flex items-start justify-between gap-3">
+        {/* OR-8: Bulk selection checkbox */}
+        {onToggle && (
+          <input
+            type="checkbox"
+            checked={selected ?? false}
+            onChange={() => onToggle(order.id)}
+            className="mt-1 h-4 w-4 rounded border-border accent-primary shrink-0 cursor-pointer"
+          />
+        )}
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <div className="text-sm font-semibold">
@@ -332,6 +346,8 @@ export default function AdminOrders() {
   const [advancingId, setAdvancingId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const ORDERS_PER_PAGE = 50;
+  // OR-8: Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Notification state
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -601,16 +617,34 @@ export default function AdminOrders() {
 
       return data;
     },
-    onSuccess: (data) => {
+    // OR-15: Optimistic update
+    onMutate: async ({ id, currentStatus }) => {
+      await qc.cancelQueries({ queryKey: ["admin", "orders"] });
+      const prev = qc.getQueryData(["admin", "orders", restaurant?.id, statusFilter, timeFilter, search, page]);
+      qc.setQueryData(["admin", "orders", restaurant?.id, statusFilter, timeFilter, search, page], (old: any) => {
+        if (!old?.orders) return old;
+        const NEXT: Record<string, string> = { pending: "accepted", accepted: "in_progress", in_progress: "ready", ready: "completed" };
+        return {
+          ...old,
+          orders: old.orders.map((o: any) => o.id === id ? { ...o, status: NEXT[currentStatus] ?? o.status } : o),
+        };
+      });
+      return { prev };
+    },
+    onSuccess: (_data) => {
       qc.invalidateQueries({ queryKey: ["admin", "orders"] });
-      qc.invalidateQueries({ queryKey: ["kitchen-orders"] }); // Cross-page sync
+      qc.invalidateQueries({ queryKey: ["kitchen-orders"] });
       setAdvancingId(null);
       toast({
         title: "Order updated",
-        description: `Order moved to ${STATUS_MAP[data.status] ?? data.status}`
+        description: `Status advanced successfully`
       });
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _vars, context) => {
+      // Rollback optimistic update
+      if (context?.prev) {
+        qc.setQueryData(["admin", "orders", restaurant?.id, statusFilter, timeFilter, search, page], context.prev);
+      }
       console.error("Order status update failed:", error);
       toast({
         title: "Failed to update order",
@@ -670,6 +704,25 @@ export default function AdminOrders() {
     a.download = `orders_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click(); URL.revokeObjectURL(url);
     toast({ title: "CSV exported" });
+  }
+
+  // --- OR-8: Bulk advance ---
+  async function bulkAdvance() {
+    if (selectedIds.size === 0) { toast({ title: "No orders selected", variant: "destructive" }); return; }
+    const selected = orders.filter(o => selectedIds.has(o.id) && !["completed", "cancelled"].includes(o.status));
+    if (selected.length === 0) { toast({ title: "No advanceable orders selected" }); return; }
+    for (const o of selected) {
+      advanceMutation.mutate({ id: o.id, currentStatus: o.status as OrderStatus });
+    }
+    setSelectedIds(new Set());
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   }
 
   // --- 4. Filtering & Grouping ---
@@ -751,6 +804,12 @@ export default function AdminOrders() {
             <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5">
               📥 Export CSV
             </Button>
+            {/* OR-8: Bulk advance */}
+            {selectedIds.size > 0 && (
+              <Button size="sm" onClick={bulkAdvance} className="gap-1.5">
+                ⚡ Advance {selectedIds.size} Order{selectedIds.size > 1 ? 's' : ''}
+              </Button>
+            )}
             <div className="inline-flex items-center gap-2 self-start rounded-full border border-border bg-background px-3 py-1.5 text-sm shadow-sm">
               <span className="relative inline-flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/40 motion-reduce:hidden" />
@@ -883,6 +942,8 @@ export default function AdminOrders() {
                     loadingId={advancingId}
                     currencyCode={restaurant?.currency_code || "INR"}
                     restaurantName={restaurant?.name || "Restaurant"}
+                    selected={selectedIds.has(o.id)}
+                    onToggle={toggleSelect}
                   />
                 ))}
 
@@ -917,6 +978,8 @@ export default function AdminOrders() {
               loadingId={advancingId}
               currencyCode={restaurant?.currency_code || "INR"}
               restaurantName={restaurant?.name || "Restaurant"}
+              selected={selectedIds.has(o.id)}
+              onToggle={toggleSelect}
             />
           ))}
         </div>

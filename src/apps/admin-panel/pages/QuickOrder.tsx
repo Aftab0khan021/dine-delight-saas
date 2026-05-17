@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Minus, Trash2, ShoppingCart, Search, CheckCircle2, Store, ShoppingBag, Truck, X, CreditCard, Banknote, Smartphone, StickyNote } from "lucide-react";
+import { Plus, Minus, Trash2, ShoppingCart, Search, CheckCircle2, Store, ShoppingBag, Truck, X, CreditCard, Banknote, Smartphone, StickyNote, MessageCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
@@ -292,6 +292,12 @@ export default function QuickOrder() {
     };
   }, [restaurant?.settings]);
 
+  // QO-16: WhatsApp number from settings
+  const whatsappNumber = useMemo(() => {
+    const s = (restaurant?.settings as any) ?? {};
+    return String(s.whatsapp_number ?? "").replace(/\D/g, "");
+  }, [restaurant?.settings]);
+
   // ── State ──
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -314,6 +320,10 @@ export default function QuickOrder() {
   const [lastOrderData, setLastOrderData] = useState<any>(null);
   // QO-12: Tip
   const [tipCents, setTipCents] = useState(0);
+  // QO-11: Coupon code
+  const [couponCode, setCouponCode] = useState("");
+  // QO-10: Manual discount (percentage)
+  const [discountPct, setDiscountPct] = useState(0);
   // QO-7: Image zoom
   const [zoomImage, setZoomImage] = useState<string | null>(null);
   // QO-15: Order history sidebar
@@ -380,8 +390,11 @@ export default function QuickOrder() {
   }, [allItems, selectedCat, search]);
 
   const subtotal = cart.reduce((s, i) => s + i.unit_price * i.quantity, 0);
-  const taxCents = Math.round(subtotal * taxSettings.rate);
-  const total = subtotal + taxCents + tipCents;
+  // QO-10: Discount
+  const discountCents = Math.round(subtotal * discountPct / 100);
+  const afterDiscount = subtotal - discountCents;
+  const taxCents = Math.round(afterDiscount * taxSettings.rate);
+  const total = afterDiscount + taxCents + tipCents;
 
   // Guard: show spinner while restaurant context is loading (placed after ALL hooks)
   if (!restaurantId) {
@@ -431,6 +444,8 @@ export default function QuickOrder() {
     setLastOrderData(null);
     setShowConfirm(false);
     setTipCents(0);
+    setCouponCode("");
+    setDiscountPct(0);
   }
 
   // ── Place order ──
@@ -478,6 +493,8 @@ export default function QuickOrder() {
         tax_label: taxSettings.label,
         tax_rate_pct: Math.round(taxSettings.rate * 100),
         tip_cents: tipCents,  // QO-12
+        discount_cents: discountCents,  // QO-10
+        coupon_code: couponCode.trim() || null,  // QO-11
         extra_charges: [],
         // QO-17: Staff metadata
         metadata: {
@@ -562,6 +579,18 @@ export default function QuickOrder() {
               if (w) { w.document.open(); w.document.write(html); w.document.close(); }
             }}>
               🖨️ Reprint KOT
+            </Button>
+          )}
+          {/* QO-16: WhatsApp receipt */}
+          {(customerPhone || whatsappNumber) && lastOrderData && (
+            <Button variant="outline" onClick={() => {
+              const phone = customerPhone.replace(/\D/g, "") || whatsappNumber;
+              const items = lastOrderData.item_details?.map((i: any) => `${i.quantity}× ${i.name_snapshot}${i.variant_name ? ` (${i.variant_name})` : ''}`).join('\n') || '';
+              const msg = `🧾 *${restaurant?.name || 'Restaurant'} — Order Receipt*\n\nToken: *${successToken}*\n${lastOrderData.table_label ? `Table: ${lastOrderData.table_label}\n` : ''}─────────────\n${items}\n─────────────\nTotal: ${formatMoney(total, currency)}\n\nThank you for your order! 🙏`;
+              const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+              window.open(url, '_blank');
+            }}>
+              <MessageCircle className="h-4 w-4 mr-1" /> WhatsApp Receipt
             </Button>
           )}
           <Button onClick={() => navigate("/admin/orders")}>View Orders</Button>
@@ -794,6 +823,12 @@ export default function QuickOrder() {
                     <span>Subtotal</span>
                     <span>{formatMoney(subtotal, currency)}</span>
                   </div>
+                  {discountCents > 0 && (
+                    <div className="flex justify-between text-green-600">
+                      <span>Discount ({discountPct}%)</span>
+                      <span>-{formatMoney(discountCents, currency)}</span>
+                    </div>
+                  )}
                   {taxCents > 0 && (
                     <div className="flex justify-between">
                       <span>{taxSettings.label} ({Math.round(taxSettings.rate * 100)}%)</span>
@@ -810,6 +845,37 @@ export default function QuickOrder() {
                     <span>Total</span>
                     <span>{formatMoney(total, currency)}</span>
                   </div>
+                </div>
+
+                {/* QO-10: Manual discount */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Discount</Label>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {[0, 5, 10, 15, 20].map(pct => (
+                      <button
+                        key={pct}
+                        onClick={() => setDiscountPct(pct)}
+                        className={cn(
+                          "rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors",
+                          discountPct === pct ? "border-primary bg-primary/10 text-primary" : "border-border hover:border-primary/50"
+                        )}
+                      >
+                        {pct === 0 ? "None" : `${pct}%`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* QO-11: Coupon code */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Coupon Code (optional)</Label>
+                  <Input
+                    value={couponCode}
+                    onChange={e => setCouponCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. SAVE10"
+                    className="h-8 text-sm font-mono"
+                    maxLength={20}
+                  />
                 </div>
 
                 {/* QO-12: Tip input */}
@@ -1000,6 +1066,18 @@ export default function QuickOrder() {
                 </div>
               ))}
               <Separator />
+              {discountCents > 0 && (
+                <div className="flex justify-between text-green-600 text-xs">
+                  <span>Discount ({discountPct}%)</span>
+                  <span>-{formatMoney(discountCents, currency)}</span>
+                </div>
+              )}
+              {tipCents > 0 && (
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Tip</span>
+                  <span>{formatMoney(tipCents, currency)}</span>
+                </div>
+              )}
               <div className="flex justify-between font-semibold">
                 <span>Total</span>
                 <span>{formatMoney(total, currency)}</span>
@@ -1008,6 +1086,7 @@ export default function QuickOrder() {
                 {orderType === "dine_in" && tableLabel && `Table ${tableLabel} · `}
                 {paymentMethod.toUpperCase()}
                 {customerName && ` · ${customerName}`}
+                {couponCode && ` · Coupon: ${couponCode}`}
               </div>
             </div>
             <div className="flex gap-2 pt-2">

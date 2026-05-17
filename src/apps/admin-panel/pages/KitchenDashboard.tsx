@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { RefreshCw, ChefHat, Clock, Store, Truck, ShoppingBag, AlertTriangle, Package, StickyNote } from "lucide-react";
+import { RefreshCw, ChefHat, Clock, Store, Truck, ShoppingBag, AlertTriangle, Package, StickyNote, BarChart3 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { formatMoney } from "@/lib/formatting";
 import { shortId } from "@/lib/formatting";
 import { useToast } from "@/hooks/use-toast";
@@ -140,7 +141,7 @@ function KitchenDashboardContent() {
         .select(`
           id, status, table_label, placed_at, total_cents, currency_code, restaurant_id, order_type, delivery_address, customer_name, notes,
           restaurants(name, brand_color),
-          order_items(name_snapshot, quantity, notes)
+          order_items(name_snapshot, quantity, notes, menu_items(food_type))
         `)
         .in("restaurant_id", ids)
         .gte("placed_at", timeStart.toISOString())
@@ -179,20 +180,44 @@ function KitchenDashboardContent() {
   });
 
   // Realtime subscription — also invalidates admin orders for cross-page sync
+  // KD-12: Track pending count for audio alert
+  const prevPendingCountRef = useRef(0);
   useEffect(() => {
     if (!restaurant?.id) return;
     const channel = supabase
       .channel(`kitchen:${restaurant.id}`)
       .on("postgres_changes", {
-        event: "*", schema: "public", table: "orders",
+        event: "INSERT", schema: "public", table: "orders",
         filter: `restaurant_id=eq.${restaurant.id}`,
       }, () => {
         qc.invalidateQueries({ queryKey: ["kitchen-orders"] });
-        qc.invalidateQueries({ queryKey: ["admin", "orders"] }); // Cross-page sync
+        qc.invalidateQueries({ queryKey: ["admin", "orders"] });
+        // KD-12: Play audio alert for new orders
+        try {
+          const ctx = new AudioContext();
+          const osc = ctx.createOscillator();
+          osc.type = "sine"; osc.frequency.value = 880;
+          osc.connect(ctx.destination);
+          osc.start(); osc.stop(ctx.currentTime + 0.15);
+          setTimeout(() => { osc.disconnect(); ctx.close(); }, 300);
+        } catch { /* Audio not available */ }
+      })
+      .on("postgres_changes", {
+        event: "UPDATE", schema: "public", table: "orders",
+        filter: `restaurant_id=eq.${restaurant.id}`,
+      }, () => {
+        qc.invalidateQueries({ queryKey: ["kitchen-orders"] });
+        qc.invalidateQueries({ queryKey: ["admin", "orders"] });
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [restaurant?.id, qc]);
+
+  // KD-3: Configurable SLA threshold (from restaurant settings, default 20 min)
+  const slaMinutes = useMemo(() => {
+    const s = (restaurant?.settings as any) ?? {};
+    return Number(s.sla_minutes ?? 20);
+  }, [restaurant?.settings]);
 
   // KD-13: SLA breach detection
   const slaAlertedRef = useRef<Set<string>>(new Set());
@@ -201,7 +226,7 @@ function KitchenDashboardContent() {
     orders.forEach((o: any) => {
       if (!["pending", "accepted"].includes(o.status)) return;
       const minutesAgo = Math.floor((Date.now() - new Date(o.placed_at).getTime()) / 60_000);
-      if (minutesAgo >= 20 && !slaAlertedRef.current.has(o.id)) {
+      if (minutesAgo >= slaMinutes && !slaAlertedRef.current.has(o.id)) {
         slaAlertedRef.current.add(o.id);
         toast({
           title: "⏰ SLA Breach",
@@ -210,7 +235,7 @@ function KitchenDashboardContent() {
         });
       }
     });
-  }, [ordersQuery.data, toast]);
+  }, [ordersQuery.data, toast, slaMinutes]);
 
   const orders = ordersQuery.data ?? [];
   const brands = brandsQuery.data ?? [];
@@ -230,6 +255,27 @@ function KitchenDashboardContent() {
     itemCount: orders.filter(o => o.status === s).reduce((sum, o: any) =>
       sum + ((o.order_items ?? []) as any[]).reduce((s2: number, i: any) => s2 + (i.quantity || 0), 0), 0),
   }));
+
+  // KD-16: Hourly throughput chart data
+  const [showChart, setShowChart] = useState(false);
+  const throughputData = useMemo(() => {
+    const completed = orders.filter(o => o.status === "completed");
+    const buckets: Record<string, number> = {};
+    for (let h = 0; h < 24; h++) buckets[`${h.toString().padStart(2, '0')}:00`] = 0;
+    for (const o of completed) {
+      const hour = new Date(o.placed_at).getHours();
+      const key = `${hour.toString().padStart(2, '0')}:00`;
+      buckets[key] = (buckets[key] ?? 0) + 1;
+    }
+    // Only return hours that have at least one surrounding hour with data, to reduce noise
+    return Object.entries(buckets)
+      .map(([hour, count]) => ({ hour, count }))
+      .filter((_, i, arr) => {
+        // Show hours 8-23 by default to cover restaurant hours
+        const h = parseInt(arr[i].hour);
+        return h >= 8 || arr[i].count > 0;
+      });
+  }, [orders]);
 
   return (
     <div className={cn("flex flex-col gap-4 w-full", fullScreen && "fixed inset-0 z-50 bg-background p-4 overflow-y-auto")}>
@@ -292,6 +338,10 @@ function KitchenDashboardContent() {
           <Button variant="outline" size="sm" onClick={() => qc.invalidateQueries({ queryKey: ["kitchen-orders"] })}>
             <RefreshCw className={`h-4 w-4 ${ordersQuery.isFetching ? 'animate-spin' : ''}`} />
           </Button>
+          {/* KD-16: Throughput chart toggle */}
+          <Button variant={showChart ? "default" : "outline"} size="sm" onClick={() => setShowChart(!showChart)} className="gap-1.5">
+            <BarChart3 className="h-4 w-4" /> {showChart ? 'Hide' : 'Stats'}
+          </Button>
         </div>
       </section>
 
@@ -311,6 +361,29 @@ function KitchenDashboardContent() {
           </div>
         ) : null;
       })()}
+
+      {/* KD-16: Throughput chart */}
+      {showChart && (
+        <Card className="shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" /> Hourly Throughput (Completed Orders)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-40">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={throughputData}>
+                  <XAxis dataKey="hour" tick={{ fontSize: 10 }} interval={1} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={24} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#f97316" radius={[3, 3, 0, 0]} name="Orders" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* KD-4: Status summary pills with item counts */}
       <div className="flex gap-3 flex-wrap">
@@ -504,8 +577,12 @@ function OrderKOTCard({ order, brandMap, currency, qc }: {
       <div className="space-y-1">
         {(order.order_items ?? []).map((item: any, i: number) => (
           <div key={i}>
-            <div className="flex gap-2 text-sm">
+            <div className="flex gap-2 text-sm items-center">
               <span className="font-bold w-5 text-right">{item.quantity}×</span>
+              {/* KD-5: Food type dot */}
+              {item.menu_items?.food_type === 'veg' && <span className="inline-block h-2.5 w-2.5 rounded-sm border-2 border-green-600 bg-green-500 shrink-0" />}
+              {item.menu_items?.food_type === 'non_veg' && <span className="inline-block h-2.5 w-2.5 rounded-sm border-2 border-red-600 bg-red-500 shrink-0" />}
+              {item.menu_items?.food_type === 'egg' && <span className="inline-block h-2.5 w-2.5 rounded-sm border-2 border-yellow-500 bg-yellow-400 shrink-0" />}
               <span className="text-foreground">{item.name_snapshot}</span>
             </div>
             {/* KD-11: Special instructions highlight */}
@@ -542,7 +619,7 @@ function OrderKOTCard({ order, brandMap, currency, qc }: {
             <div className="text-[10px] bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-2 py-1 flex items-start gap-1">
               <Package className="h-3 w-3 text-amber-500 shrink-0 mt-0.5" />
               <span className="text-amber-700 dark:text-amber-400">
-                <strong>Will go low:</strong> {ingredientLow.map((i: any) => `${i.ingredient_name} (${Number(i.stock_after).toFixed(1)} ${i.unit} left)`).join(", ")}
+                <strong>Will go low:</strong> {ingredientLow.map((i: any) => `${i.ingredient_name} (${Number(i.stock_after).toFixed(1)} ${i.storage_unit} left)`).join(", ")}
               </span>
             </div>
           )}
