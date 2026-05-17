@@ -21,7 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toCents } from "@/lib/formatting";
-import { ALL_UNIT_SYMBOLS, ALL_UNITS, UNIT_CATEGORIES, getUnitsByCategory, getSuggestedConversion, formatFactor } from "@/lib/unit-conversions";
+import { ALL_UNIT_SYMBOLS, ALL_UNITS, UNIT_CATEGORIES, getUnitsByCategory, getSuggestedConversion, formatFactor, convertSameCategory } from "@/lib/unit-conversions";
 import type { UnitCategory } from "@/lib/unit-conversions";
 
 // Storage units for ingredient master (sensible warehouse units only)
@@ -294,17 +294,17 @@ function InventoryContent() {
     mutationFn: async () => {
       if (bulkLinkRows.length === 0) throw new Error("Select at least one menu item");
       const inserts = bulkLinkRows.map(row => {
-        const factor = parseFloat(row.factor);
+        const isSameUnit = !row.recipe_unit || row.recipe_unit === selected?.unit;
+        const factor = isSameUnit ? 1 : parseFloat(row.factor);
         if (!isFinite(factor) || isNaN(factor) || factor <= 0) {
-          throw new Error(`Invalid factor for ${row.name}`);
+          throw new Error(`Invalid conversion factor for ${row.name}. Set how much 1 ${row.recipe_unit} equals in ${selected?.unit}.`);
         }
-        const recipeUnit = row.recipe_unit && row.recipe_unit !== selected?.unit ? row.recipe_unit : null;
         return {
           menu_item_id: row.menu_item_id,
           ingredient_id: selected!.id,
           quantity_needed: parseFloat(row.qty) || 1,
           restaurant_id: restaurant!.id,
-          recipe_unit: recipeUnit,
+          recipe_unit: isSameUnit ? null : row.recipe_unit,
           conversion_factor: factor,
         };
       });
@@ -706,12 +706,18 @@ function InventoryContent() {
                           checked={checked}
                           onCheckedChange={(v) => {
                             if (v) {
+                              // Smart defaults: use smaller unit for recipes (g instead of kg, ml instead of L)
+                              const storageUnit = selected?.unit || "pcs";
+                              const smallerUnit = storageUnit === "kg" ? "g" : storageUnit === "L" ? "ml" : storageUnit;
+                              const autoFactor = smallerUnit !== storageUnit
+                                ? convertSameCategory(1, smallerUnit, storageUnit)
+                                : 1;
                               setBulkLinkRows(prev => [...prev, {
                                 menu_item_id: m.id,
                                 name: m.name,
-                                qty: "1",
-                                recipe_unit: selected?.unit || "pcs",
-                                factor: "1",
+                                qty: storageUnit === "kg" ? "100" : storageUnit === "L" ? "100" : "1",
+                                recipe_unit: smallerUnit,
+                                factor: autoFactor !== null ? String(parseFloat(autoFactor.toFixed(6))) : "1",
                               }]);
                             } else {
                               setBulkLinkRows(prev => prev.filter(r => r.menu_item_id !== m.id));
@@ -814,7 +820,13 @@ function InventoryContent() {
                         value={row.recipe_unit}
                         onValueChange={v => {
                           const next = [...bulkLinkRows];
-                          next[idx] = { ...next[idx], recipe_unit: v, factor: v === selected?.unit ? "1" : next[idx].factor };
+                          // Auto-calculate factor when changing unit
+                          let newFactor = "1";
+                          if (v !== selected?.unit) {
+                            const auto = convertSameCategory(1, v, selected?.unit || "pcs");
+                            newFactor = auto !== null ? String(parseFloat(auto.toFixed(6))) : next[idx].factor;
+                          }
+                          next[idx] = { ...next[idx], recipe_unit: v, factor: newFactor };
                           setBulkLinkRows(next);
                         }}
                       >
