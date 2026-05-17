@@ -4,6 +4,7 @@ import { AdminShell } from "./AdminShell";
 import { RestaurantProvider } from "../state/restaurant-context";
 import { PermissionProvider } from "../state/permission-context";
 import { ImpersonationBanner } from "./ImpersonationBanner";
+import { SupportChat } from "./SupportChat";
 
 export function AdminLayout() {
   return (
@@ -15,10 +16,12 @@ export function AdminLayout() {
             <AdminShell>
               <Outlet />
             </AdminShell>
+            <SupportChat />
           </div>
         </SidebarProvider>
       </PermissionProvider>
     </RestaurantProvider>
   );
 }
+
 
