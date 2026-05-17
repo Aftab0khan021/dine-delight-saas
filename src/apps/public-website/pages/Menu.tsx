@@ -572,6 +572,10 @@ export default function PublicMenu() {
 
   const placeOrder = async () => {
     if (placingOrder) return;
+    if (!isRestaurantOpen) {
+      setCheckoutError("Restaurant is currently closed. Ordering is unavailable.");
+      return;
+    }
     const restaurantId = restaurantQuery.data?.id;
     if (!restaurantId) return;
     if (activeCart.items.length === 0) return;
@@ -822,22 +826,7 @@ export default function PublicMenu() {
     }
   };
 
-  // M7: Cart restore toast
-  const cartRestoreShown = useRef(false);
-  useEffect(() => {
-    if (cartRestoreShown.current) return;
-    const timer = setTimeout(() => {
-      if (activeCart.itemCount > 0 && !placedOrderToken) {
-        cartRestoreShown.current = true;
-        toast({
-          title: `🛒 You have ${activeCart.itemCount} item${activeCart.itemCount > 1 ? 's' : ''} in your cart`,
-          description: "Ready to complete your order?",
-          action: (<button onClick={() => setCartOpen(true)} className="text-xs font-semibold underline">View Cart</button>) as React.ReactNode,
-        });
-      }
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [activeCart.itemCount]);
+  // M7: Cart restore toast — removed (was sticky/annoying without close button)
 
   // M17: '/' keyboard shortcut for search
   useEffect(() => {
@@ -1487,14 +1476,14 @@ export default function PublicMenu() {
                               )}
                               <div className="mt-auto flex items-center justify-between gap-2">
                                 <p className="text-sm font-bold">{formatMoney(item.price_cents, currencyCode)}</p>
-                                {inCart ? (
+                                {inCart && isRestaurantOpen ? (
                                   <div className="flex items-center gap-1">
                                     <button onClick={() => { navigator.vibrate?.(20); activeCart.decrement(inCart.cart_id); }} className="h-7 w-7 rounded-full border flex items-center justify-center text-sm font-bold hover:bg-muted"><Minus className="h-3 w-3" /></button>
                                     <span className="w-5 text-center text-sm font-semibold">{inCart.quantity}</span>
                                     <button onClick={handleAdd} className="h-7 w-7 rounded-full border flex items-center justify-center text-sm font-bold hover:bg-muted"><Plus className="h-3 w-3" /></button>
                                   </div>
                                 ) : (
-                                  <button onClick={handleAdd} disabled={!isRestaurantOpen} className={`h-8 px-3 rounded-full text-xs font-bold transition-opacity ${isRestaurantOpen ? 'bg-primary text-primary-foreground hover:opacity-90' : 'bg-muted text-muted-foreground cursor-not-allowed'}`}>+ Add</button>
+                                  <button onClick={handleAdd} disabled={!isRestaurantOpen} className={`h-8 px-3 rounded-full text-xs font-bold transition-opacity ${isRestaurantOpen ? 'bg-primary text-primary-foreground hover:opacity-90' : 'bg-muted text-muted-foreground cursor-not-allowed'}`}>{isRestaurantOpen ? '+ Add' : 'Closed'}</button>
                                 )}
                               </div>
                             </div>
@@ -1557,7 +1546,7 @@ export default function PublicMenu() {
                               </div>
                               <div className="mt-3 flex items-center justify-end">
                                 {/* M3: Inline qty OR Add button */}
-                                {inCart ? (
+                                {inCart && isRestaurantOpen ? (
                                   <div className="flex items-center gap-2">
                                     <button onClick={() => { navigator.vibrate?.(20); activeCart.decrement(inCart.cart_id); }} className="h-8 w-8 rounded-full border flex items-center justify-center hover:bg-muted"><Minus className="h-4 w-4" /></button>
                                     <span className="min-w-6 text-center font-semibold">{inCart.quantity}</span>
