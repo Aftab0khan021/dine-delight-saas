@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Minus, Trash2, ShoppingCart, Search, CheckCircle2, Store, ShoppingBag, Truck, X, CreditCard, Banknote, Smartphone, StickyNote, MessageCircle } from "lucide-react";
+import { Plus, Minus, Trash2, ShoppingCart, Search, CheckCircle2, Store, ShoppingBag, Truck, X, CreditCard, Banknote, Smartphone, StickyNote, MessageCircle, LayoutGrid, List } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantContext } from "../state/restaurant-context";
 import { useToast } from "@/hooks/use-toast";
@@ -328,6 +328,8 @@ export default function QuickOrder() {
   const [zoomImage, setZoomImage] = useState<string | null>(null);
   // QO-15: Order history sidebar
   const [showHistory, setShowHistory] = useState(false);
+  // View mode: grid or list
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   // QO-15: Recent orders query
   const recentOrdersQuery = useQuery({
@@ -640,19 +642,43 @@ export default function QuickOrder() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-0 items-start" style={{ height: 'calc(100vh - 200px)' }}>
 
-        {/* ── Left: Menu Browser ── */}
-        <div className="space-y-3">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search menu items…"
-              className="pl-9"
-            />
+        {/* ── Left: Menu Browser (scrollable) ── */}
+        <div className="overflow-y-auto h-full pr-2 pb-4 space-y-3">
+          {/* Search + View Toggle */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search menu items…"
+                className="pl-9"
+              />
+            </div>
+            <div className="flex items-center border rounded-lg overflow-hidden shrink-0">
+              <button
+                onClick={() => setViewMode("grid")}
+                className={cn(
+                  "p-2 transition-colors",
+                  viewMode === "grid" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"
+                )}
+                title="Grid view"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                className={cn(
+                  "p-2 transition-colors",
+                  viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"
+                )}
+                title="List view"
+              >
+                <List className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           {/* QO-2: Frequently ordered items */}
@@ -709,68 +735,147 @@ export default function QuickOrder() {
             ))}
           </div>
 
-          {/* Items grid */}
+          {/* Items — Grid or List */}
           {itemsQuery.isLoading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="h-24 rounded-xl bg-muted animate-pulse" />
+            <div className={viewMode === "grid" ? "grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3" : "space-y-2"}>
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className={cn("rounded-xl bg-muted animate-pulse", viewMode === "grid" ? "h-44" : "h-16")} />
               ))}
             </div>
           ) : filteredItems.length === 0 ? (
             <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
               No items found.
             </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          ) : viewMode === "grid" ? (
+            /* ─── GRID VIEW ─── */
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
               {filteredItems.map(item => {
-                // QO-1: Check if item has variants or addons
                 const hasVariants = (variantsQuery.data ?? []).some(v => v.menu_item_id === item.id && v.is_active);
                 const hasAddons = (addonsQuery.data ?? []).some(a => a.menu_item_id === item.id && a.is_active);
                 const isSimple = !hasVariants && !hasAddons;
+                const inCart = cart.find(c => c.menu_item_id === item.id);
 
                 return (
                   <button
                     key={item.id}
                     onClick={() => {
                       if (isSimple) {
-                        // QO-1: Direct add to cart — skip dialog
-                        addToCart({
-                          menu_item_id: item.id,
-                          name: item.name,
-                          unit_price: item.price_cents,
-                          addons: [],
-                          notes: "",
-                        });
+                        addToCart({ menu_item_id: item.id, name: item.name, unit_price: item.price_cents, addons: [], notes: "" });
                         toast({ title: `Added ${item.name}` });
                       } else {
                         setPickerItem(item);
                       }
                     }}
-                    className="group relative flex flex-col items-start rounded-xl border border-border bg-card p-3 text-left transition-all hover:border-primary hover:shadow-sm active:scale-[0.98]"
+                    className="group relative flex flex-col rounded-xl border border-border bg-card overflow-hidden text-left transition-all hover:border-primary/60 hover:shadow-md active:scale-[0.98]"
                   >
-                    {item.image_url && (
-                      <img
-                        src={item.image_url}
-                        alt={item.name}
-                        className="mb-2 h-14 w-full rounded-lg object-cover cursor-zoom-in"
-                        onClick={(e) => { e.stopPropagation(); setZoomImage(item.image_url); }}
-                      />
-                    )}
-                    <div className="flex items-start gap-1.5 w-full">
-                      {foodTypeDot(item.food_type)}
-                      <span className="text-sm font-medium leading-tight line-clamp-2">{item.name}</span>
+                    {/* Image */}
+                    <div className="relative w-full aspect-[4/3] bg-muted overflow-hidden">
+                      {item.image_url ? (
+                        <img
+                          src={item.image_url}
+                          alt={item.name}
+                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          loading="lazy"
+                          onClick={(e) => { e.stopPropagation(); setZoomImage(item.image_url); }}
+                        />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center text-muted-foreground/30">
+                          <ShoppingBag className="h-8 w-8" />
+                        </div>
+                      )}
+                      {/* Gradient overlay for price */}
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-2.5 py-2">
+                        <span className="text-white text-sm font-bold">{formatMoney(item.price_cents, currency)}</span>
+                      </div>
+                      {/* Add button overlay */}
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="h-7 w-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg">
+                          <Plus className="h-4 w-4" />
+                        </div>
+                      </div>
+                      {/* In-cart badge */}
+                      {inCart && (
+                        <div className="absolute top-2 left-2">
+                          <Badge className="h-5 px-1.5 text-[10px] bg-primary text-primary-foreground shadow">{inCart.quantity} in cart</Badge>
+                        </div>
+                      )}
                     </div>
-                    <span className="mt-1 text-xs text-muted-foreground">{formatMoney(item.price_cents, currency)}</span>
-                  <Plus className="absolute top-2 right-2 h-4 w-4 opacity-0 group-hover:opacity-100 text-primary transition-opacity" />
-                </button>
+                    {/* Info */}
+                    <div className="p-2.5 flex-1 flex flex-col gap-0.5">
+                      <div className="flex items-start gap-1.5">
+                        {foodTypeDot(item.food_type)}
+                        <span className="text-sm font-medium leading-tight line-clamp-2">{item.name}</span>
+                      </div>
+                      {!isSimple && (
+                        <span className="text-[10px] text-muted-foreground">Customizable</span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            /* ─── LIST VIEW ─── */
+            <div className="space-y-1.5">
+              {filteredItems.map(item => {
+                const hasVariants = (variantsQuery.data ?? []).some(v => v.menu_item_id === item.id && v.is_active);
+                const hasAddons = (addonsQuery.data ?? []).some(a => a.menu_item_id === item.id && a.is_active);
+                const isSimple = !hasVariants && !hasAddons;
+                const inCart = cart.find(c => c.menu_item_id === item.id);
+
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      if (isSimple) {
+                        addToCart({ menu_item_id: item.id, name: item.name, unit_price: item.price_cents, addons: [], notes: "" });
+                        toast({ title: `Added ${item.name}` });
+                      } else {
+                        setPickerItem(item);
+                      }
+                    }}
+                    className="group w-full flex items-center gap-3 rounded-lg border border-border bg-card p-2.5 text-left transition-all hover:border-primary/60 hover:shadow-sm active:scale-[0.99]"
+                  >
+                    {/* Thumbnail */}
+                    <div className="relative h-14 w-14 rounded-lg bg-muted overflow-hidden shrink-0">
+                      {item.image_url ? (
+                        <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" loading="lazy" />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center text-muted-foreground/30">
+                          <ShoppingBag className="h-5 w-5" />
+                        </div>
+                      )}
+                      {inCart && (
+                        <div className="absolute inset-0 bg-primary/80 flex items-center justify-center">
+                          <span className="text-[10px] font-bold text-primary-foreground">{inCart.quantity}×</span>
+                        </div>
+                      )}
+                    </div>
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        {foodTypeDot(item.food_type)}
+                        <span className="text-sm font-medium truncate">{item.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-sm font-semibold text-primary">{formatMoney(item.price_cents, currency)}</span>
+                        {!isSimple && <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Customizable</span>}
+                      </div>
+                    </div>
+                    {/* Add button */}
+                    <div className="shrink-0 h-8 w-8 rounded-full border-2 border-primary/20 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                      <Plus className="h-4 w-4" />
+                    </div>
+                  </button>
                 );
               })}
             </div>
           )}
         </div>
 
-        {/* ── Right: Cart & Checkout ── */}
-        <Card className="shadow-sm sticky top-4">
+        {/* ── Right: Cart & Checkout (sticky, independent scroll) ── */}
+        <div className="sticky top-0 h-full overflow-y-auto border-l pl-4">
+        <Card className="shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <ShoppingCart className="h-4 w-4" />
@@ -1037,6 +1142,7 @@ export default function QuickOrder() {
             )}
           </CardContent>
         </Card>
+        </div>
       </div>
 
       {/* Item picker dialog */}
