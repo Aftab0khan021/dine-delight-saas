@@ -10,11 +10,9 @@ const corsHeaders = {
   "access-control-allow-headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// SMTP configuration — set SMTP_USER, SMTP_PASS, SMTP_HOST, SMTP_PORT in Supabase function secrets
-const SMTP_USER = Deno.env.get("SMTP_USER") ?? "";
-const SMTP_PASS = Deno.env.get("SMTP_PASS") ?? "";
-const SMTP_HOST = Deno.env.get("SMTP_HOST") ?? "smtp.gmail.com";
-const SMTP_PORT = parseInt(Deno.env.get("SMTP_PORT") ?? "465");
+// Gmail SMTP configuration
+const GMAIL_USER = Deno.env.get("GMAIL_USER") ?? "";
+const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD") ?? "";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -151,7 +149,7 @@ serve(async (req) => {
         // "User not found" is expected for new invites — only log non-404 errors
         const errMsg = existingUserError.message || "";
         const is404 = errMsg.toLowerCase().includes("not found") ||
-                       (existingUserError as any).status === 404;
+          (existingUserError as any).status === 404;
         if (!is404) {
           console.error("getUserByEmail error:", existingUserError);
           return new Response(
@@ -473,13 +471,14 @@ serve(async (req) => {
       // Non-critical, continue
     }
 
-    if (!SMTP_USER || !SMTP_PASS) {
-      console.warn("SMTP not configured — invitation token stored in DB only. Set SMTP_USER + SMTP_PASS in Supabase function secrets.");
+    if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
+      console.warn("Gmail SMTP not configured, invitation token stored in DB only");
       // H4 — Do NOT return the invitation link in the API response (contains a one-time token).
+      // In production, configure GMAIL_USER + GMAIL_APP_PASSWORD in Supabase function secrets.
       return new Response(
         JSON.stringify({
           success: true,
-          message: "Invitation created. Configure SMTP secrets to send email automatically.",
+          message: "Invitation created. Configure Gmail SMTP to send email automatically.",
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -488,22 +487,22 @@ serve(async (req) => {
       );
     }
 
-    // Send email via SMTP
+    // Send email via Gmail SMTP
     try {
       const client = new SMTPClient({
         connection: {
-          hostname: SMTP_HOST,
-          port: SMTP_PORT,
+          hostname: "smtp.gmail.com",
+          port: 465,
           tls: true,
           auth: {
-            username: SMTP_USER,
-            password: SMTP_PASS,
+            username: GMAIL_USER,
+            password: GMAIL_APP_PASSWORD,
           },
         },
       });
 
       await client.send({
-        from: `Dine Delight <${SMTP_USER}>`,
+        from: `Dine Delight <${GMAIL_USER}>`,
         to: email,
         subject: `You're invited to join ${restaurantName}`,
         content: emailHtml,
@@ -512,7 +511,7 @@ serve(async (req) => {
 
       await client.close();
 
-      console.log("✅ Email sent via SMTP from:", SMTP_USER);
+      console.log("✅ Email sent via Gmail SMTP");
     } catch (emailError: unknown) {
       console.error("❌ Email send error:", emailError);
 
