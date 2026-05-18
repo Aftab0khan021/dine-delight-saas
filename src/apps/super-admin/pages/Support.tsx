@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { format } from "date-fns";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,7 +39,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MoreVertical, Plus, RefreshCw, Download, Ticket } from "lucide-react";
+import { MoreVertical, Plus, RefreshCw, Download, Ticket, MessageCircle, ThumbsUp, ThumbsDown } from "lucide-react";
 
 import { SLAIndicator } from "../components/SLAIndicator";
 import {
@@ -58,9 +58,16 @@ type TicketWithRestaurant = SupportTicket & {
     restaurants?: { name: string };
 };
 
+// ─── Chat log types ─────────────────────────────────────────────────────────
+type ChatMessage = { id: number; text: string; from: "user" | "agent"; time: string; reaction?: "up" | "down" | null };
+type ChatTicket = { id: string; subject: string; created_at: string; updated_at: string; restaurant_id: string | null; restaurants?: { name: string }; metadata: { chat_messages?: ChatMessage[]; source?: string; satisfaction?: string; updated_at?: string } | null };
+
 export default function SuperAdminSupport() {
     const { toast } = useToast();
     const queryClient = useQueryClient();
+
+    // Tab state
+    const [activeTab, setActiveTab] = useState<"tickets" | "chats">("tickets");
 
     // Filters
     const [statusFilter, setStatusFilter] = useState<TicketStatus | "all">("all");
@@ -205,13 +212,45 @@ export default function SuperAdminSupport() {
         }
     };
 
+    // ─── Chat Logs query ─────────────────────────────────────────────────────
+    const { data: chatLogs, isLoading: chatsLoading } = useQuery({
+        queryKey: ["superadmin", "chat-logs"],
+        enabled: activeTab === "chats",
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("support_tickets")
+                .select(`*, restaurants(name)`)
+                .like("subject", "Chat Support%")
+                .order("updated_at", { ascending: false })
+                .limit(200);
+            if (error) throw error;
+            return (data || []) as ChatTicket[];
+        },
+    });
+
+    const [selectedChat, setSelectedChat] = useState<ChatTicket | null>(null);
+    const chatBottomRef = useRef<HTMLDivElement>(null);
+    useEffect(() => { chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [selectedChat]);
+
+    // Chat stats
+    const chatStats = useMemo(() => {
+        if (!chatLogs) return { total: 0, positive: 0, negative: 0, avgMsgs: 0 };
+        let positive = 0, negative = 0, totalMsgs = 0;
+        chatLogs.forEach(c => {
+            const msgs = (c.metadata as any)?.chat_messages || [];
+            totalMsgs += msgs.length;
+            msgs.forEach((m: ChatMessage) => { if (m.reaction === "up") positive++; if (m.reaction === "down") negative++; });
+        });
+        return { total: chatLogs.length, positive, negative, avgMsgs: chatLogs.length ? Math.round(totalMsgs / chatLogs.length) : 0 };
+    }, [chatLogs]);
+
     return (
         <section className="flex flex-col gap-4 w-full">
             <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div className="space-y-1">
-                    <h1 className="text-2xl font-semibold tracking-tight">Support Tickets</h1>
+                    <h1 className="text-2xl font-semibold tracking-tight">Support & Chat Logs</h1>
                     <p className="text-sm text-muted-foreground">
-                        Manage customer support requests and track SLA compliance
+                        Manage support tickets and view chatbot conversations
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -230,6 +269,17 @@ export default function SuperAdminSupport() {
                 </div>
             </header>
 
+            {/* Tab Toggle */}
+            <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+                <button onClick={() => setActiveTab("tickets")} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === "tickets" ? "bg-background shadow-sm" : "hover:bg-background/50"}`}>
+                    <Ticket className="h-4 w-4 inline mr-1.5" />Tickets
+                </button>
+                <button onClick={() => setActiveTab("chats")} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === "chats" ? "bg-background shadow-sm" : "hover:bg-background/50"}`}>
+                    <MessageCircle className="h-4 w-4 inline mr-1.5" />Chat Logs
+                </button>
+            </div>
+
+            {activeTab === "tickets" && (<>
             {/* Statistics */}
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
                 <Card>
@@ -557,6 +607,103 @@ export default function SuperAdminSupport() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+            </>)}
+
+            {/* ═══════════ CHAT LOGS TAB ═══════════ */}
+            {activeTab === "chats" && (<>
+            {/* Chat Stats */}
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total Chats</CardTitle><MessageCircle className="h-4 w-4 text-blue-600" /></CardHeader><CardContent><div className="text-2xl font-bold">{chatStats.total}</div></CardContent></Card>
+                <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Avg Messages</CardTitle><MessageCircle className="h-4 w-4 text-purple-600" /></CardHeader><CardContent><div className="text-2xl font-bold">{chatStats.avgMsgs}</div></CardContent></Card>
+                <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Positive Reactions</CardTitle><ThumbsUp className="h-4 w-4 text-green-600" /></CardHeader><CardContent><div className="text-2xl font-bold text-green-600">{chatStats.positive}</div></CardContent></Card>
+                <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Negative Reactions</CardTitle><ThumbsDown className="h-4 w-4 text-red-600" /></CardHeader><CardContent><div className="text-2xl font-bold text-red-600">{chatStats.negative}</div></CardContent></Card>
+            </div>
+
+            {/* Chat Logs Table */}
+            <Card>
+                <CardHeader className="pb-3"><CardTitle className="text-base">Chat Conversations</CardTitle></CardHeader>
+                <CardContent>
+                    {chatsLoading ? (
+                        <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+                    ) : (
+                        <div className="w-full overflow-x-auto">
+                            <Table>
+                                <TableHeader><TableRow>
+                                    <TableHead className="min-w-[200px]">Restaurant</TableHead>
+                                    <TableHead className="min-w-[80px]">Messages</TableHead>
+                                    <TableHead className="min-w-[100px]">Reactions</TableHead>
+                                    <TableHead className="min-w-[160px]">Last Active</TableHead>
+                                    <TableHead className="w-24"></TableHead>
+                                </TableRow></TableHeader>
+                                <TableBody>
+                                    {(!chatLogs || chatLogs.length === 0) ? (
+                                        <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No chat logs found.</TableCell></TableRow>
+                                    ) : chatLogs.map(chat => {
+                                        const msgs: ChatMessage[] = (chat.metadata as any)?.chat_messages || [];
+                                        const ups = msgs.filter(m => m.reaction === "up").length;
+                                        const downs = msgs.filter(m => m.reaction === "down").length;
+                                        return (
+                                            <TableRow key={chat.id}>
+                                                <TableCell className="font-medium">{chat.restaurants?.name || "Unknown"}</TableCell>
+                                                <TableCell>{msgs.length}</TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-2 text-xs">
+                                                        {ups > 0 && <span className="text-green-600 flex items-center gap-0.5"><ThumbsUp className="h-3 w-3" />{ups}</span>}
+                                                        {downs > 0 && <span className="text-red-600 flex items-center gap-0.5"><ThumbsDown className="h-3 w-3" />{downs}</span>}
+                                                        {ups === 0 && downs === 0 && <span className="text-muted-foreground">—</span>}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-sm">{chat.updated_at ? format(new Date(chat.updated_at), "PP p") : "—"}</TableCell>
+                                                <TableCell>
+                                                    <Button size="sm" variant="outline" onClick={() => setSelectedChat(chat)}>View</Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Chat Transcript Dialog */}
+            <Dialog open={!!selectedChat} onOpenChange={o => !o && setSelectedChat(null)}>
+                <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <MessageCircle className="h-5 w-5 text-primary" />
+                            {selectedChat?.restaurants?.name || "Chat"}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {selectedChat?.created_at ? format(new Date(selectedChat.created_at), "PPP p") : ""}
+                            {" · "}{((selectedChat?.metadata as any)?.chat_messages || []).length} messages
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex-1 overflow-y-auto space-y-3 py-3 px-1 min-h-[200px] max-h-[50vh]">
+                        {((selectedChat?.metadata as any)?.chat_messages || []).map((msg: ChatMessage) => (
+                            <div key={msg.id} className={`flex gap-2 ${msg.from === "user" ? "justify-end" : "justify-start"}`}>
+                                {msg.from === "agent" && <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold shrink-0 mt-1">S</div>}
+                                <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
+                                    msg.from === "user" ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-muted rounded-bl-sm"
+                                }`}>
+                                    {msg.text}
+                                    <div className={`text-[9px] mt-1 opacity-60 flex items-center gap-1.5 ${msg.from === "user" ? "justify-end" : ""}`}>
+                                        {msg.time}
+                                        {msg.reaction === "up" && <ThumbsUp className="h-2.5 w-2.5 text-green-500" />}
+                                        {msg.reaction === "down" && <ThumbsDown className="h-2.5 w-2.5 text-red-500" />}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                        <div ref={chatBottomRef} />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setSelectedChat(null)}>Close</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            </>)}
         </section>
     );
 }
