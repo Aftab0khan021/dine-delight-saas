@@ -10,9 +10,11 @@ const corsHeaders = {
   "access-control-allow-headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Gmail SMTP configuration
-const GMAIL_USER = Deno.env.get("GMAIL_USER") ?? "";
-const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD") ?? "";
+// SMTP configuration — set SMTP_USER, SMTP_PASS, SMTP_HOST, SMTP_PORT in Supabase function secrets
+const SMTP_USER = Deno.env.get("SMTP_USER") ?? "";
+const SMTP_PASS = Deno.env.get("SMTP_PASS") ?? "";
+const SMTP_HOST = Deno.env.get("SMTP_HOST") ?? "smtp.gmail.com";
+const SMTP_PORT = parseInt(Deno.env.get("SMTP_PORT") ?? "465");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -471,14 +473,13 @@ serve(async (req) => {
       // Non-critical, continue
     }
 
-    if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
-      console.warn("Gmail SMTP not configured, invitation token stored in DB only");
+    if (!SMTP_USER || !SMTP_PASS) {
+      console.warn("SMTP not configured — invitation token stored in DB only. Set SMTP_USER + SMTP_PASS in Supabase function secrets.");
       // H4 — Do NOT return the invitation link in the API response (contains a one-time token).
-      // In production, configure GMAIL_USER + GMAIL_APP_PASSWORD in Supabase function secrets.
       return new Response(
         JSON.stringify({
           success: true,
-          message: "Invitation created. Configure Gmail SMTP to send email automatically.",
+          message: "Invitation created. Configure SMTP secrets to send email automatically.",
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -487,22 +488,22 @@ serve(async (req) => {
       );
     }
 
-    // Send email via Gmail SMTP
+    // Send email via SMTP
     try {
       const client = new SMTPClient({
         connection: {
-          hostname: "smtp.gmail.com",
-          port: 465,
+          hostname: SMTP_HOST,
+          port: SMTP_PORT,
           tls: true,
           auth: {
-            username: GMAIL_USER,
-            password: GMAIL_APP_PASSWORD,
+            username: SMTP_USER,
+            password: SMTP_PASS,
           },
         },
       });
 
       await client.send({
-        from: `Dine Delight <${GMAIL_USER}>`,
+        from: `Dine Delight <${SMTP_USER}>`,
         to: email,
         subject: `You're invited to join ${restaurantName}`,
         content: emailHtml,
@@ -511,7 +512,7 @@ serve(async (req) => {
 
       await client.close();
 
-      console.log("✅ Email sent via Gmail SMTP");
+      console.log("✅ Email sent via SMTP from:", SMTP_USER);
     } catch (emailError: unknown) {
       console.error("❌ Email send error:", emailError);
 
